@@ -22,7 +22,6 @@ export const metadata = {
   },
   description: 'Attendance & member management for church groups',
   manifest: '/manifest.json',
-  themeColor: '#1a3a2a',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
@@ -33,6 +32,7 @@ export const metadata = {
     initialScale: 1,
     maximumScale: 1,
     userScalable: false,
+    themeColor: '#1a3a2a',
   },
 }
 
