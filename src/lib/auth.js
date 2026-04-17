@@ -72,5 +72,4 @@ export async function getChurch(userId, userMetadata = {}) {
   }
 }
 
-// Re-export validation helpers so old imports don't break
 export { sanitizeInput, validateSignupFields } from './validation'
