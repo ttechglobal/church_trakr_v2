@@ -10,9 +10,21 @@ export async function GET(request) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
-    const groupId  = searchParams.get('groupId')
+    const groupId = searchParams.get('groupId')
     const churchId = searchParams.get('churchId')
-    const date     = searchParams.get('date')
+    const date = searchParams.get('date')
+
+    // Add at the top of the GET handler, after parsing searchParams:
+    const countAwayOnly = searchParams.get('countAwayOnly')
+
+    if (countAwayOnly === 'true') {
+      const { count } = await admin
+        .from('members')
+        .select('id', { count: 'exact', head: true })
+        .eq('church_id', churchId)
+        .eq('status', 'away')
+      return NextResponse.json({ awayCount: count ?? 0 })
+    }
 
     if (!groupId || !churchId) {
       return NextResponse.json({ error: 'groupId and churchId required' }, { status: 400 })

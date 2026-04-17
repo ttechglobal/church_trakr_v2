@@ -2,17 +2,16 @@ import { NextResponse } from 'next/server'
 import { withAuth } from '@/lib/apiAuth'
 
 export const PATCH = withAuth(async (request, { church, admin }) => {
-  const { key, reached, note, markedBy, markedAt } = await request.json()
+  const { key, reached, markedBy, markedAt } = await request.json()
 
   if (!key) return NextResponse.json({ error: 'key required' }, { status: 400 })
 
-  const existing = church.follow_up_data ?? {}
+  const existing = church.attendee_followup_data ?? {}
   const updated  = {
     ...existing,
     [key]: {
       ...(existing[key] ?? {}),
       reached:   reached ?? false,
-      note:      note !== undefined ? note : (existing[key]?.note ?? ''),
       markedBy:  reached ? (markedBy ?? '') : '',
       markedAt:  reached ? (markedAt ?? '') : '',
       updatedAt: new Date().toISOString(),
@@ -21,7 +20,7 @@ export const PATCH = withAuth(async (request, { church, admin }) => {
 
   const { error } = await admin
     .from('churches')
-    .update({ follow_up_data: updated })
+    .update({ attendee_followup_data: updated })
     .eq('id', church.id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
