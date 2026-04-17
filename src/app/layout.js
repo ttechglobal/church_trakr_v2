@@ -27,18 +27,25 @@ export const metadata = {
     statusBarStyle: 'black-translucent',
     title: 'ChurchTrakr',
   },
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-    themeColor: '#1a3a2a',
-  },
+}
+
+export const viewport = {
+  themeColor:      '#1a3a2a',
+  width:           'device-width',
+  initialScale:    1,
+  maximumScale:    1,
+  userScalable:    false,
 }
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${playfair.variable} ${dmSans.variable}`}>
+      <head>
+        {/* PWA / Apple specific */}
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-touch-fullscreen" content="yes" />
+      </head>
       <body>{children}</body>
     </html>
   )

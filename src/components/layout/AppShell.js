@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getAv } from '@/lib/utils'
@@ -10,6 +11,9 @@ import {
   Users, User, MessageSquare, BarChart2, FileText,
   Settings, LogOut, Menu, X,
 } from 'lucide-react'
+
+// Lazy-load non-critical UI — doesn't block first paint
+const InstallBanner = dynamic(() => import('@/components/InstallBanner'), { ssr: false })
 
 const NAV = [
   { href: '/dashboard',   label: 'Dashboard',    Icon: LayoutDashboard },
@@ -117,7 +121,8 @@ export default function AppShell({ church, user, children }) {
       <style>{`
         .shell-root { display: flex; min-height: 100dvh; background: #f7f5f0; }
         .shell-sidebar { width: ${SIDEBAR_W}px; flex-shrink: 0; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; }
-.shell-topbar { display: none; position: fixed; top: 0; left: 0; right: 0; height: 54px; background: #ffffff; border-bottom: 1px solid rgba(26,58,42,0.09); z-index: 100; align-items: center; justify-content: space-between; padding: 0 1rem; box-shadow: 0 1px 6px rgba(26,58,42,0.06); }        .shell-main { flex: 1; min-width: 0; margin-left: ${SIDEBAR_W}px; }
+        .shell-topbar { display: none; position: fixed; top: 0; left: 0; right: 0; height: 54px; background: #0d1f15; z-index: 100; align-items: center; justify-content: space-between; padding: 0 1rem; }
+        .shell-main { flex: 1; min-width: 0; margin-left: ${SIDEBAR_W}px; }
         .shell-backdrop { display: none; position: fixed; inset: 0; z-index: 150; background: rgba(0,0,0,0.65); backdrop-filter: blur(3px); opacity: 0; transition: opacity 0.25s ease; pointer-events: none; }
         .shell-backdrop.vis { opacity: 1; pointer-events: auto; }
         .shell-drawer { display: none; position: fixed; top: 0; left: 0; bottom: 0; width: 268px; z-index: 200; transform: translateX(-100%); transition: transform 0.27s cubic-bezier(0.16,1,0.3,1); box-shadow: 4px 0 32px rgba(0,0,0,0.3); }
@@ -135,38 +140,16 @@ export default function AppShell({ church, user, children }) {
         <aside className="shell-sidebar">{sidebarInner}</aside>
 
         <header className="shell-topbar">
-  <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-    <div style={{
-      width: 28, height: 28, borderRadius: 8,
-      background: 'linear-gradient(135deg,#1a3a2a,#2d5a42)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>
-      <svg width="12" height="12" viewBox="0 0 20 20" fill="none">
-        <path d="M10 3v14M3 10h14" stroke="#c9a84c" strokeWidth="2.5" strokeLinecap="round"/>
-      </svg>
-    </div>
-    <span style={{
-      fontFamily: 'var(--font-playfair),Georgia,serif',
-      fontWeight: 700, fontSize: 16, color: '#1a3a2a', letterSpacing: '-0.01em',
-    }}>
-      ChurchTrakr
-    </span>
-  </div>
-  <button
-    onClick={() => setOpen(true)}
-    style={{
-      background: 'rgba(26,58,42,0.07)',
-      border: 'none', borderRadius: 8,
-      width: 36, height: 36,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      cursor: 'pointer', color: '#1a3a2a',
-      transition: 'background 0.14s',
-    }}
-    aria-label="Open menu"
-  >
-    <Menu size={18} />
-  </button>
-</header>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <div style={{ width: 26, height: 26, borderRadius: 7, background: 'linear-gradient(135deg,#c9a84c,#e8d5a0)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="11" height="11" viewBox="0 0 20 20" fill="none"><path d="M10 3v14M3 10h14" stroke="#1a3a2a" strokeWidth="2.5" strokeLinecap="round"/></svg>
+            </div>
+            <span style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontWeight: 700, fontSize: 16, color: '#fff' }}>ChurchTrakr</span>
+          </div>
+          <button onClick={() => setOpen(true)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 8, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff' }} aria-label="Open menu">
+            <Menu size={18} />
+          </button>
+        </header>
 
         <div className={"shell-backdrop" + (open ? " vis" : "")} onClick={() => setOpen(false)} />
 
@@ -178,6 +161,7 @@ export default function AppShell({ church, user, children }) {
         </div>
 
         <main className="shell-main">{children}</main>
+        <InstallBanner />
       </div>
     </>
   )
