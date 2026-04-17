@@ -41,9 +41,26 @@ export default function NotificationSettings() {
 
   async function handleEnable() {
     setRequesting(true)
-    const granted = await requestPermission()
-    setRequesting(false)
-    if (granted) setJustEnabled(true)
+    try {
+      // Request permission directly — does not require SW to be ready
+      // SW is only needed for push notifications (server-side), not local notifications
+      if (!('Notification' in window)) {
+        alert('Your browser does not support notifications.')
+        return
+      }
+      let result
+      if (swReady) {
+        // Full flow: permission + push subscription
+        result = await requestPermission()
+      } else {
+        // Fallback: permission only (local notifications will still work)
+        result = await Notification.requestPermission()
+        result = result === 'granted'
+      }
+      if (result) setJustEnabled(true)
+    } finally {
+      setRequesting(false)
+    }
   }
 
   if (!loaded) return null
@@ -115,15 +132,15 @@ export default function NotificationSettings() {
         </div>
 
         {!isGranted && !isDenied && (
-          <button onClick={handleEnable} disabled={requesting || !swReady}
+          <button onClick={handleEnable} disabled={requesting}
             style={{
               width: '100%', height: 44, borderRadius: 11, border: 'none',
-              background: swReady ? '#1a3a2a' : '#e0dbd0',
-              color: swReady ? '#e8d5a0' : '#8a9e90',
+              background: requesting ? '#e0dbd0' : '#1a3a2a',
+              color: requesting ? '#8a9e90' : '#e8d5a0',
               fontSize: 14, fontWeight: 700,
-              cursor: requesting || !swReady ? 'not-allowed' : 'pointer',
+              cursor: requesting ? 'wait' : 'pointer',
             }}>
-            {requesting ? 'Requesting…' : 'Enable notifications'}
+            {requesting ? 'Requesting permission…' : 'Enable notifications'}
           </button>
         )}
 

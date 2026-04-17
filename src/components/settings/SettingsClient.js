@@ -146,12 +146,12 @@ export default function SettingsClient({ church: initialChurch, user }) {
       <BackButton />
         <h1 className="font-display text-2xl font-semibold text-forest mb-4">Settings</h1>
 
-      {/* Tab bar */}
-      <div className="flex gap-1 overflow-x-auto pb-1 -mx-4 px-4">
+      {/* Tab bar — wraps to two rows on mobile */}
+      <div className="flex gap-1 flex-wrap">
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={`shrink-0 px-3 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-1.5
-              ${tab === t.id ? 'bg-forest text-ivory' : 'text-forest-muted hover:bg-ivory hover:text-forest'}`}>
+            className={`px-3 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-1.5
+              ${tab === t.id ? 'bg-forest text-ivory' : 'bg-ivory text-forest-muted hover:bg-ivory-dark hover:text-forest'}`}>
             {t.Icon && <t.Icon size={13} strokeWidth={tab === t.id ? 2.5 : 1.75} />}
             {t.label}
           </button>
@@ -160,29 +160,13 @@ export default function SettingsClient({ church: initialChurch, user }) {
 
       {/* ── Profile tab ── */}
       {tab === 'profile' && (
-        <div className="card space-y-4 animate-fade-in">
-          <h2 className="font-display text-lg font-semibold text-forest">Profile</h2>
-          {[
-            { key: 'name', label: 'Church / Group name', placeholder: 'Your group name' },
-            { key: 'admin_name', label: 'Your name', placeholder: 'Leader / admin name' },
-            { key: 'phone', label: 'Phone', placeholder: '+234…', type: 'tel' },
-            { key: 'location', label: 'Location', placeholder: 'City or address' },
-          ].map(({ key, label, placeholder, type = 'text' }) => (
-            <div key={key}>
-              <label className="input-label">{label}</label>
-              <input className="input" type={type} placeholder={placeholder}
-                value={profile[key]} onChange={e => setProfile(p => ({ ...p, [key]: e.target.value }))} />
-            </div>
-          ))}
-          {profileMsg && (
-            <p className={`text-sm font-medium ${profileMsg.includes('✓') ? 'text-success' : 'text-error'}`}>
-              {profileMsg}
-            </p>
-          )}
-          <button onClick={handleSaveProfile} disabled={savingProfile} className="btn-primary w-full">
-            {savingProfile ? 'Saving…' : 'Save changes'}
-          </button>
-        </div>
+        <ProfileTab
+          profile={profile}
+          setProfile={setProfile}
+          profileMsg={profileMsg}
+          savingProfile={savingProfile}
+          onSave={handleSaveProfile}
+        />
       )}
 
       {/* ── Attendance tab ── */}
@@ -372,6 +356,113 @@ export default function SettingsClient({ church: initialChurch, user }) {
     </div>
   )
 }
+
+// ── Profile tab component ─────────────────────────────────────────────────────
+function ProfileTab({ profile, setProfile, profileMsg, savingProfile, onSave }) {
+  const [editing,     setEditing]     = useState(false)
+  const [displayName, setDisplayName] = useState('')
+
+  // Read device display name from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem('ct_display_name')
+    if (stored) setDisplayName(stored)
+  }, [])
+
+  function saveDisplayName(val) {
+    setDisplayName(val)
+    localStorage.setItem('ct_display_name', val)
+  }
+
+  return (
+    <div className="space-y-4 animate-fade-in">
+
+      {/* ── Display Name (device-only) ── */}
+      <div className="card space-y-3">
+        <div>
+          <h2 className="font-display text-lg font-semibold text-forest">Your Display Name</h2>
+          <p className="text-xs text-mist mt-1">
+            Stored on this device only. Used when logging follow-ups and attendance.
+            Each team member sets their own on their device.
+          </p>
+        </div>
+        <div>
+          <label className="input-label">Your Display Name (this device only)</label>
+          <input
+            className="input"
+            placeholder="e.g. Pastor Tunde, Sister Ada…"
+            value={displayName}
+            onChange={e => saveDisplayName(e.target.value)}
+          />
+        </div>
+        {displayName.trim() && (
+          <p className="text-xs text-success font-medium">✓ Saved to this device</p>
+        )}
+      </div>
+
+      {/* ── Church Profile ── */}
+      <div className="card space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-lg font-semibold text-forest">Church Profile</h2>
+          {!editing && (
+            <button onClick={() => setEditing(true)} className="btn-outline btn-sm gap-1.5">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+              Edit
+            </button>
+          )}
+        </div>
+
+        {editing ? (
+          <>
+            {[
+              { key: 'name',       label: 'Church / Group name', placeholder: 'Your group name' },
+              { key: 'admin_name', label: 'Admin Name',          placeholder: 'Leader / admin name' },
+              { key: 'phone',      label: 'Phone',               placeholder: '+234…', type: 'tel' },
+              { key: 'location',   label: 'Location',            placeholder: 'City or address' },
+            ].map(({ key, label, placeholder, type = 'text' }) => (
+              <div key={key}>
+                <label className="input-label">{label}</label>
+                <input className="input" type={type} placeholder={placeholder}
+                  value={profile[key]}
+                  onChange={e => setProfile(p => ({ ...p, [key]: e.target.value }))} />
+              </div>
+            ))}
+            {profileMsg && (
+              <p className={`text-sm font-medium ${profileMsg.includes('✓') ? 'text-success' : 'text-error'}`}>
+                {profileMsg}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button onClick={() => setEditing(false)} className="btn-outline flex-1">Cancel</button>
+              <button onClick={() => { onSave(); setEditing(false) }} disabled={savingProfile} className="btn-primary flex-1">
+                {savingProfile ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="space-y-3">
+            {[
+              { label: 'Church / Group name', value: profile.name },
+              { label: 'Admin Name',          value: profile.admin_name },
+              { label: 'Phone',               value: profile.phone },
+              { label: 'Location',            value: profile.location },
+            ].map(({ label, value }) => (
+              <div key={label} className="flex justify-between items-start gap-4 py-1 border-b border-forest/6 last:border-0">
+                <span className="text-sm text-mist shrink-0">{label}</span>
+                <span className="text-sm font-medium text-forest text-right">
+                  {value || <span className="text-mist italic">Not set</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 
 function PlusIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> }
 function TrashIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg> }

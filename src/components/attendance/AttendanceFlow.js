@@ -43,9 +43,10 @@ export default function AttendanceFlow({
   // ── Step 1: Group selected ──
   function handleGroupSelect(group) {
     if (group.id === FIRST_TIMERS_ID) {
-      // First-timers: initialise all as present, skip date step → go straight to mark
+      // First-timers: initialise all as UNMARKED (false), skip date step → go straight to mark
+      // DEFAULT STATE = unmarked. User taps to mark present. Do not pre-mark anyone.
       const init = {}
-      firstTimers.forEach(ft => { init[ft.id] = true })
+      firstTimers.forEach(ft => { init[ft.id] = false })
       setFtAttendance(init)
       setSelectedGroup(group)
       setSelectedDate(new Date().toISOString().split('T')[0])
@@ -63,23 +64,32 @@ export default function AttendanceFlow({
     setLoadingMembers(true)
 
     try {
-      // Fetch members for this group
-      const res = await fetch(`/api/attendance/members?groupId=${selectedGroup.id}&churchId=${church.id}`)
+      // Fetch members + existing records for this group+date
+      // Pass date so API returns existingRecords when attendance already taken
+      const res = await fetch(
+        `/api/attendance/members?groupId=${selectedGroup.id}&churchId=${church.id}&date=${date}`
+      )
       const data = await res.json()
       const memberList = data.members ?? []
       setMembers(memberList)
 
       // Initialize attendance state
       let initial = {}
-      if (existingId && data.existingRecords) {
-        // Editing: load saved state
+      if (data.existingRecords && data.existingRecords.length > 0) {
+        // ── EDITING EXISTING SESSION ──
+        // Load each member's saved present/absent value.
+        // Members not in existingRecords default to false (absent).
+        for (const m of memberList) {
+          initial[m.id] = false // default absent
+        }
         for (const r of data.existingRecords) {
           initial[r.member_id] = r.present
         }
       } else {
-        // New: default based on mark mode
+        // ── NEW SESSION ──
+        // DEFAULT STATE = false (absent/unmarked). Do not pre-mark anyone.
         for (const m of memberList) {
-          initial[m.id] = markMode === 'absent' // absent mode → start all present (true)
+          initial[m.id] = false
         }
       }
       setAttendance(initial)
@@ -391,6 +401,30 @@ function StepGroup({ groups, sessionsByGroup, onSelect, onBack, firstTimers = []
         </div>
         <ChevronRight className="text-mist shrink-0" />
       </button>
+
+      {/* ── Away Members link ── */}
+      <a
+        href="/away"
+        className="card w-full text-left flex items-center gap-4 hover:shadow-card-hover transition-all active:scale-[0.98]"
+        style={{ borderColor: 'rgba(217,119,6,0.2)', background: 'rgba(217,119,6,0.03)', textDecoration: 'none' }}
+      >
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: 'rgba(217,119,6,0.1)' }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round">
+            <path d="M3 17h1m16 0h1M6 11l-2.5 6M18 11l2.5 6M6 11h12l-1-6H7L6 11z"/>
+            <circle cx="12" cy="5" r="2"/>
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-forest text-[15px]">Away Members</p>
+          <p className="text-xs text-mist mt-0.5">
+            Manage members who are travelling or on leave
+          </p>
+        </div>
+        <ChevronRight className="text-mist shrink-0" />
+      </a>
     </div>
   )
 }
@@ -400,38 +434,61 @@ function StepGroup({ groups, sessionsByGroup, onSelect, onBack, firstTimers = []
 // ─────────────────────────────────────────────────────────────────────────────
 
 function StepDate({ group, church, onSelect, onBack }) {
-  const [customDate, setCustomDate] = useState('')
-  const [checking, setChecking] = useState(false)
-  const [existingMap, setExistingMap] = useState({}) // date → sessionId | false
+  /*
+    DO NOT CHANGE — date selection rules (permanent):
+    - Tapping "This Sunday" / "Last Sunday" HIGHLIGHTS the button only.
+    - It does NOT auto-navigate. User must tap "Take Attendance" / "Go" to proceed.
+    - This prevents accidental navigation and gives a moment to confirm.
+  */
+  const [selectedDate, setSelectedDate] = useState('')
+  const [customDate,   setCustomDate]   = useState('')
+  const [checking,     setChecking]     = useState(false)
+  const [existingMap,  setExistingMap]  = useState({}) // date → sessionId | false
 
   const thisSunday = toISODate(getLastSunday())
   const lastSunday = toISODate(getPrevSunday())
 
   async function checkDate(date) {
     if (existingMap[date] !== undefined) return existingMap[date]
-    setChecking(true)
     try {
       const res = await fetch(`/api/attendance/check?groupId=${group.id}&date=${date}`)
       const data = await res.json()
       const sessionId = data.sessionId ?? false
       setExistingMap(prev => ({ ...prev, [date]: sessionId }))
       return sessionId
+    } catch { return false }
+  }
+
+  // Highlight quick button — pre-check in background, but do NOT navigate yet
+  async function handleQuickTap(date) {
+    setSelectedDate(date)
+    setCustomDate('')
+    // Pre-fetch existence so Go is instant
+    checkDate(date)
+  }
+
+  // Go button — now actually navigate
+  async function handleGo() {
+    const date = selectedDate || customDate
+    if (!date) return
+    setChecking(true)
+    try {
+      const sessionId = await checkDate(date)
+      onSelect(date, sessionId || null)
     } finally {
       setChecking(false)
     }
   }
 
-  async function handleQuickSelect(date) {
-    const sessionId = await checkDate(date)
-    onSelect(date, sessionId || null)
+  async function handleCustomChange(date) {
+    setCustomDate(date)
+    setSelectedDate('')
+    if (date) checkDate(date)
   }
 
-  async function handleCustomSubmit(e) {
-    e.preventDefault()
-    if (!customDate) return
-    const sessionId = await checkDate(customDate)
-    onSelect(customDate, sessionId || null)
-  }
+  const activeDate   = selectedDate || customDate
+  const existingId   = existingMap[activeDate]
+  const hasExisting  = !!existingId
 
   const quickDates = [
     { label: 'This Sunday', date: thisSunday },
@@ -446,26 +503,57 @@ function StepDate({ group, church, onSelect, onBack }) {
         </button>
         <div>
           <h1 className="font-display text-2xl font-semibold text-forest">{group.name}</h1>
-          <p className="text-sm text-mist">Select a date</p>
+          <p className="text-sm text-mist">Select a date then tap Go</p>
         </div>
       </div>
 
-      {/* Quick tiles */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
+      {/* Quick tiles — tap to SELECT only, not to navigate */}
+      <div className="grid grid-cols-2 gap-3 mb-4">
         {quickDates.map(({ label, date }) => {
-          const existing = existingMap[date]
+          const isSelected = selectedDate === date
+          const existing   = existingMap[date]
           return (
             <button
               key={date}
-              onClick={() => handleQuickSelect(date)}
-              disabled={checking}
-              className="card text-left p-4 hover:shadow-card-hover transition-all active:scale-[0.98]
-                hover:border-forest/20 disabled:opacity-60"
+              onClick={() => handleQuickTap(date)}
+              className="card text-left p-4 transition-all active:scale-[0.98]"
+              style={{
+                background:   isSelected ? '#1a3a2a' : '#ffffff',
+                borderColor:  isSelected ? 'rgba(26,58,42,0.6)' : undefined,
+                boxShadow:    isSelected ? 'var(--shadow-card-hover)' : undefined,
+                transition:   'background 0.15s, box-shadow 0.15s',
+              }}
             >
-              <p className="font-semibold text-forest text-[15px]">{label}</p>
-              <p className="text-xs text-mist mt-1">{fmtDate(date)}</p>
+              <p style={{
+                fontWeight: 600, fontSize: 15,
+                color: isSelected ? '#ede9e0' : '#1a3a2a',
+              }}>
+                {label}
+              </p>
+              <p style={{
+                fontSize: 12, marginTop: 4,
+                color: isSelected ? 'rgba(237,233,224,0.6)' : '#8a9e90',
+              }}>
+                {fmtDate(date)}
+              </p>
               {existing && (
-                <span className="badge-gold mt-2 text-[10px]">Already recorded</span>
+                <span style={{
+                  display: 'inline-block', marginTop: 8,
+                  fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                  background: isSelected ? 'rgba(201,168,76,0.25)' : 'rgba(201,168,76,0.15)',
+                  color:      isSelected ? '#e8d5a0'               : '#a8862e',
+                }}>
+                  Edit existing
+                </span>
+              )}
+              {isSelected && !existing && (
+                <span style={{
+                  display: 'inline-block', marginTop: 8,
+                  fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                  background: 'rgba(237,233,224,0.15)', color: 'rgba(237,233,224,0.8)',
+                }}>
+                  ✓ Selected
+                </span>
               )}
             </button>
           )
@@ -473,30 +561,45 @@ function StepDate({ group, church, onSelect, onBack }) {
       </div>
 
       {/* Custom date */}
-      <div className="card">
+      <div className="card mb-4">
         <p className="text-sm font-semibold text-forest mb-3">Custom date</p>
-        <form onSubmit={handleCustomSubmit} className="flex gap-2">
-          <input
-            type="date"
-            className="input flex-1"
-            value={customDate}
-            max={toISODate(new Date())}
-            onChange={e => setCustomDate(e.target.value)}
-          />
-          <button
-            type="submit"
-            disabled={!customDate || checking}
-            className="btn-primary shrink-0"
-          >
-            {checking ? '…' : 'Go'}
-          </button>
-        </form>
+        <input
+          type="date"
+          className="input w-full"
+          value={customDate}
+          max={toISODate(new Date())}
+          onChange={e => handleCustomChange(e.target.value)}
+        />
         {customDate && existingMap[customDate] && (
           <p className="text-xs text-warning mt-2">
-            ⚠️ Attendance already recorded for this date. Continuing will let you edit it.
+            ⚠️ Attendance already recorded — tapping Go will open it for editing.
           </p>
         )}
       </div>
+
+      {/* Go button — always visible, only active when a date is selected */}
+      <button
+        onClick={handleGo}
+        disabled={!activeDate || checking}
+        className="btn-primary btn-lg w-full"
+        style={{
+          background: activeDate && !checking
+            ? hasExisting
+              ? 'linear-gradient(135deg,#a8862e,#c9a84c)'  // gold = editing
+              : 'linear-gradient(135deg,#1a3a2a,#2d5a42)'  // green = new
+            : undefined,
+          opacity: !activeDate ? 0.5 : 1,
+        }}
+      >
+        {checking
+          ? '…'
+          : !activeDate
+            ? 'Select a date first'
+            : hasExisting
+              ? `Edit Attendance — ${fmtDate(activeDate)}`
+              : `Take Attendance — ${fmtDate(activeDate)}`
+        }
+      </button>
     </div>
   )
 }
@@ -584,6 +687,7 @@ function StepMark({
             {filtered.map(member => {
               const isPresent = attendance[member.id] ?? false
               const av = getAv(member.name)
+              // DEFAULT STATE = X gray, PRESENT = green. Do not change.
               return (
                 <button
                   key={member.id}
@@ -592,7 +696,7 @@ function StepMark({
                     transition-all duration-150 active:scale-[0.98] text-left
                     ${isPresent
                       ? 'bg-success/8 border-success/25 hover:bg-success/12'
-                      : 'bg-error/6 border-error/20 hover:bg-error/10'
+                      : 'bg-white border-forest/10 hover:bg-ivory'
                     }`}
                 >
                   {/* Avatar */}
@@ -603,18 +707,25 @@ function StepMark({
                     {av.initials}
                   </div>
 
-                  {/* Name */}
-                  <span className="flex-1 font-medium text-forest text-[15px] truncate">
+                  {/* Name — left aligned */}
+                  <span className="flex-1 font-medium text-forest text-[15px] truncate text-left">
                     {member.name}
                   </span>
 
-                  {/* Status indicator */}
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0
-                    ${isPresent ? 'bg-success text-white' : 'bg-error/15 text-error'}`}
+                  {/*
+                    DEFAULT STATE = X gray dot (card stays white/neutral).
+                    PRESENT = green filled circle with checkmark.
+                    DO NOT make the card red. Only the dot shows the absent state.
+                  */}
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors
+                    ${isPresent
+                      ? 'bg-success text-white'
+                      : 'bg-ivory-deeper text-mist border border-forest/15'
+                    }`}
                   >
                     {isPresent
                       ? <CheckIcon className="w-4 h-4" />
-                      : <XIcon className="w-4 h-4" />
+                      : <XIcon className="w-4 h-4" style={{ opacity: 0.5 }} />
                     }
                   </div>
                 </button>

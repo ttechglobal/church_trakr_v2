@@ -35,8 +35,38 @@ export default async function DashboardPage() {
       }, 0) / withData.length)
     : null
 
-  const pendingKeys  = Object.entries(church.follow_up_data ?? {}).filter(([, v]) => !v.reached)
-  const pendingCount = pendingKeys.length
+  // ── Follow-up pending entries with real names ─────────────────────────────
+  // follow_up_data keys = "{sessionId}_{memberId}", value = { reached, note, ... }
+  // We look up real names from attendance_records so names are always current.
+  const rawPendingKeys = Object.entries(church.follow_up_data ?? {}).filter(([, v]) => !v.reached)
+  const pendingCount   = rawPendingKeys.length
+
+  // Build a memberId → name map from recent sessions for the dashboard list
+  let memberNameMap = {}
+  if (rawPendingKeys.length > 0) {
+    // Extract memberIds from keys (format: sessionId_memberId)
+    const memberIds = [...new Set(
+      rawPendingKeys.map(([key]) => {
+        const parts = key.split('_')
+        return parts[parts.length - 1]  // last segment is memberId
+      }).filter(Boolean)
+    )]
+    if (memberIds.length > 0) {
+      const { data: memberRows } = await admin
+        .from('members')
+        .select('id, name')
+        .in('id', memberIds)
+      for (const m of (memberRows ?? [])) memberNameMap[m.id] = m.name
+    }
+  }
+
+  // Enrich pending entries with real names
+  const pendingKeys = rawPendingKeys.map(([key, entry]) => {
+    const parts = key.split('_')
+    const memberId = parts[parts.length - 1]
+    const realName = memberNameMap[memberId] || entry.name || null
+    return [key, { ...entry, name: realName }]
+  })
 
   return (
     <>
@@ -81,7 +111,7 @@ export default async function DashboardPage() {
             { label: 'Avg Rate',     value: avgRate !== null ? `${avgRate}%` : '—', Icon: BarChart2, href: '/analytics', color: avgRate !== null && avgRate >= 75 ? '#16a34a' : avgRate !== null && avgRate >= 50 ? '#d97706' : '#1a3a2a' },
             { label: 'First Timers', value: firstTimers.length, Icon: Star,     href: '/firsttimers', color: '#a8862e' },
           ].map(({ label, value, Icon, href, color }) => (
-            <Link key={label} href={href} prefetch className="d-stat" style={{ display: 'block', padding: '1rem 0.875rem', background: '#fff', border: '1px solid rgba(26,58,42,0.08)', borderRadius: 14, textDecoration: 'none', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', transition: 'transform 0.18s ease, box-shadow 0.18s ease' }}>
+            <Link key={label} href={href} prefetch className="d-stat" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '1rem 0.875rem', background: '#fff', border: '1px solid rgba(26,58,42,0.08)', borderRadius: 14, textDecoration: 'none', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', transition: 'transform 0.18s ease, box-shadow 0.18s ease' }}>
               <Icon size={18} color={color} strokeWidth={1.75} style={{ marginBottom: 8, display: 'block' }} />
               <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 24, fontWeight: 800, color, margin: '0 0 3px', letterSpacing: '-0.03em', lineHeight: 1 }}>{value}</p>
               <p style={{ fontSize: 11, color: '#8a9e90', margin: 0, fontWeight: 600 }}>{label}</p>
@@ -99,7 +129,7 @@ export default async function DashboardPage() {
               { label: 'Members',   Icon: Users,     href: '/members',   desc: 'Manage your list' },
             ].map(({ label, Icon, href, desc }) => (
               <Link key={label} href={href} prefetch className="d-quick" style={{
-                display: 'flex', flexDirection: 'column', position: 'relative',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', position: 'relative',
                 padding: '0.875rem 0.75rem',
                 background: '#fff', border: '1px solid rgba(26,58,42,0.09)',
                 borderRadius: 13, textDecoration: 'none',
