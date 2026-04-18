@@ -1,101 +1,113 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 
-// Routes anyone can access without being logged in
-const PUBLIC_ROUTES = ['/', '/login', '/signup', '/forgot', '/auth']
-
-// Routes that require authentication
-const PROTECTED_PREFIXES = [
-  '/dashboard',
-  '/attendance',
-  '/absentees',
-  '/attendees',
-  '/groups',
-  '/members',
-  '/firsttimers',
-  '/analytics',
-  '/report',
-  '/messaging',
-  '/profile',
-  '/settings',
-]
-
-function isPublic(pathname) {
-  return PUBLIC_ROUTES.some(r =>
-    pathname === r || pathname.startsWith(r + '/')
-  )
-}
-
-function isProtected(pathname) {
-  return PROTECTED_PREFIXES.some(r =>
-    pathname === r || pathname.startsWith(r + '/')
-  )
-}
-
 export async function middleware(request) {
   const { pathname } = request.nextUrl
 
-  // Skip static files and API routes entirely
+  // ── Skip middleware entirely for static files and PWA assets ────────────
+  // These must NEVER go through auth middleware or they 404 in production.
   if (
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/api') ||
-    pathname.match(/\.(ico|png|jpg|jpeg|svg|webp|css|js|woff2?)$/)
+    pathname === '/manifest.json' ||
+    pathname === '/sw.js' ||
+    pathname === '/favicon.ico' ||
+    pathname === '/robots.txt' ||
+    pathname.startsWith('/icons/') ||
+    pathname.startsWith('/_next/') ||
+    pathname.endsWith('.png') ||
+    pathname.endsWith('.ico') ||
+    pathname.endsWith('.svg') ||
+    pathname.endsWith('.json')
   ) {
     return NextResponse.next()
   }
 
-  // Public routes — always allow through, no session check needed
-  if (isPublic(pathname)) {
-    return NextResponse.next()
+  let supabaseResponse = NextResponse.next({ request })
+
+  // Guard against missing env vars (e.g. during Vercel preview builds)
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return supabaseResponse
   }
 
-  // For protected routes — verify session
-  if (isProtected(pathname)) {
-    let response = NextResponse.next({ request })
-
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value }) =>
-              request.cookies.set(name, value)
-            )
-            response = NextResponse.next({ request })
-            cookiesToSet.forEach(({ name, value, options }) =>
-              response.cookies.set(name, value, {
-                ...options,
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                path: '/',
-              })
-            )
-          },
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
         },
-      }
-    )
-
-    // getUser() verifies the JWT with Supabase auth server
-    // Never use getSession() here — it trusts the cookie without verification
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      const loginUrl = new URL('/login', request.url)
-      loginUrl.searchParams.set('next', pathname)
-      return NextResponse.redirect(loginUrl)
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value)
+          )
+          supabaseResponse = NextResponse.next({ request })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
+        },
+      },
     }
+  )
 
-    return response
+  // Refresh session — required by @supabase/ssr. Must not have code between
+  // createServerClient and getUser() per Supabase docs.
+  let user = null
+  try {
+    const { data } = await supabase.auth.getUser()
+    user = data?.user ?? null
+  } catch {
+    // If Supabase is unreachable, allow the request through.
+    // The page/layout will handle the unauthenticated state.
+    return supabaseResponse
   }
 
-  return NextResponse.next()
+  // Auth pages — redirect to dashboard if already signed in
+  const isAuthPage =
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/signup') ||
+    pathname.startsWith('/forgot')
+
+  if (isAuthPage && user) {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
+
+  // Protected app routes — redirect to login if not signed in
+  const isAppRoute =
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/attendance') ||
+    pathname.startsWith('/absentees') ||
+    pathname.startsWith('/attendees') ||
+    pathname.startsWith('/away') ||
+    pathname.startsWith('/groups') ||
+    pathname.startsWith('/members') ||
+    pathname.startsWith('/firsttimers') ||
+    pathname.startsWith('/analytics') ||
+    pathname.startsWith('/report') ||
+    pathname.startsWith('/messaging') ||
+    pathname.startsWith('/settings') ||
+    pathname.startsWith('/profile')
+
+  if (isAppRoute && !user) {
+    const loginUrl = new URL('/login', request.url)
+    loginUrl.searchParams.set('next', pathname)
+    return NextResponse.redirect(loginUrl)
+  }
+
+  return supabaseResponse
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: [
+    /*
+     * Run middleware on all paths EXCEPT:
+     * - _next/static  (Next.js build output)
+     * - _next/image   (image optimisation)
+     * - favicon.ico
+     * - Static file extensions (images, fonts, json, xml, txt, etc.)
+     *
+     * NOTE: manifest.json and sw.js are also excluded at the top of the
+     * middleware function itself as an extra safety guard.
+     */
+    '/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|json|xml|txt|woff|woff2|ttf|otf)$).*)',
+  ],
 }

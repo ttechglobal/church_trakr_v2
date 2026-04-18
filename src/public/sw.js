@@ -1,181 +1,91 @@
-// ChurchTrakr Service Worker
-// Handles: caching, push notifications, background sync
+// ChurchTrakr Service Worker v2
+const CACHE = 'churchtrakr-v2'
+const STATIC = ['/', '/dashboard', '/manifest.json', '/icons/icon-192.png']
 
-const CACHE_NAME = 'churchtrakr-v1'
-const STATIC_ASSETS = [
-  '/',
-  '/dashboard',
-  '/manifest.json',
-]
-
-// ── Install ──────────────────────────────────────────────────────────────────
-
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      // Cache what we can — failures are non-fatal
-      return Promise.allSettled(
-        STATIC_ASSETS.map(url => cache.add(url).catch(() => null))
-      )
-    })
+self.addEventListener('install', e => {
+  e.waitUntil(
+    caches.open(CACHE).then(c =>
+      Promise.allSettled(STATIC.map(u => c.add(u).catch(() => null)))
+    )
   )
   self.skipWaiting()
 })
 
-// ── Activate ─────────────────────────────────────────────────────────────────
-
-self.addEventListener('activate', event => {
-  event.waitUntil(
+self.addEventListener('activate', e => {
+  e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(
-        keys
-          .filter(key => key !== CACHE_NAME)
-          .map(key => caches.delete(key))
-      )
+      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
     )
   )
   self.clients.claim()
 })
 
-// ── Fetch — Network first, cache fallback ────────────────────────────────────
-
-self.addEventListener('fetch', event => {
-  const { request } = event
+self.addEventListener('fetch', e => {
+  const { request } = e
   const url = new URL(request.url)
 
-  // Skip non-GET, cross-origin, and API requests
-  if (
-    request.method !== 'GET' ||
-    url.origin !== self.location.origin ||
-    url.pathname.startsWith('/api/')
-  ) {
+  // Skip non-GET and cross-origin
+  if (request.method !== 'GET' || url.origin !== self.location.origin) return
+  // Skip API calls - always network
+  if (url.pathname.startsWith('/api/')) return
+
+  // Static assets: cache-first
+  if (url.pathname.startsWith('/_next/static/') ||
+      url.pathname.startsWith('/icons/') ||
+      url.pathname === '/manifest.json') {
+    e.respondWith(
+      caches.match(request).then(hit => hit || fetch(request).then(res => {
+        if (res.ok) caches.open(CACHE).then(c => c.put(request, res.clone()))
+        return res
+      }))
+    )
     return
   }
 
-  // For navigation requests: network first, fall back to cached dashboard
+  // Navigation: network-first, cache fallback
   if (request.mode === 'navigate') {
-    event.respondWith(
+    e.respondWith(
       fetch(request)
-        .then(response => {
-          // Cache successful navigation responses
-          if (response.ok) {
-            const clone = response.clone()
-            caches.open(CACHE_NAME).then(cache => cache.put(request, clone))
-          }
-          return response
+        .then(res => {
+          if (res.ok) caches.open(CACHE).then(c => c.put(request, res.clone()))
+          return res
         })
-        .catch(() => {
-          return caches.match(request) || caches.match('/dashboard')
-        })
-    )
-    return
-  }
-
-  // For static assets: cache first, network fallback
-  if (
-    url.pathname.startsWith('/_next/static/') ||
-    url.pathname.startsWith('/icons/') ||
-    url.pathname.endsWith('.png') ||
-    url.pathname.endsWith('.svg') ||
-    url.pathname.endsWith('.ico')
-  ) {
-    event.respondWith(
-      caches.match(request).then(cached => {
-        if (cached) return cached
-        return fetch(request).then(response => {
-          if (response.ok) {
-            caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone()))
-          }
-          return response
-        })
-      })
+        .catch(() => caches.match(request) || caches.match('/dashboard'))
     )
   }
 })
 
-// ── Push Notifications ───────────────────────────────────────────────────────
-
-self.addEventListener('push', event => {
-  if (!event.data) return
-
+// Push notifications
+self.addEventListener('push', e => {
+  if (!e.data) return
   let payload
-  try {
-    payload = event.data.json()
-  } catch {
-    payload = { title: 'ChurchTrakr', body: event.data.text() }
-  }
+  try { payload = e.data.json() }
+  catch { payload = { title: 'ChurchTrakr', body: e.data.text() } }
 
-  const {
-    title = 'ChurchTrakr',
-    body  = '',
-    icon  = '/icons/icon-192.png',
-    badge = '/icons/icon-192.png',
-    tag,
-    url   = '/dashboard',
-    data  = {},
-  } = payload
-
-  event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      icon,
-      badge,
-      tag:            tag || 'churchtrakr',
-      requireInteraction: false,
-      data:           { url, ...data },
-      actions: [
-        { action: 'open', title: 'Open app' },
-        { action: 'dismiss', title: 'Dismiss' },
-      ],
+  e.waitUntil(
+    self.registration.showNotification(payload.title || 'ChurchTrakr', {
+      body:  payload.body || '',
+      icon:  '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      tag:   payload.tag || 'churchtrakr',
+      data:  { url: payload.url || '/dashboard' },
     })
   )
 })
 
-// ── Notification click ────────────────────────────────────────────────────────
-
-self.addEventListener('notificationclick', event => {
-  event.notification.close()
-
-  if (event.action === 'dismiss') return
-
-  const targetUrl = event.notification.data?.url || '/dashboard'
-
-  event.waitUntil(
+self.addEventListener('notificationclick', e => {
+  e.notification.close()
+  const url = e.notification.data?.url || '/dashboard'
+  e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
-      // If app already open, focus it and navigate
-      for (const client of clients) {
-        if (client.url.includes(self.location.origin)) {
-          client.focus()
-          client.postMessage({ type: 'NAVIGATE', url: targetUrl })
-          return
-        }
+      for (const c of clients) {
+        if (c.url.includes(self.location.origin)) { c.focus(); return }
       }
-      // Otherwise open new window
-      return self.clients.openWindow(targetUrl)
+      return self.clients.openWindow(url)
     })
   )
 })
 
-// ── Background sync (for offline queue) ──────────────────────────────────────
-
-self.addEventListener('sync', event => {
-  if (event.tag === 'attendance-sync') {
-    event.waitUntil(syncOfflineQueue())
-  }
-})
-
-async function syncOfflineQueue() {
-  // Notify the client to process its offline queue
-  const clients = await self.clients.matchAll()
-  clients.forEach(client => {
-    client.postMessage({ type: 'SYNC_OFFLINE_QUEUE' })
-  })
-}
-
-// ── Message from app ──────────────────────────────────────────────────────────
-
-self.addEventListener('message', event => {
-  if (event.data?.type === 'SKIP_WAITING') {
-    self.skipWaiting()
-  }
+self.addEventListener('message', e => {
+  if (e.data?.type === 'SKIP_WAITING') self.skipWaiting()
 })
