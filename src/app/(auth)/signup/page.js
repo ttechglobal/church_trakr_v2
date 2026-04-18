@@ -1,113 +1,138 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { validateSignupFields, sanitizeInput } from '@/lib/validation'
 
 export default function SignupPage() {
+  const router = useRouter()
+
   const [form, setForm] = useState({
-    groupName: '', adminName: '', email: '', password: '', confirmPassword: '',
+    groupName: '',
+    adminName: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [confirmed, setConfirmed] = useState(false)
 
   function setField(key, value) {
     setForm(prev => ({ ...prev, [key]: value }))
+  }
+
+  function validate() {
+    if (!form.groupName.trim()) return 'Please enter your group or church name.'
+    if (!form.adminName.trim()) return 'Please enter your name.'
+    if (!form.email.trim()) return 'Please enter your email.'
+    if (form.password.length < 8) return 'Password must be at least 8 characters.'
+    if (form.password !== form.confirmPassword) return 'Passwords do not match.'
+    return null
   }
 
   async function handleSignup(e) {
     e.preventDefault()
     setError('')
 
-    // Sanitize all inputs before touching them
-    const email     = sanitizeInput(form.email).toLowerCase()
-    const password  = form.password           // don't trim passwords
-    const groupName = sanitizeInput(form.groupName)
-    const adminName = sanitizeInput(form.adminName)
-
-    if (form.password !== form.confirmPassword) {
-      setError('Passwords do not match.')
+    const validationError = validate()
+    if (validationError) {
+      setError(validationError)
       return
     }
 
-    const validationError = validateSignupFields({ email, password, groupName, adminName })
-    if (validationError) { setError(validationError); return }
-
     setLoading(true)
-
     const supabase = createClient()
 
-    // 1. Create auth user — Supabase hashes the password with bcrypt internally
-    const { data: authData, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
+    // 1. Create auth user
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: form.email.trim().toLowerCase(),
+      password: form.password,
       options: {
-        // Store names in metadata as fallback for church record creation
-        data: {
-          admin_name: adminName,
-          group_name: groupName,
-        },
-        // Non-blocking — email sent for info only, never gates access
-        emailRedirectTo: `${window.location.origin}/dashboard`,
+        emailRedirectTo: `${window.location.origin}/api/auth/callback`,
       },
     })
 
-    if (signUpError) {
+    if (authError) {
       setLoading(false)
-      // Generic message — don't reveal if email is already registered
-      if (signUpError.message.toLowerCase().includes('already registered')) {
-        setError('An account with this email already exists.')
+      if (authError.message.includes('already registered')) {
+        setError('An account with this email already exists. Try signing in.')
       } else {
-        setError('Could not create account. Please try again.')
+        setError(authError.message)
       }
       return
     }
 
-    if (!authData?.user) {
-      setLoading(false)
-      setError('Signup failed. Please try again.')
-      return
-    }
+    // 2. Create church record + default group in one sequence
+    if (authData.user) {
+      const { data: churchData, error: churchError } = await supabase
+        .from('churches')
+        .insert({
+          admin_user_id: authData.user.id,
+          name: form.groupName.trim(),
+          admin_name: form.adminName.trim(),
+          plan: 'free',
+          sms_credits: 0,
+        })
+        .select('id')
+        .single()
 
-    // 2. Create church record server-side (service role bypasses RLS)
-    try {
-      const res = await fetch('/api/auth/setup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: authData.user.id,
-          groupName,
-          adminName,
-        }),
-      })
-
-      // Don't block on this — getChurch() in pages auto-creates if missing
-      if (!res.ok) {
-        console.warn('Church setup via API failed — will auto-create on first dashboard load')
+      if (churchError || !churchData) {
+        setLoading(false)
+        setError('Account created but setup failed. Please contact support.')
+        return
       }
-    } catch {
-      // Non-fatal — dashboard handles missing church gracefully
-    }
 
-    // 3. Sign in immediately — no email verification gate
-    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+      // 3. Auto-create a default group using the church/group name
+      // This means new users can take attendance immediately without creating a group first
+      await supabase
+        .from('groups')
+        .insert({
+          church_id: churchData.id,
+          name: form.groupName.trim(),
+          leader: form.adminName.trim(),
+        })
+      // Non-fatal if this fails — user can create groups manually
+    }
 
     setLoading(false)
-
-    if (signInError || !signInData?.session) {
-      // Account created but auto sign-in failed — redirect to login
-      window.location.replace('/login?message=Account created! Please sign in.')
-      return
-    }
-
-    // Full page navigation so cookies are committed before dashboard loads
-    window.location.replace('/dashboard')
+    setConfirmed(true)
   }
 
+  // ── Success screen ──
+  if (confirmed) {
+    return (
+      <div className="text-center space-y-4 animate-fade-in">
+        <div
+          className="w-16 h-16 rounded-full mx-auto flex items-center justify-center"
+          style={{ background: 'rgba(22,163,74,0.1)' }}
+        >
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+            <path d="M20 6L9 17l-5-5" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+        <div>
+          <h2 className="font-display text-2xl font-semibold text-forest">Check your email</h2>
+          <p className="text-sm text-forest-muted mt-2">
+            We sent a confirmation link to <strong className="text-forest">{form.email}</strong>.
+            Click it to activate your account.
+          </p>
+        </div>
+        <p className="text-xs text-forest-muted">
+          Didn't receive it? Check your spam folder or{' '}
+          <button
+            className="text-forest underline"
+            onClick={() => setConfirmed(false)}
+          >
+            try a different email
+          </button>.
+        </p>
+      </div>
+    )
+  }
+
+  // ── Signup form ──
   return (
     <>
       <div className="mb-6">
@@ -117,76 +142,115 @@ export default function SignupPage() {
         </p>
       </div>
 
-      <form onSubmit={handleSignup} className="space-y-4" noValidate>
+      <form onSubmit={handleSignup} className="space-y-4">
         <div>
-          <label className="input-label" htmlFor="groupName">Church / Group name</label>
+          <label className="input-label" htmlFor="groupName">
+            Church / Group name
+          </label>
           <input
-            id="groupName" type="text" required autoComplete="organization"
-            className="input" placeholder="e.g. Youth Fellowship, Men's Unit"
-            maxLength={100}
-            value={form.groupName} onChange={e => setField('groupName', e.target.value)}
+            id="groupName"
+            type="text"
+            required
+            autoComplete="organization"
+            className="input"
+            placeholder="e.g. Youth Fellowship, Men's Unit"
+            value={form.groupName}
+            onChange={e => setField('groupName', e.target.value)}
           />
         </div>
+
         <div>
-          <label className="input-label" htmlFor="adminName">Your name</label>
+          <label className="input-label" htmlFor="adminName">Your name (leader / admin)</label>
           <input
-            id="adminName" type="text" required autoComplete="name"
-            className="input" placeholder="Full name"
-            maxLength={100}
-            value={form.adminName} onChange={e => setField('adminName', e.target.value)}
+            id="adminName"
+            type="text"
+            required
+            autoComplete="name"
+            className="input"
+            placeholder="Full name"
+            value={form.adminName}
+            onChange={e => setField('adminName', e.target.value)}
           />
         </div>
+
         <div>
           <label className="input-label" htmlFor="email">Email</label>
           <input
-            id="email" type="email" required autoComplete="email"
-            className="input" placeholder="you@example.com"
-            maxLength={254}
-            value={form.email} onChange={e => setField('email', e.target.value)}
+            id="email"
+            type="email"
+            required
+            autoComplete="email"
+            className="input"
+            placeholder="you@example.com"
+            value={form.email}
+            onChange={e => setField('email', e.target.value)}
           />
         </div>
+
         <div>
           <label className="input-label" htmlFor="password">Password</label>
           <input
-            id="password" type="password" required
-            autoComplete="new-password" className="input"
+            id="password"
+            type="password"
+            required
+            minLength={8}
+            autoComplete="new-password"
+            className="input"
             placeholder="Min. 8 characters"
-            minLength={8} maxLength={72}
-            value={form.password} onChange={e => setField('password', e.target.value)}
+            value={form.password}
+            onChange={e => setField('password', e.target.value)}
           />
         </div>
+
         <div>
           <label className="input-label" htmlFor="confirmPassword">Confirm password</label>
           <input
-            id="confirmPassword" type="password" required
-            autoComplete="new-password" className="input"
+            id="confirmPassword"
+            type="password"
+            required
+            autoComplete="new-password"
+            className="input"
             placeholder="Repeat password"
-            minLength={8} maxLength={72}
             value={form.confirmPassword}
             onChange={e => setField('confirmPassword', e.target.value)}
           />
         </div>
 
         {error && (
-          <div style={{
-            background: 'rgba(220,38,38,0.08)',
-            border: '1px solid rgba(220,38,38,0.2)',
-            borderRadius: 12, padding: '0.75rem 1rem',
-            fontSize: '0.875rem', color: '#dc2626',
-          }}>
+          <div className="rounded-xl bg-error/8 border border-error/20 px-4 py-3 text-sm text-error">
             {error}
           </div>
         )}
 
-        <button type="submit" disabled={loading} className="btn-primary w-full btn-lg">
-          {loading ? 'Creating account…' : 'Create account'}
+        <button
+          type="submit"
+          disabled={loading}
+          className="btn-primary w-full btn-lg mt-2"
+        >
+          {loading ? (
+            <span className="flex items-center gap-2">
+              <LoadingSpinner />
+              Creating account…
+            </span>
+          ) : 'Create account'}
         </button>
       </form>
 
       <p className="mt-6 text-center text-sm text-forest-muted">
         Already have an account?{' '}
-        <Link href="/login" className="text-forest font-medium">Sign in</Link>
+        <Link href="/login" className="text-forest font-medium hover:text-forest-mid transition-colors">
+          Sign in
+        </Link>
       </p>
     </>
+  )
+}
+
+function LoadingSpinner() {
+  return (
+    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.37 0 0 5.37 0 12h4z" />
+    </svg>
   )
 }

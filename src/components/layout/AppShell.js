@@ -19,7 +19,6 @@ const NAV = [
   { href: '/absentees',   label: 'Absentees',    Icon: UserX },
   { href: '/attendees',   label: 'Attendees',    Icon: UserCheck },
   { href: '/firsttimers', label: 'First Timers', Icon: Star },
-  { href: '/groups',      label: 'Groups',       Icon: Users },
   { href: '/members',     label: 'Members',      Icon: User },
   { href: '/messaging',   label: 'Messaging',    Icon: MessageSquare },
   { href: '/analytics',   label: 'Analytics',    Icon: BarChart2 },

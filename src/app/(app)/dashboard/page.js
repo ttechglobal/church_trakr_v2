@@ -27,13 +27,18 @@ export default async function DashboardPage() {
   const sessions    = sessionsRes.status    === 'fulfilled' ? (sessionsRes.value.data    ?? []) : []
   const firstTimers = firstTimersRes.status === 'fulfilled' ? (firstTimersRes.value.data ?? []) : []
 
-  const withData = sessions.filter(s => s.attendance_records?.length > 0)
-  const avgRate  = withData.length > 0
-    ? Math.round(withData.reduce((sum, s) => {
-        const present = s.attendance_records.filter(r => r.present).length
-        return sum + attendanceRate(present, s.attendance_records.length)
-      }, 0) / withData.length)
+  // Last Sunday attendance rate (most recent session with records)
+  const withData    = sessions.filter(s => s.attendance_records?.length > 0)
+  const lastSession = withData[0] ?? null
+  const lastSundayRate = lastSession
+    ? Math.round(
+        (lastSession.attendance_records.filter(r => r.present).length /
+         lastSession.attendance_records.length) * 100
+      )
     : null
+  const lastSundayColor = lastSundayRate === null
+    ? '#1a3a2a'
+    : lastSundayRate >= 70 ? '#16a34a' : '#dc2626'
 
   // ── Follow-up: query the most recent session's absentees from DB ───────────
   // Pull actual absent members from last session, cross-check follow_up_data
@@ -125,9 +130,9 @@ export default async function DashboardPage() {
         {/* Stats row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: '1.25rem' }}>
           {[
-            { label: 'Members',      value: members.length,     Icon: Users,    href: '/members',     color: '#1a3a2a' },
-            { label: 'Avg Rate',     value: avgRate !== null ? `${avgRate}%` : '—', Icon: BarChart2, href: '/analytics', color: avgRate !== null && avgRate >= 75 ? '#16a34a' : avgRate !== null && avgRate >= 50 ? '#d97706' : '#1a3a2a' },
-            { label: 'First Timers', value: firstTimers.length, Icon: Star,     href: '/firsttimers', color: '#a8862e' },
+            { label: 'Members',      value: members.length,                          Icon: Users,    href: '/members',     color: '#1a3a2a' },
+            { label: 'Last Sunday',  value: lastSundayRate !== null ? `${lastSundayRate}%` : '—', Icon: BarChart2, href: '/analytics', color: lastSundayColor },
+            { label: 'First Timers', value: firstTimers.length,                          Icon: Star,     href: '/firsttimers', color: '#a8862e' },
           ].map(({ label, value, Icon, href, color }) => (
             <Link key={label} href={href} prefetch className="d-stat" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '1rem 0.875rem', background: '#fff', border: '1px solid rgba(26,58,42,0.08)', borderRadius: 14, textDecoration: 'none', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', transition: 'transform 0.18s ease, box-shadow 0.18s ease' }}>
               <Icon size={18} color={color} strokeWidth={1.75} style={{ marginBottom: 8, display: 'block' }} />
@@ -180,16 +185,16 @@ export default async function DashboardPage() {
             </div>
           ) : (
             <div style={{ background: '#fff', border: '1px solid rgba(220,38,38,0.14)', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-              {pendingFollowUps.slice(0, 4).map((p, i) => (
-                <div key={p.key} className="d-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.7rem 1rem', borderBottom: i < Math.min(pendingFollowUps.length,4)-1 ? '1px solid rgba(26,58,42,0.06)' : 'none', transition: 'background 0.14s' }}>
+              {pendingFollowUps.slice(0, 3).map((p, i) => (
+                <div key={p.key} className="d-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.7rem 1rem', borderBottom: i < Math.min(pendingFollowUps.length,3)-1 ? '1px solid rgba(26,58,42,0.06)' : 'none', transition: 'background 0.14s' }}>
                   <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#dc2626', flexShrink: 0 }} />
                   <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: '#1a3a2a' }}>{p.name}</span>
                   <Link href="/absentees" prefetch style={{ fontSize: 12, fontWeight: 700, color: '#dc2626', textDecoration: 'none', padding: '3px 9px', background: 'rgba(220,38,38,0.08)', borderRadius: 20 }}>Follow up</Link>
                 </div>
               ))}
-              {pendingCount > 4 && (
+              {pendingCount > 3 && (
                 <div style={{ padding: '0.6rem 1rem', background: 'rgba(220,38,38,0.03)' }}>
-                  <Link href="/absentees" prefetch style={{ fontSize: 13, color: '#dc2626', fontWeight: 700, textDecoration: 'none' }}>+ {pendingCount-4} more need follow-up →</Link>
+                  <Link href="/absentees" prefetch style={{ fontSize: 13, color: '#dc2626', fontWeight: 700, textDecoration: 'none' }}>+ {pendingCount-3} more need follow-up →</Link>
                 </div>
               )}
             </div>

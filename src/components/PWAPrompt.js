@@ -81,6 +81,8 @@ function NotifPrompt({ onAccept, onDismiss }) {
 
 // ── Install banner (subtle bottom strip after first prompt) ────────────────────
 function InstallBanner({ isIOS, onInstall, onDismiss }) {
+  // Don't render if no install mechanism available
+  if (!isIOS && !onInstall) return null
   return (
     <div style={{
       position: 'fixed', bottom: 72, left: '50%',
@@ -194,12 +196,18 @@ export default function PWAPrompt() {
                          window.navigator.standalone
     if (!isStandalone) {
       // Capture install prompt for Android/Chrome
+      // Show the install banner immediately when the prompt is available
       const handler = (e) => {
         e.preventDefault()
         setInstallPrompt(e)
+        // Show install banner unless already done/dismissed recently
+        if (!localStorage.getItem(K.installDone) &&
+            shouldShow(K.installDismissed, INSTALL_REPROMPT_DAYS)) {
+          // Small delay so it doesn't appear before the page loads
+          setTimeout(() => setShowInstall(true), 4000)
+        }
       }
       window.addEventListener('beforeinstallprompt', handler)
-      // Cleanup handled in return below
     }
 
     // ── Decide what to show ──
