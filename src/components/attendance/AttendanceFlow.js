@@ -42,19 +42,10 @@ export default function AttendanceFlow({
 
   // ── Step 1: Group selected ──
   function handleGroupSelect(group) {
-    if (group.id === FIRST_TIMERS_ID) {
-      // First-timers: initialise all as UNMARKED (false), skip date step → go straight to mark
-      // DEFAULT STATE = unmarked. User taps to mark present. Do not pre-mark anyone.
-      const init = {}
-      firstTimers.forEach(ft => { init[ft.id] = false })
-      setFtAttendance(init)
-      setSelectedGroup(group)
-      setSelectedDate(new Date().toISOString().split('T')[0])
-      setStep(STEP.MARK)
-      return
-    }
     setSelectedGroup(group)
     setStep(STEP.DATE)
+    // First Timers goes through date step just like regular groups
+    // so existing attendance can be loaded when editing
   }
 
   // ── Step 2: Date selected ──
@@ -64,35 +55,41 @@ export default function AttendanceFlow({
     setLoadingMembers(true)
 
     try {
-      // Fetch members + existing records for this group+date
-      // Pass date so API returns existingRecords when attendance already taken
-      const res = await fetch(
-        `/api/attendance/members?groupId=${selectedGroup.id}&churchId=${church.id}&date=${date}`
-      )
-      const data = await res.json()
-      const memberList = data.members ?? []
-      setMembers(memberList)
+      if (selectedGroup.id === FIRST_TIMERS_ID) {
+        // ── FIRST TIMERS path ──
+        // Load existing FT attendance for this date from the dedicated API
+        const res  = await fetch(`/api/attendance/firsttimers?date=${date}&churchId=${church.id}`)
+        const data = await res.json()
 
-      // Initialize attendance state
-      let initial = {}
-      if (data.existingRecords && data.existingRecords.length > 0) {
-        // ── EDITING EXISTING SESSION ──
-        // Load each member's saved present/absent value.
-        // Members not in existingRecords default to false (absent).
-        for (const m of memberList) {
-          initial[m.id] = false // default absent
+        // Start all unmarked, then overlay existing records
+        const init = {}
+        firstTimers.forEach(ft => { init[ft.id] = false })
+        if (data.records && data.records.length > 0) {
+          for (const r of data.records) {
+            if (r.member_id in init) init[r.member_id] = r.present
+          }
+          setExistingSessionId(data.sessionId)
         }
-        for (const r of data.existingRecords) {
-          initial[r.member_id] = r.present
-        }
+        setFtAttendance(init)
+        setMembers([]) // not used for FT path
       } else {
-        // ── NEW SESSION ──
-        // DEFAULT STATE = false (absent/unmarked). Do not pre-mark anyone.
-        for (const m of memberList) {
-          initial[m.id] = false
+        // ── Regular group path ──
+        const res = await fetch(
+          `/api/attendance/members?groupId=${selectedGroup.id}&churchId=${church.id}&date=${date}`
+        )
+        const data = await res.json()
+        const memberList = data.members ?? []
+        setMembers(memberList)
+
+        let initial = {}
+        if (data.existingRecords && data.existingRecords.length > 0) {
+          for (const m of memberList) initial[m.id] = false
+          for (const r of data.existingRecords) initial[r.member_id] = r.present
+        } else {
+          for (const m of memberList) initial[m.id] = false
         }
+        setAttendance(initial)
       }
-      setAttendance(initial)
     } catch (err) {
       console.error('Failed to load members', err)
     } finally {
@@ -163,33 +160,32 @@ export default function AttendanceFlow({
     }
   }
 
-  // ── First-timers save ──
+  // ── First-timers save ── mirrors handleSave exactly, uses dedicated API ──────
   async function handleSaveFirstTimers() {
     setSavingFT(true)
-    const presentIds = Object.entries(ftAttendance)
-      .filter(([, v]) => v).map(([id]) => id)
+    const records = firstTimers.map(ft => ({
+      memberId: ft.id,
+      name:     ft.name,
+      present:  ftAttendance[ft.id] ?? false,
+    }))
 
     try {
-      // Log visits for each present first timer
-      await Promise.all(
-        presentIds.map(id =>
-          fetch(`/api/firsttimers/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              visits: (firstTimers.find(ft => ft.id === id)?.visits ?? 0) + 1,
-            }),
-          })
-        )
-      )
+      const res = await fetch('/api/attendance/firsttimers', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ date: selectedDate, records }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Save failed')
       setSavedResult({
-        sessionId: 'ft_' + Date.now(),
-        present:   presentIds.length,
-        absent:    firstTimers.length - presentIds.length,
-        total:     firstTimers.length,
+        ...data,
         isFirstTimers: true,
+        // Provide members/attendance for the summary page
+        ftMembers:    firstTimers,
+        ftAttendance: { ...ftAttendance },
       })
       setStep(STEP.SUMMARY)
+      localStorage.setItem('ct_last_attendance_date', selectedDate)
     } catch (err) {
       alert('Failed to save: ' + err.message)
     } finally {
@@ -239,6 +235,7 @@ export default function AttendanceFlow({
           church={church}
           onSelect={handleDateSelect}
           onBack={() => setStep(STEP.GROUP)}
+          isFirstTimers={selectedGroup?.id === FIRST_TIMERS_ID}
         />
       )}
       {step === STEP.MARK && selectedGroup && selectedDate && (
@@ -433,7 +430,7 @@ function StepGroup({ groups, sessionsByGroup, onSelect, onBack, firstTimers = []
 // STEP 2 — Date Selection
 // ─────────────────────────────────────────────────────────────────────────────
 
-function StepDate({ group, church, onSelect, onBack }) {
+function StepDate({ group, church, onSelect, onBack, isFirstTimers = false }) {
   /*
     DO NOT CHANGE — date selection rules (permanent):
     - Tapping "This Sunday" / "Last Sunday" HIGHLIGHTS the button only.
@@ -451,9 +448,16 @@ function StepDate({ group, church, onSelect, onBack }) {
   async function checkDate(date) {
     if (existingMap[date] !== undefined) return existingMap[date]
     try {
-      const res = await fetch(`/api/attendance/check?groupId=${group.id}&date=${date}`)
-      const data = await res.json()
-      const sessionId = data.sessionId ?? false
+      let sessionId = false
+      if (isFirstTimers) {
+        const res  = await fetch(`/api/attendance/firsttimers?date=${date}`)
+        const data = await res.json()
+        sessionId = data.sessionId ?? false
+      } else {
+        const res  = await fetch(`/api/attendance/check?groupId=${group.id}&date=${date}`)
+        const data = await res.json()
+        sessionId = data.sessionId ?? false
+      }
       setExistingMap(prev => ({ ...prev, [date]: sessionId }))
       return sessionId
     } catch { return false }
@@ -584,9 +588,11 @@ function StepDate({ group, church, onSelect, onBack }) {
         className="btn-primary btn-lg w-full"
         style={{
           background: activeDate && !checking
-            ? hasExisting
-              ? 'linear-gradient(135deg,#a8862e,#c9a84c)'  // gold = editing
-              : 'linear-gradient(135deg,#1a3a2a,#2d5a42)'  // green = new
+            ? isFirstTimers
+              ? 'linear-gradient(135deg,#a8862e,#c9a84c)'  // gold = first timers
+              : hasExisting
+                ? 'linear-gradient(135deg,#a8862e,#c9a84c)'  // gold = editing
+                : 'linear-gradient(135deg,#1a3a2a,#2d5a42)'  // green = new
             : undefined,
           opacity: !activeDate ? 0.5 : 1,
         }}
@@ -595,9 +601,13 @@ function StepDate({ group, church, onSelect, onBack }) {
           ? '…'
           : !activeDate
             ? 'Select a date first'
-            : hasExisting
-              ? `Edit Attendance — ${fmtDate(activeDate)}`
-              : `Take Attendance — ${fmtDate(activeDate)}`
+            : isFirstTimers
+              ? hasExisting
+                ? `Edit First Timers — ${fmtDate(activeDate)}`
+                : `Mark First Timers — ${fmtDate(activeDate)}`
+              : hasExisting
+                ? `Edit Attendance — ${fmtDate(activeDate)}`
+                : `Take Attendance — ${fmtDate(activeDate)}`
         }
       </button>
     </div>
@@ -687,7 +697,6 @@ function StepMark({
             {filtered.map(member => {
               const isPresent = attendance[member.id] ?? false
               const av = getAv(member.name)
-              // DEFAULT STATE = X gray, PRESENT = green. Do not change.
               return (
                 <button
                   key={member.id}
@@ -906,35 +915,35 @@ function StepMarkFirstTimers({ firstTimers, attendance, date, saving, onToggle, 
 // ─────────────────────────────────────────────────────────────────────────────
 
 function StepSummary({ group, date, members, attendance, result, onDone, onEdit }) {
-  const [showPresent, setShowPresent] = useState(false)
-  const [showAbsent, setShowAbsent] = useState(true)
+  // For FT, use members from result; for regular, use members prop
+  const allMembers = result.isFirstTimers ? (result.ftMembers ?? []) : members
+  const allAttendance = result.isFirstTimers ? (result.ftAttendance ?? {}) : attendance
 
-  const presentMembers = members.filter(m => attendance[m.id])
-  const absentMembers = members.filter(m => !attendance[m.id])
-  const rate = result.isFirstTimers
-    ? Math.round((result.present / (result.total || 1)) * 100)
-    : attendanceRate(presentMembers.length, members.length)
+  const presentMembers = allMembers.filter(m => allAttendance[m.id])
+  const absentMembers  = allMembers.filter(m => !allAttendance[m.id])
+  const rate = attendanceRate(presentMembers.length, allMembers.length)
 
   return (
-    <div className="page-content">
-      {/* Rate ring */}
-      <div className="card text-center py-8 animate-slide-up animate-fill-both">
-        <p className="text-sm text-mist mb-3">{group?.name ?? 'First Timers'} · {fmtDate(date)}</p>
-        <RateRing rate={rate} size={120} />
-        <div className="flex justify-center gap-8 mt-6">
-          <div>
-            <p className="font-display text-3xl font-bold text-success">{presentMembers.length}</p>
-            <p className="text-xs text-mist mt-1">Present</p>
+    <div className="page-content pb-10">
+      {/* Stats card */}
+      <div className="card text-center py-6 animate-slide-up animate-fill-both">
+        <p className="text-sm text-mist mb-4">{group?.name ?? 'First Timers'} · {fmtDate(date)}</p>
+        <RateRing rate={rate} size={110} />
+        {/* Full breakdown — Total, Present, Absent */}
+        <div className="flex justify-center gap-6 mt-5">
+          <div className="text-center">
+            <p className="font-display text-2xl font-bold text-forest">{allMembers.length}</p>
+            <p className="text-xs text-mist mt-1 font-medium">Total</p>
           </div>
           <div className="w-px bg-ivory-deeper" />
-          <div>
-            <p className="font-display text-3xl font-bold text-error">{absentMembers.length}</p>
-            <p className="text-xs text-mist mt-1">Absent</p>
+          <div className="text-center">
+            <p className="font-display text-2xl font-bold text-success">{presentMembers.length}</p>
+            <p className="text-xs text-mist mt-1 font-medium">Present</p>
           </div>
           <div className="w-px bg-ivory-deeper" />
-          <div>
-            <p className="font-display text-3xl font-bold text-forest">{members.length}</p>
-            <p className="text-xs text-mist mt-1">Total</p>
+          <div className="text-center">
+            <p className="font-display text-2xl font-bold text-error">{absentMembers.length}</p>
+            <p className="text-xs text-mist mt-1 font-medium">Absent</p>
           </div>
         </div>
         {result.offline && (
@@ -945,7 +954,7 @@ function StepSummary({ group, date, members, attendance, result, onDone, onEdit 
       </div>
 
       {/* Message attendees shortcut */}
-      {presentMembers.length > 0 && (
+      {presentMembers.length > 0 && !result.isFirstTimers && (
         <a
           href="/attendees"
           className="card flex items-center gap-3 hover:shadow-card-hover transition-shadow
@@ -963,63 +972,111 @@ function StepSummary({ group, date, members, attendance, result, onDone, onEdit 
       )}
 
       {/* Present list */}
-      <ExpandableList
-        title={`Present (${presentMembers.length})`}
+      <SummaryList
+        title={`Present · ${presentMembers.length}`}
         members={presentMembers}
         color="success"
-        open={showPresent}
-        onToggle={() => setShowPresent(p => !p)}
+        defaultOpen={true}
+        maxVisible={999}
       />
 
-      {/* Absent list */}
-      <ExpandableList
-        title={`Absent (${absentMembers.length})`}
+      {/* Absent list — collapsed with show more */}
+      <SummaryList
+        title={`Absent · ${absentMembers.length}`}
         members={absentMembers}
         color="error"
-        open={showAbsent}
-        onToggle={() => setShowAbsent(p => !p)}
+        defaultOpen={absentMembers.length <= 5}
+        maxVisible={5}
       />
 
-      {/* Actions */}
-      <div className="flex gap-3 pb-6 animate-slide-up animate-fill-both animate-stagger-3">
-        <button onClick={onEdit} className="btn-outline flex-1">Edit</button>
-        <button onClick={onDone} className="btn-primary flex-1">Done</button>
+      {/* Action buttons */}
+      <div className="flex gap-3 pb-8 animate-slide-up animate-fill-both animate-stagger-3">
+        <button onClick={onEdit} className="btn-outline flex-1 btn-lg gap-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+          Edit
+        </button>
+        <button onClick={onDone} className="btn-primary flex-1 btn-lg">
+          Done ✓
+        </button>
       </div>
     </div>
   )
 }
 
-function ExpandableList({ title, members, color, open, onToggle }) {
+function SummaryList({ title, members, color, defaultOpen, maxVisible = 5 }) {
+  const [open,     setOpen]     = useState(defaultOpen)
+  const [showAll,  setShowAll]  = useState(false)
+
+  const visible  = showAll ? members : members.slice(0, maxVisible)
+  const hiddenCount = members.length - maxVisible
+  const isSuccess   = color === 'success'
+
   return (
-    <div className={`card overflow-hidden animate-slide-up animate-fill-both animate-stagger-2
-      border-${color === 'success' ? 'success' : 'error'}/20`}
+    <div className={`card overflow-hidden animate-slide-up animate-fill-both animate-stagger-2`}
+      style={{ borderColor: isSuccess ? 'rgba(22,163,74,0.2)' : 'rgba(220,38,38,0.2)' }}
     >
       <button
-        onClick={onToggle}
+        onClick={() => setOpen(p => !p)}
         className="w-full flex items-center justify-between py-1"
       >
-        <span className={`font-semibold text-[14px] text-${color === 'success' ? 'success' : 'error'}`}>
+        <span className={`font-semibold text-[14px] ${isSuccess ? 'text-success' : 'text-error'}`}>
           {title}
         </span>
         <ChevronRight className={`text-mist transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
       </button>
-      {open && members.length > 0 && (
-        <div className="mt-3 space-y-1.5 border-t border-forest/8 pt-3">
-          {members.map(m => {
-            const av = getAv(m.name)
-            return (
-              <div key={m.id} className="flex items-center gap-3 px-1">
-                <div className="avatar text-xs shrink-0" style={{ background: av.bg, color: av.color, width: 28, height: 28 }}>
-                  {av.initials}
-                </div>
-                <span className="text-[14px] text-forest truncate">{m.name}</span>
+
+      {open && (
+        <div className="border-t border-forest/8 mt-2 pt-2">
+          {members.length === 0 ? (
+            <p className="text-sm text-mist py-2">None</p>
+          ) : (
+            <>
+              <div className="space-y-0">
+                {visible.map((m, i) => {
+                  const av = getAv(m.name)
+                  return (
+                    <div key={m.id}
+                      className="flex items-center gap-3 py-2.5 px-1"
+                      style={{ borderBottom: i < visible.length - 1 ? '1px solid rgba(26,58,42,0.06)' : 'none' }}
+                    >
+                      <div className="avatar text-xs shrink-0"
+                        style={{ background: av.bg, color: av.color, width: 30, height: 30, borderRadius: 9 }}>
+                        {av.initials}
+                      </div>
+                      <span className="text-[14px] text-forest font-medium">{m.name}</span>
+                      {isSuccess && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" className="ml-auto shrink-0">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
-            )
-          })}
+              {!showAll && hiddenCount > 0 && (
+                <button
+                  onClick={() => setShowAll(true)}
+                  className="w-full mt-2 py-2 text-xs font-semibold text-forest-muted
+                    hover:text-forest bg-ivory rounded-xl transition-colors"
+                >
+                  Show {hiddenCount} more ↓
+                </button>
+              )}
+              {showAll && hiddenCount > 0 && (
+                <button
+                  onClick={() => setShowAll(false)}
+                  className="w-full mt-2 py-2 text-xs font-semibold text-forest-muted
+                    hover:text-forest bg-ivory rounded-xl transition-colors"
+                >
+                  Show less ↑
+                </button>
+              )}
+            </>
+          )}
         </div>
-      )}
-      {open && members.length === 0 && (
-        <p className="text-sm text-mist mt-3 border-t border-forest/8 pt-3">None</p>
       )}
     </div>
   )

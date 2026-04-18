@@ -1,11 +1,12 @@
 import { getUser, getChurch } from '@/lib/auth'
 import AppShell from '@/components/layout/AppShell'
+import PWAInit from '@/components/PWAInit'
+import FollowUpBanner from '@/components/FollowUpBanner'
+import PWAPromptLoader from '@/components/PWAPromptLoader'
 
 export default async function AppLayout({ children }) {
   const user = await getUser()
 
-  // No redirect — AppShell handles unauthenticated state gracefully
-  // Redirecting in layout causes loops when session cookie timing is off
   if (!user) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', fontFamily: 'system-ui' }}>
@@ -34,8 +35,18 @@ export default async function AppLayout({ children }) {
     )
   }
 
+  // Count pending follow-ups for banner + notifications
+  let pendingFollowUps = 0
+  try {
+    pendingFollowUps = Object.values(church.follow_up_data ?? {})
+      .filter(v => !v.reached).length
+  } catch {}
+
   return (
     <AppShell church={church} user={user}>
+      <PWAInit pendingFollowUps={pendingFollowUps} />
+      <FollowUpBanner pendingCount={pendingFollowUps} />
+      <PWAPromptLoader />
       {children}
     </AppShell>
   )

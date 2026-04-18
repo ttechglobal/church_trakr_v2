@@ -13,8 +13,6 @@ import {
 } from 'lucide-react'
 
 // Lazy-load non-critical UI — doesn't block first paint
-const InstallBanner = dynamic(() => import('@/components/InstallBanner'), { ssr: false })
-
 const NAV = [
   { href: '/dashboard',   label: 'Dashboard',    Icon: LayoutDashboard },
   { href: '/attendance',  label: 'Attendance',   Icon: CheckSquare },
@@ -161,7 +159,6 @@ export default function AppShell({ church, user, children }) {
         </div>
 
         <main className="shell-main">{children}</main>
-        <InstallBanner />
       </div>
     </>
   )

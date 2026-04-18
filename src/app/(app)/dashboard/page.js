@@ -35,38 +35,56 @@ export default async function DashboardPage() {
       }, 0) / withData.length)
     : null
 
-  // ── Follow-up pending entries with real names ─────────────────────────────
-  // follow_up_data keys = "{sessionId}_{memberId}", value = { reached, note, ... }
-  // We look up real names from attendance_records so names are always current.
-  const rawPendingKeys = Object.entries(church.follow_up_data ?? {}).filter(([, v]) => !v.reached)
-  const pendingCount   = rawPendingKeys.length
+  // ── Follow-up: query the most recent session's absentees from DB ───────────
+  // Pull actual absent members from last session, cross-check follow_up_data
+  // to filter out those already marked as reached.
+  const followUpData = church.follow_up_data ?? {}
 
-  // Build a memberId → name map from recent sessions for the dashboard list
-  let memberNameMap = {}
-  if (rawPendingKeys.length > 0) {
-    // Extract memberIds from keys (format: sessionId_memberId)
-    const memberIds = [...new Set(
-      rawPendingKeys.map(([key]) => {
-        const parts = key.split('_')
-        return parts[parts.length - 1]  // last segment is memberId
-      }).filter(Boolean)
-    )]
-    if (memberIds.length > 0) {
-      const { data: memberRows } = await admin
-        .from('members')
-        .select('id, name')
-        .in('id', memberIds)
-      for (const m of (memberRows ?? [])) memberNameMap[m.id] = m.name
+  // Find the most recent attendance session for this church
+  let pendingFollowUps = []
+  {
+    const { data: latestSession } = await admin
+      .from('attendance_sessions')
+      .select('id, date, group_id, groups(name), attendance_records(member_id, name, present)')
+      .eq('church_id', church.id)
+      .order('date', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (latestSession) {
+      // Get absent members from latest session
+      const absentRecords = (latestSession.attendance_records ?? [])
+        .filter(r => !r.present && r.member_id)
+
+      if (absentRecords.length > 0) {
+        // Look up real names from members table
+        const memberIds = absentRecords.map(r => r.member_id)
+        const { data: memberRows } = await admin
+          .from('members')
+          .select('id, name')
+          .in('id', memberIds)
+        const nameMap = {}
+        for (const m of (memberRows ?? [])) nameMap[m.id] = m.name
+
+        // Build pending list — skip those already marked as reached
+        for (const r of absentRecords) {
+          const key     = `${latestSession.id}_${r.member_id}`
+          const reached = followUpData[key]?.reached ?? false
+          if (!reached) {
+            pendingFollowUps.push({
+              key,
+              memberId:  r.member_id,
+              name:      nameMap[r.member_id] || r.name || 'Unknown',
+              sessionId: latestSession.id,
+              date:      latestSession.date,
+              groupName: latestSession.groups?.name ?? '',
+            })
+          }
+        }
+      }
     }
   }
-
-  // Enrich pending entries with real names
-  const pendingKeys = rawPendingKeys.map(([key, entry]) => {
-    const parts = key.split('_')
-    const memberId = parts[parts.length - 1]
-    const realName = memberNameMap[memberId] || entry.name || null
-    return [key, { ...entry, name: realName }]
-  })
+  const pendingCount = pendingFollowUps.length
 
   return (
     <>
@@ -147,18 +165,25 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Absentees follow-up */}
-        {pendingCount > 0 && (
-          <div style={{ marginBottom: '1.25rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <h2 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 15, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>Follow-up Needed</h2>
+        {/* Absentees follow-up — dynamic from most recent session */}
+        <div style={{ marginBottom: '1.25rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <h2 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 15, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>Follow-up Needed</h2>
+            {pendingCount > 0 && (
               <Link href="/absentees" prefetch style={{ fontSize: 13, color: '#4a8a65', fontWeight: 700, textDecoration: 'none' }}>View all {pendingCount} →</Link>
+            )}
+          </div>
+          {pendingCount === 0 ? (
+            <div style={{ background: '#fff', border: '1px solid rgba(26,58,42,0.08)', borderRadius: 14, padding: '1.25rem 1rem', display: 'flex', alignItems: 'center', gap: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.03)' }}>
+              <span style={{ fontSize: 20 }}>🎉</span>
+              <p style={{ fontSize: 14, color: '#4a8a65', fontWeight: 600, margin: 0 }}>All caught up — no pending follow-ups</p>
             </div>
+          ) : (
             <div style={{ background: '#fff', border: '1px solid rgba(220,38,38,0.14)', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-              {pendingKeys.slice(0, 4).map(([key, entry], i) => (
-                <div key={key} className="d-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.7rem 1rem', borderBottom: i < Math.min(pendingKeys.length,4)-1 ? '1px solid rgba(26,58,42,0.06)' : 'none', transition: 'background 0.14s' }}>
+              {pendingFollowUps.slice(0, 4).map((p, i) => (
+                <div key={p.key} className="d-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.7rem 1rem', borderBottom: i < Math.min(pendingFollowUps.length,4)-1 ? '1px solid rgba(26,58,42,0.06)' : 'none', transition: 'background 0.14s' }}>
                   <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#dc2626', flexShrink: 0 }} />
-                  <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: '#1a3a2a' }}>{entry.name ?? `Member ${i+1}`}</span>
+                  <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: '#1a3a2a' }}>{p.name}</span>
                   <Link href="/absentees" prefetch style={{ fontSize: 12, fontWeight: 700, color: '#dc2626', textDecoration: 'none', padding: '3px 9px', background: 'rgba(220,38,38,0.08)', borderRadius: 20 }}>Follow up</Link>
                 </div>
               ))}
@@ -168,8 +193,8 @@ export default async function DashboardPage() {
                 </div>
               )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Recent sessions */}
         <div>
