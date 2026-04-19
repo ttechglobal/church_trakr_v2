@@ -1,25 +1,110 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import BackButton from '@/components/ui/BackButton'
-import { useFollowUpSync } from '@/hooks/useFollowUpSync'
 import { fmtDate, toWhatsAppNumber, getAv } from '@/lib/utils'
-import { Check, Phone, FileText, MessageSquare, ChevronRight, ChevronDown } from 'lucide-react'
+import { Check, Phone, FileText, MessageSquare } from 'lucide-react'
 
 const ABSENTEE_MESSAGE = (name) =>
   `Hi ${name}, we missed you at service this week. We hope you're well. Please join us next Sunday! 🙏`
 
+function getDisplayName() {
+  if (typeof window === 'undefined') return 'Team member'
+  return localStorage.getItem('ct_display_name') || 'Team member'
+}
+
 export default function AbsenteesClient({
   churchId, absentees, groups, initialFollowUpData, hasCredits
 }) {
-  const { data: followUp, update } = useFollowUpSync(
-    churchId, initialFollowUpData, 'absentee', 'follow_up_data'
-  )
+  // Local state initialised from server data
+  const [followUp, setFollowUp] = useState(initialFollowUpData ?? {})
+  const [syncing,  setSyncing]  = useState({}) // key → true while saving
 
-  const [activeGroup, setActiveGroup] = useState('all')
-  const [statusFilter, setStatusFilter] = useState('all') // all | pending | reached
-  const [noteTarget, setNoteTarget] = useState(null) // { key, name, currentNote }
-  const [noteText, setNoteText] = useState('')
+  const [activeGroup,  setActiveGroup]  = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [noteTarget,   setNoteTarget]   = useState(null)
+  const [noteText,     setNoteText]     = useState('')
+
+  // ── Pull fresh data from server on mount + on tab focus ──────────────────────
+  const syncFromServer = useCallback(async () => {
+    try {
+      const res = await fetch('/api/followup/load?field=follow_up_data')
+      if (!res.ok) return
+      const { data } = await res.json()
+      if (data) setFollowUp(prev => ({ ...prev, ...data }))
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    syncFromServer()
+    const handler = () => syncFromServer()
+    window.addEventListener('focus', handler)
+    return () => window.removeEventListener('focus', handler)
+  }, [syncFromServer])
+
+  // ── Atomic mark — writes directly to DB, not a debounced blob replace ────────
+  async function markReached(absentee, reached) {
+    const key = absentee.sessionId + '_' + absentee.memberId
+    setSyncing(p => ({ ...p, [key]: true }))
+
+    // Optimistic update
+    const reachedBy  = reached ? getDisplayName() : null
+    const reachedAt  = reached ? new Date().toISOString() : null
+    const prevEntry  = followUp[key] ?? {}
+    setFollowUp(prev => ({
+      ...prev,
+      [key]: { ...prevEntry, reached, reachedBy, reachedAt, updatedAt: new Date().toISOString() },
+    }))
+
+    try {
+      const res = await fetch('/api/followup/mark', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key,
+          reached,
+          note:       prevEntry.note ?? '',
+          reachedBy:  reached ? getDisplayName() : null,
+        }),
+      })
+      const data = await res.json()
+      if (data.entry) {
+        setFollowUp(prev => ({ ...prev, [key]: data.entry }))
+      }
+    } catch {
+      // Revert optimistic update on failure
+      setFollowUp(prev => ({ ...prev, [key]: prevEntry }))
+    } finally {
+      setSyncing(p => { const n = { ...p }; delete n[key]; return n })
+    }
+  }
+
+  // ── Save note — also uses atomic endpoint ─────────────────────────────────────
+  async function saveNote() {
+    if (!noteTarget) return
+    const { key } = noteTarget
+    const prevEntry = followUp[key] ?? {}
+
+    setFollowUp(prev => ({
+      ...prev,
+      [key]: { ...prevEntry, note: noteText.trim(), updatedAt: new Date().toISOString() },
+    }))
+
+    try {
+      await fetch('/api/followup/mark', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key,
+          reached:   prevEntry.reached ?? false,
+          note:      noteText.trim(),
+          reachedBy: prevEntry.reachedBy ?? null,
+        }),
+      })
+    } catch {}
+
+    setNoteTarget(null)
+  }
 
   // Filter absentees
   const filtered = useMemo(() => {
@@ -49,25 +134,10 @@ export default function AbsenteesClient({
     return map
   }, [absentees, followUp, groups])
 
-  function toggleReached(absentee) {
-    const key = `${absentee.sessionId}_${absentee.memberId}`
-    const current = followUp[key]?.reached ?? false
-    update(key, { reached: !current, note: followUp[key]?.note ?? '' })
-  }
-
   function openNote(absentee) {
-    const key = `${absentee.sessionId}_${absentee.memberId}`
+    const key = absentee.sessionId + '_' + absentee.memberId
     setNoteTarget({ key, name: absentee.name })
     setNoteText(followUp[key]?.note ?? '')
-  }
-
-  function saveNote() {
-    if (!noteTarget) return
-    update(noteTarget.key, {
-      reached: followUp[noteTarget.key]?.reached ?? false,
-      note: noteText.trim(),
-    })
-    setNoteTarget(null)
   }
 
   const totalPending = absentees.filter(a => {
@@ -157,91 +227,99 @@ export default function AbsenteesClient({
       ) : (
         <div className="space-y-3">
           {filtered.map(absentee => {
-            const key = `${absentee.sessionId}_${absentee.memberId}`
-            const entry = followUp[key]
-            const reached = entry?.reached ?? false
-            const note = entry?.note ?? ''
-            const av = getAv(absentee.name)
-            const waNumber = toWhatsAppNumber(absentee.phone ?? '')
-            const waMessage = encodeURIComponent(ABSENTEE_MESSAGE(absentee.name.split(' ')[0]))
+            const key        = absentee.sessionId + '_' + absentee.memberId
+            const entry      = followUp[key] ?? {}
+            const reached    = entry.reached    ?? false
+            const note       = entry.note       ?? ''
+            const reachedBy  = entry.reachedBy  ?? null
+            const reachedAt  = entry.reachedAt  ?? null
+            const isSyncing  = !!syncing[key]
+            const av         = getAv(absentee.name)
+            const waNumber   = toWhatsAppNumber(absentee.phone ?? '')
+            const waMessage  = encodeURIComponent(ABSENTEE_MESSAGE(absentee.name.split(' ')[0]))
 
             return (
-              <div
-                key={key}
-                className={`card transition-all duration-200
-                  ${reached ? 'opacity-60' : ''}`}
-              >
+              <div key={key} className={`card transition-all duration-200 ${reached ? 'opacity-70' : ''}`}>
+
+                {/* ── Member row ── */}
                 <div className="flex items-center gap-3">
-                  <div
-                    className="avatar shrink-0"
-                    style={{ background: av.bg, color: av.color }}
-                  >
+                  <div className="avatar shrink-0" style={{ background: av.bg, color: av.color }}>
                     {av.initials}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-forest text-[15px] truncate">{absentee.name}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       <span className="text-xs text-mist">{absentee.groupName}</span>
-                      <span className="text-xs text-mist/50">·</span>
+                      <span className="text-xs text-mist/40">·</span>
                       <span className="text-xs text-mist">{fmtDate(absentee.date)}</span>
                     </div>
-                    {absentee.phone && (
-                      <p className="text-xs text-mist mt-0.5">{absentee.phone}</p>
-                    )}
-                    {note && (
-                      <p className="text-xs text-forest-muted mt-1 italic">"{note}"</p>
-                    )}
+                    {absentee.phone && <p className="text-xs text-mist mt-0.5">{absentee.phone}</p>}
                   </div>
-                  {/* Reached toggle */}
+
+                  {/* ── Reached toggle ── */}
                   <button
-                    onClick={() => toggleReached(absentee)}
-                    className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center
-                      transition-all duration-200
+                    onClick={() => markReached(absentee, !reached)}
+                    disabled={isSyncing}
+                    className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center
+                      transition-all duration-200 border-2
                       ${reached
-                        ? 'bg-success text-white'
-                        : 'bg-ivory-deeper text-mist hover:bg-success/20 hover:text-success'
-                      }`}
+                        ? 'bg-success border-success text-white shadow-sm'
+                        : 'bg-white border-forest/15 text-mist hover:border-success/60 hover:text-success'
+                      } ${isSyncing ? 'opacity-50 cursor-wait' : ''}`}
                     title={reached ? 'Mark as not reached' : 'Mark as reached'}
                   >
-                    <CheckIcon className="w-4 h-4" />
+                    <Check size={15} strokeWidth={2.5} />
                   </button>
                 </div>
 
-                {/* Action buttons */}
+                {/* ── Reached attribution (visible to all users) ── */}
+                {reached && reachedBy && (
+                  <div className="mt-2.5 px-2 py-2 bg-success/6 rounded-xl flex items-start gap-2">
+                    <Check size={12} className="text-success shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-success">
+                        Reached by {reachedBy}
+                        {reachedAt && (
+                          <span className="font-normal text-success/70">
+                            {' · '}{new Date(reachedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                          </span>
+                        )}
+                      </p>
+                      {note && <p className="text-xs text-forest-muted mt-0.5 italic">"{note}"</p>}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Note (pending state) ── */}
+                {!reached && note && (
+                  <div className="mt-2 px-2 py-1.5 bg-ivory rounded-lg">
+                    <p className="text-xs text-forest-muted italic">"{note}"</p>
+                  </div>
+                )}
+
+                {/* ── Action buttons ── */}
                 <div className="flex gap-2 mt-3 pt-3 border-t border-forest/8">
                   {absentee.phone && (
-                    <a
-                      href={`tel:${absentee.phone}`}
-                      className="btn btn-outline btn-sm flex-1 text-xs gap-1.5"
-                    >
-                      <PhoneIcon /> Call
+                    <a href={'tel:' + absentee.phone} className="btn btn-outline btn-sm flex-1 text-xs gap-1.5">
+                      <Phone size={13} /> Call
                     </a>
                   )}
                   {waNumber && (
-                    <a
-                      href={`https://wa.me/${waNumber}?text=${waMessage}`}
-                      target="_blank"
-                      rel="noreferrer"
+                    <a href={'https://wa.me/' + waNumber + '?text=' + waMessage}
+                      target="_blank" rel="noreferrer"
                       className="btn btn-sm flex-1 text-xs gap-1.5"
-                      style={{ background: '#25D366', color: '#fff' }}
-                    >
-                      <WhatsAppIcon /> WhatsApp
+                      style={{ background: '#25D366', color: '#fff' }}>
+                      WhatsApp
                     </a>
                   )}
-                  <button
-                    onClick={() => openNote(absentee)}
-                    className="btn btn-outline btn-sm flex-1 text-xs gap-1.5"
-                    title="Add note"
-                  >
-                    <NoteIcon /> {note ? 'Edit note' : 'Add note'}
+                  <button onClick={() => openNote(absentee)}
+                    className="btn btn-outline btn-sm flex-1 text-xs gap-1.5">
+                    <FileText size={13} /> {note ? 'Edit note' : 'Add note'}
                   </button>
                   {hasCredits && absentee.phone && (
-                    <a
-                      href={`/messaging/send?phone=${absentee.phone}&name=${encodeURIComponent(absentee.name)}&type=absentee`}
-                      className="btn btn-outline btn-sm text-xs px-3"
-                      title="Send SMS"
-                    >
-                      <SmsIcon />
+                    <a href={'/messaging/send?phone=' + absentee.phone + '&name=' + encodeURIComponent(absentee.name) + '&type=absentee'}
+                      className="btn btn-outline btn-sm text-xs px-3">
+                      <MessageSquare size={13} />
                     </a>
                   )}
                 </div>
@@ -297,10 +375,4 @@ function FilterChip({ active, onClick, label }) {
   )
 }
 
-function CheckIcon({ className = '' }) { return <Check className={className || 'w-4 h-4'} /> }
-function PhoneIcon() { return <Phone size={13} /> }
-function WhatsAppIcon() {
-  return <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-}
-function NoteIcon() { return <FileText size={13} /> }
-function SmsIcon() { return <MessageSquare size={13} /> }
+

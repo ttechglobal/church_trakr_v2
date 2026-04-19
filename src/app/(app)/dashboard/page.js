@@ -19,7 +19,9 @@ export default async function DashboardPage() {
     admin.from('members').select('id').eq('church_id', church.id).eq('status', 'active'),
     admin.from('attendance_sessions')
       .select('id,date,group_id,groups(name),attendance_records(present)')
-      .eq('church_id', church.id).order('date', { ascending: false }).limit(10),
+      .eq('church_id', church.id)
+      .order('date', { ascending: false })
+      .limit(20),  // fetch more so we can filter out FT sessions below
     admin.from('first_timers').select('id').eq('church_id', church.id),
   ])
 
@@ -27,8 +29,14 @@ export default async function DashboardPage() {
   const sessions    = sessionsRes.status    === 'fulfilled' ? (sessionsRes.value.data    ?? []) : []
   const firstTimers = firstTimersRes.status === 'fulfilled' ? (firstTimersRes.value.data ?? []) : []
 
-  // Last Sunday attendance rate (most recent session with records)
-  const withData    = sessions.filter(s => s.attendance_records?.length > 0)
+  // Last Sunday attendance rate — exclude First Timers sessions
+  // FT sessions have groups.name = 'First Timers' and records with null member_id
+  // They must never be used for the attendance % stat
+  const withData    = sessions.filter(s =>
+    s.attendance_records?.length > 0 &&
+    s.groups?.name !== 'First Timers' &&
+    s.attendance_records.some(r => r.present !== undefined)  // real records only
+  )
   const lastSession = withData[0] ?? null
   const lastSundayRate = lastSession
     ? Math.round(
@@ -48,13 +56,19 @@ export default async function DashboardPage() {
   // Find the most recent attendance session for this church
   let pendingFollowUps = []
   {
-    const { data: latestSession } = await admin
+    // Fetch recent sessions excluding First Timers (which have null member_ids)
+    const { data: recentSessions } = await admin
       .from('attendance_sessions')
       .select('id, date, group_id, groups(name), attendance_records(member_id, name, present)')
       .eq('church_id', church.id)
       .order('date', { ascending: false })
-      .limit(1)
-      .single()
+      .limit(10)
+
+    // Pick the most recent non-FT session that has real member records
+    const latestSession = (recentSessions ?? []).find(s =>
+      s.groups?.name !== 'First Timers' &&
+      (s.attendance_records ?? []).some(r => r.member_id !== null)
+    ) ?? null
 
     if (latestSession) {
       // Get absent members from latest session
