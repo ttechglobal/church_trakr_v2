@@ -24,48 +24,52 @@ export function usePWA() {
   const [installPrompt, setInstallPrompt] = useState(null)
   const [isInstalled,   setIsInstalled]   = useState(false)
 
-  // Register service worker
+  // Register service worker + set up install prompt capture
   useEffect(() => {
-    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return
-
-    navigator.serviceWorker
-      .register('/sw.js', { scope: '/' })
-      .then(reg => {
-        setSwReady(true)
-
-        // Check existing subscription
-        reg.pushManager.getSubscription().then(sub => {
-          if (sub) setSubscription(sub)
-        })
-
-        // Listen for SW messages
-        navigator.serviceWorker.addEventListener('message', event => {
-          if (event.data?.type === 'NAVIGATE') {
-            window.location.href = event.data.url
-          }
-          if (event.data?.type === 'SYNC_OFFLINE_QUEUE') {
-            processOfflineQueue()
-          }
-        })
-      })
-      .catch(err => console.warn('SW registration failed:', err))
+    if (typeof window === 'undefined') return
 
     // Check notification permission
     if ('Notification' in window) {
       setPermission(Notification.permission)
     }
 
-    // Check if already installed
-    if (window.matchMedia('(display-mode: standalone)').matches) {
+    // Check if already installed (standalone mode)
+    if (window.matchMedia('(display-mode: standalone)').matches ||
+        window.navigator.standalone) {
       setIsInstalled(true)
     }
 
-    // Capture install prompt
+    // Capture beforeinstallprompt BEFORE attempting SW registration
+    // This event fires independently of the SW — don't block it on SW success
     const handleBeforeInstall = e => {
       e.preventDefault()
       setInstallPrompt(e)
     }
     window.addEventListener('beforeinstallprompt', handleBeforeInstall)
+
+    // Register service worker (non-blocking — failure does not affect install prompt)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .register('/sw.js', { scope: '/' })
+        .then(reg => {
+          setSwReady(true)
+          // Check existing push subscription
+          reg.pushManager?.getSubscription().then(sub => {
+            if (sub) setSubscription(sub)
+          }).catch(() => {})
+          // Listen for SW messages
+          navigator.serviceWorker.addEventListener('message', event => {
+            if (event.data?.type === 'NAVIGATE') window.location.href = event.data.url
+            if (event.data?.type === 'SYNC_OFFLINE_QUEUE') processOfflineQueue()
+          })
+        })
+        .catch(err => {
+          // SW failed (404, security error, etc.) — log but don't throw
+          // Install prompt and notifications can still work without SW
+          console.warn('[ChurchTrakr] Service worker registration failed:', err.message)
+        })
+    }
+
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall)
   }, [])
 

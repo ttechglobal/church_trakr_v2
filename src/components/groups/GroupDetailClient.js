@@ -88,14 +88,14 @@ export default function GroupDetailClient({ church, group, members: initMembers,
     <div className="page-content">
       {/* Header */}
       <div className="flex items-center gap-3 mb-2">
-        <Link href="/groups" className="btn-ghost btn-sm px-2">
+        <Link href="/groups" className="btn btn-ghost btn-sm px-2">
           <ChevronLeft />
         </Link>
         <div className="flex-1 min-w-0">
           <h1 className="font-display text-2xl font-semibold text-forest truncate">{group.name}</h1>
           {group.leader && <p className="text-sm text-mist">{group.leader}</p>}
         </div>
-        <Link href={`/attendance?group=${group.id}`} className="btn-primary btn-sm gap-1.5">
+        <Link href={`/attendance?group=${group.id}`} className="btn btn-primary btn-sm gap-1.5">
           <CheckIcon /> Attendance
         </Link>
       </div>
@@ -117,7 +117,7 @@ export default function GroupDetailClient({ church, group, members: initMembers,
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-ivory-darker rounded-xl p-1" style={{ background: 'var(--ivory-dark)' }}>
+      <div className="flex gap-1 bg-ivory-dark rounded-xl p-1" style={{ background: 'var(--ivory-dark)' }}>
         {[['members', 'Members'], ['birthdays', '🎂 Birthdays'], ['attendance', 'Attendance']].map(([val, label]) => (
           <button
             key={val}
@@ -135,15 +135,15 @@ export default function GroupDetailClient({ church, group, members: initMembers,
         <>
           {/* Actions */}
           <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setShowAddNew(true)} className="btn-primary btn-sm gap-1.5">
+            <button onClick={() => setShowAddNew(true)} className="btn btn-primary btn-sm gap-1.5">
               <PlusIcon /> New member
             </button>
             {nonGroupMembers.length > 0 && (
-              <button onClick={() => setShowAddExisting(true)} className="btn-outline btn-sm gap-1.5">
+              <button onClick={() => setShowAddExisting(true)} className="btn btn-outline btn-sm gap-1.5">
                 <UserPlusIcon /> Add existing
               </button>
             )}
-            <button onClick={() => setShowImport(true)} className="btn-outline btn-sm gap-1.5">
+            <button onClick={() => setShowImport(true)} className="btn btn-outline btn-sm gap-1.5">
               <UploadIcon /> Import Excel
             </button>
           </div>
@@ -231,7 +231,7 @@ export default function GroupDetailClient({ church, group, members: initMembers,
             <div className="empty-state card">
               <p className="text-3xl">📋</p>
               <p className="font-medium text-forest">No sessions yet</p>
-              <Link href={`/attendance?group=${group.id}`} className="btn-primary btn-sm mt-2">
+              <Link href={`/attendance?group=${group.id}`} className="btn btn-primary btn-sm mt-2">
                 Take first attendance
               </Link>
             </div>
@@ -337,7 +337,7 @@ function BirthdaysTab({ thisWeek, thisMonth, church }) {
                     <a
                       href={`https://wa.me/${waNum}?text=${waMsg}`}
                       target="_blank" rel="noreferrer"
-                      className="btn-sm gap-1.5 text-xs shrink-0"
+                      className="btn btn-sm gap-1.5 text-xs shrink-0"
                       style={{ background: '#25D366', color: '#fff' }}
                     >
                       <WhatsAppIcon /> Wish
@@ -436,8 +436,8 @@ function AddNewMemberModal({ churchId, groupId, onClose, onAdded }) {
         </div>
         {error && <p className="text-sm text-error">{error}</p>}
         <div className="flex gap-3 pt-1">
-          <button type="button" onClick={onClose} className="btn-outline flex-1">Cancel</button>
-          <button type="submit" disabled={saving} className="btn-primary flex-1">
+          <button type="button" onClick={onClose} className="btn btn-outline flex-1">Cancel</button>
+          <button type="submit" disabled={saving} className="btn btn-primary flex-1">
             {saving ? 'Adding…' : 'Add member'}
           </button>
         </div>
@@ -540,7 +540,7 @@ function ExcelImportModal({ churchId, groupId, onClose, onImported }) {
             <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} />
           </div>
           {error && <p className="text-sm text-error">{error}</p>}
-          <button onClick={onClose} className="btn-outline w-full">Cancel</button>
+          <button onClick={onClose} className="btn btn-outline w-full">Cancel</button>
         </div>
       )}
 
@@ -562,8 +562,8 @@ function ExcelImportModal({ churchId, groupId, onClose, onImported }) {
           ))}
           {error && <p className="text-sm text-error">{error}</p>}
           <div className="flex gap-3">
-            <button onClick={() => setStage('upload')} className="btn-outline flex-1">Back</button>
-            <button onClick={buildPreview} className="btn-primary flex-1">Preview import</button>
+            <button onClick={() => setStage('upload')} className="btn btn-outline flex-1">Back</button>
+            <button onClick={buildPreview} className="btn btn-primary flex-1">Preview import</button>
           </div>
         </div>
       )}
@@ -584,8 +584,8 @@ function ExcelImportModal({ churchId, groupId, onClose, onImported }) {
             )}
           </div>
           <div className="flex gap-3">
-            <button onClick={() => setStage('map')} className="btn-outline flex-1">Back</button>
-            <button onClick={handleImport} className="btn-primary flex-1">
+            <button onClick={() => setStage('map')} className="btn btn-outline flex-1">Back</button>
+            <button onClick={handleImport} className="btn btn-primary flex-1">
               Import {preview.length} members
             </button>
           </div>

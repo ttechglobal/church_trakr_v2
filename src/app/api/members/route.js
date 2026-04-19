@@ -1,157 +1,155 @@
+import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import { withAuth } from '@/lib/apiAuth'
+import { normBirthday } from '@/lib/utils'
 
-// ── GET — fetch all members for this church ───────────────────────────────────
+/**
+ * POST /api/members
+ *
+ * Body: {
+ *   name: string,
+ *   phone?: string,
+ *   address?: string,
+ *   birthday?: string,
+ *   groupIds?: string[],
+ *   status?: 'active' | 'inactive'
+ * }
+ */
+export async function POST(request) {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-export const GET = withAuth(async (request, { church, admin }) => {
-  const { searchParams } = new URL(request.url)
-  const status = searchParams.get('status') // optional filter
+    const { data: church } = await supabase
+      .from('churches')
+      .select('id')
+      .eq('admin_user_id', user.id)
+      .single()
 
-  let query = admin
-    .from('members')
-    .select('*')
-    .eq('church_id', church.id)
-    .order('name', { ascending: true })
+    if (!church) return NextResponse.json({ error: 'Church not found' }, { status: 404 })
 
-  if (status) query = query.eq('status', status)
+    const body = await request.json()
+    const { name, phone, address, birthday, groupIds, status } = body
 
-  const { data, error } = await query
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  return NextResponse.json({ members: data ?? [] })
-})
-
-// ── POST — create a new member ────────────────────────────────────────────────
-
-export const POST = withAuth(async (request, { church, admin }) => {
-  const body = await request.json()
-
-  const {
-    name, phone, address, birthday,
-    groupIds, status = 'active',
-    away_since, away_contact,
-  } = body
-
-  if (!name?.trim()) {
-    return NextResponse.json({ error: 'Name is required' }, { status: 400 })
-  }
-
-  const insertData = {
-    church_id: church.id,          // ← always set from verified auth context
-    name:      name.trim(),
-    phone:     phone?.trim()   || null,
-    address:   address?.trim() || null,
-    birthday:  birthday        || null,
-    groupIds:  groupIds        ?? [],
-    status,
-  }
-
-  if (away_since)   insertData.away_since   = away_since
-  if (away_contact) insertData.away_contact = away_contact
-
-  const { data, error } = await admin
-    .from('members')
-    .insert(insertData)
-    .select()
-    .single()
-
-  if (error) {
-    console.error('[POST /api/members]', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  return NextResponse.json({ member: data }, { status: 201 })
-})
-
-// ── PATCH — update an existing member ────────────────────────────────────────
-
-export const PATCH = withAuth(async (request, { church, admin }) => {
-  const body = await request.json()
-  const { id, ...updates } = body
-
-  if (!id) {
-    return NextResponse.json({ error: 'Member ID is required' }, { status: 400 })
-  }
-
-  // Verify the member belongs to this church before updating
-  const { data: existing } = await admin
-    .from('members')
-    .select('id')
-    .eq('id', id)
-    .eq('church_id', church.id)
-    .single()
-
-  if (!existing) {
-    return NextResponse.json({ error: 'Member not found' }, { status: 404 })
-  }
-
-  // Whitelist updatable fields — never allow church_id to be changed
-  const allowed = [
-    'name', 'phone', 'address', 'birthday',
-    'groupIds', 'status', 'away_since', 'away_contact',
-  ]
-  const updateData = {}
-  for (const key of allowed) {
-    if (updates[key] !== undefined) {
-      updateData[key] = updates[key]
+    if (!name?.trim()) {
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
     }
+
+    // If no groupIds provided, auto-assign to the default group for this church
+    // This ensures all members (imported or manually added) appear in attendance
+    let resolvedGroupIds = groupIds ?? []
+    if (resolvedGroupIds.length === 0) {
+      const { data: defaultGroup } = await supabase
+        .from('groups')
+        .select('id')
+        .eq('church_id', church.id)
+        .neq('name', 'First Timers')
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .single()
+      if (defaultGroup) resolvedGroupIds = [defaultGroup.id]
+    }
+
+    const { data: member, error } = await supabase
+      .from('members')
+      .insert({
+        church_id: church.id,
+        name: name.trim(),
+        phone: phone?.trim() ?? null,
+        address: address?.trim() ?? null,
+        birthday: birthday ? normBirthday(birthday) : null,
+        groupIds: resolvedGroupIds,
+        status: status ?? 'active',
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    return NextResponse.json({ success: true, member })
+  } catch (err) {
+    console.error('[POST /api/members]', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
+}
 
-  if (Object.keys(updateData).length === 0) {
-    return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
+/**
+ * PATCH /api/members
+ *
+ * Body: { id: string, ...fields }
+ */
+export async function PATCH(request) {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const { data: church } = await supabase
+      .from('churches')
+      .select('id')
+      .eq('admin_user_id', user.id)
+      .single()
+
+    if (!church) return NextResponse.json({ error: 'Church not found' }, { status: 404 })
+
+    const body = await request.json()
+    const { id, ...fields } = body
+
+    if (!id) return NextResponse.json({ error: 'Member ID required' }, { status: 400 })
+
+    // Normalize birthday if provided
+    if (fields.birthday) fields.birthday = normBirthday(fields.birthday)
+
+    // Only allow updating own church's members (RLS enforced + explicit check)
+    const { data: member, error } = await supabase
+      .from('members')
+      .update(fields)
+      .eq('id', id)
+      .eq('church_id', church.id)
+      .select()
+      .single()
+
+    if (error) throw error
+
+    return NextResponse.json({ success: true, member })
+  } catch (err) {
+    console.error('[PATCH /api/members]', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
+}
 
-  const { data, error } = await admin
-    .from('members')
-    .update(updateData)
-    .eq('id', id)
-    .eq('church_id', church.id)  // double-check ownership in the update itself
-    .select()
-    .single()
+/**
+ * DELETE /api/members?id=xxx
+ */
+export async function DELETE(request) {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  if (error) {
-    console.error('[PATCH /api/members]', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    const { data: church } = await supabase
+      .from('churches')
+      .select('id')
+      .eq('admin_user_id', user.id)
+      .single()
+
+    if (!church) return NextResponse.json({ error: 'Church not found' }, { status: 404 })
+
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+    if (!id) return NextResponse.json({ error: 'Member ID required' }, { status: 400 })
+
+    const { error } = await supabase
+      .from('members')
+      .delete()
+      .eq('id', id)
+      .eq('church_id', church.id)
+
+    if (error) throw error
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error('[DELETE /api/members]', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
-
-  return NextResponse.json({ member: data })
-})
-
-// ── DELETE — remove a member ──────────────────────────────────────────────────
-
-export const DELETE = withAuth(async (request, { church, admin }) => {
-  const { searchParams } = new URL(request.url)
-  const id = searchParams.get('id')
-
-  if (!id) {
-    return NextResponse.json({ error: 'Member ID is required' }, { status: 400 })
-  }
-
-  // Verify ownership
-  const { data: existing } = await admin
-    .from('members')
-    .select('id')
-    .eq('id', id)
-    .eq('church_id', church.id)
-    .single()
-
-  if (!existing) {
-    return NextResponse.json({ error: 'Member not found' }, { status: 404 })
-  }
-
-  const { error } = await admin
-    .from('members')
-    .delete()
-    .eq('id', id)
-    .eq('church_id', church.id)
-
-  if (error) {
-    console.error('[DELETE /api/members]', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  return NextResponse.json({ success: true })
-})
+}

@@ -216,7 +216,7 @@ export default function SettingsClient({ church: initialChurch, user }) {
           <div className="card">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-display text-lg font-semibold text-forest">My templates</h2>
-              <button onClick={() => setShowNewTpl(p => !p)} className="btn-primary btn-sm gap-1.5">
+              <button onClick={() => setShowNewTpl(p => !p)} className="btn btn-primary btn-sm gap-1.5">
                 <PlusIcon /> New
               </button>
             </div>
@@ -235,8 +235,8 @@ export default function SettingsClient({ church: initialChurch, user }) {
                     value={newTplBody} onChange={e => setNewTplBody(e.target.value)} />
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => setShowNewTpl(false)} className="btn-outline flex-1 btn-sm">Cancel</button>
-                  <button onClick={saveCustomTemplate} className="btn-primary flex-1 btn-sm">Save template</button>
+                  <button onClick={() => setShowNewTpl(false)} className="btn btn-outline flex-1 btn-sm">Cancel</button>
+                  <button onClick={saveCustomTemplate} className="btn btn-primary flex-1 btn-sm">Save template</button>
                 </div>
               </div>
             )}
@@ -298,7 +298,7 @@ export default function SettingsClient({ church: initialChurch, user }) {
                 </p>
               )}
               <button onClick={handleApplySenderId} disabled={submittingSenderId || !senderId.trim()}
-                className="btn-primary w-full">
+                className="btn btn-primary w-full">
                 {submittingSenderId ? 'Submitting…' : 'Apply for Sender ID'}
               </button>
             </>
@@ -331,7 +331,7 @@ export default function SettingsClient({ church: initialChurch, user }) {
               <span className="font-semibold text-forest">{initialChurch.sms_credits}</span>
             </div>
             <div className="divider" />
-            <button onClick={handleSignOut} className="btn-outline w-full text-error border-error/30 hover:bg-error/8">
+            <button onClick={handleSignOut} className="btn btn-outline w-full text-error border-error/30 hover:bg-error/8">
               Sign out
             </button>
           </div>
@@ -344,7 +344,7 @@ export default function SettingsClient({ church: initialChurch, user }) {
             <button
               onClick={handleDeleteAccount}
               disabled={deleteConfirm !== 'DELETE' || deleting}
-              className="btn-danger w-full"
+              className="btn btn-danger w-full"
             >
               {deleting ? 'Deleting…' : 'Delete account permanently'}
             </button>
@@ -378,13 +378,27 @@ function ProfileTab({ profile, setProfile, profileMsg, savingProfile, onSave }) 
 
       {/* ── Display Name (device-only) ── */}
       <div className="card space-y-3">
-        <div>
-          <h2 className="font-display text-lg font-semibold text-forest">Your Display Name</h2>
-          <p className="text-xs text-mist mt-1">
-            Stored on this device only. Used when logging follow-ups and attendance.
-            Each team member sets their own on their device.
-          </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-lg font-semibold text-forest">Your Display Name</h2>
+            <p className="text-xs text-mist mt-1">
+              This device only — used when logging follow-ups and attendance.
+            </p>
+          </div>
         </div>
+        {displayName.trim() ? (
+          <div className="flex items-center justify-between gap-3 py-2 px-3 bg-ivory rounded-xl">
+            <div>
+              <p className="text-xs text-mist">Saved name</p>
+              <p className="font-semibold text-forest">{displayName}</p>
+            </div>
+            <button onClick={() => saveDisplayName('')} className="btn btn-ghost btn-sm text-xs text-mist px-2">
+              Clear
+            </button>
+          </div>
+        ) : (
+          <p className="text-sm text-mist italic">No display name set — tap below to add one.</p>
+        )}
         <div>
           <label className="input-label">Your Display Name (this device only)</label>
           <input
@@ -404,7 +418,7 @@ function ProfileTab({ profile, setProfile, profileMsg, savingProfile, onSave }) 
         <div className="flex items-center justify-between">
           <h2 className="font-display text-lg font-semibold text-forest">Church Profile</h2>
           {!editing && (
-            <button onClick={() => setEditing(true)} className="btn-outline btn-sm gap-1.5">
+            <button onClick={() => setEditing(true)} className="btn btn-outline btn-sm gap-1.5">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                 <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
                 <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -435,8 +449,8 @@ function ProfileTab({ profile, setProfile, profileMsg, savingProfile, onSave }) 
               </p>
             )}
             <div className="flex gap-2">
-              <button onClick={() => setEditing(false)} className="btn-outline flex-1">Cancel</button>
-              <button onClick={() => { onSave(); setEditing(false) }} disabled={savingProfile} className="btn-primary flex-1">
+              <button onClick={() => setEditing(false)} className="btn btn-outline flex-1">Cancel</button>
+              <button onClick={() => { onSave(); setEditing(false) }} disabled={savingProfile} className="btn btn-primary flex-1">
                 {savingProfile ? 'Saving…' : 'Save changes'}
               </button>
             </div>

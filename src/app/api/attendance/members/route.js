@@ -35,14 +35,24 @@ export async function GET(request) {
 
     if (!church) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    // Fetch active (non-away) members in this group
-    const { data: members } = await admin
+    // Fetch active (non-away) members for this group.
+    // Strategy: members explicitly in this group OR members with no group assignment
+    // (ungrouped members belong to whatever group is taking attendance — this ensures
+    // imported members without groupIds still appear in attendance).
+    const { data: allActiveMembers } = await admin
       .from('members')
       .select('id, name, phone, groupIds')
       .eq('church_id', churchId)
       .eq('status', 'active')
-      .contains('groupIds', [groupId])
       .order('name', { ascending: true })
+
+    // Include member if:
+    // 1. Their groupIds contains this groupId, OR
+    // 2. Their groupIds is empty/null (ungrouped — show in all groups)
+    const members = (allActiveMembers ?? []).filter(m => {
+      const ids = m.groupIds ?? []
+      return ids.length === 0 || ids.includes(groupId)
+    })
 
     // If date provided, load existing session records for pre-filling the attendance UI
     let existingRecords = null

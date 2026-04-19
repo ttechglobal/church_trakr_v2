@@ -184,6 +184,39 @@ export default function NotificationSettings() {
           </div>
         </div>
       )}
+      {/* ── Permanent Install App section ── */}
+      <div style={{ background: '#fff', border: '1px solid rgba(26,58,42,0.08)', borderRadius: 16, padding: '1.125rem 1.25rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 11, flexShrink: 0, background: 'rgba(26,58,42,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Smartphone size={18} color="#1a3a2a" strokeWidth={1.75} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: 15, fontWeight: 700, color: '#1a3a2a', margin: '0 0 3px' }}>
+              {isInstalled ? 'App installed ✓' : 'Install this app'}
+            </p>
+            <p style={{ fontSize: 13, color: '#8a9e90', margin: '0 0 12px', lineHeight: 1.4 }}>
+              {isInstalled
+                ? 'ChurchTrakr is installed on this device.'
+                : 'Add to your home screen for faster access and offline support.'
+              }
+            </p>
+            {!isInstalled && (
+              installPrompt
+                ? <button onClick={promptInstall} style={{ height: 36, padding: '0 1rem', borderRadius: 9, border: 'none', background: '#1a3a2a', color: '#e8d5a0', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                    Install App
+                  </button>
+                : /iPhone|iPad|iPod/.test(navigator?.userAgent ?? '')
+                  ? <p style={{ fontSize: 12, color: '#8a9e90', background: 'rgba(26,58,42,0.04)', padding: '0.625rem 0.75rem', borderRadius: 9, margin: 0, lineHeight: 1.5 }}>
+                      Tap the <strong>Share</strong> button in Safari, then <strong>"Add to Home Screen"</strong>
+                    </p>
+                  : <p style={{ fontSize: 12, color: '#8a9e90', margin: 0 }}>
+                      Open this app in Chrome on Android to install it.
+                    </p>
+            )}
+          </div>
+        </div>
+      </div>
+
     </div>
   )
 }

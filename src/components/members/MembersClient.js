@@ -1,21 +1,31 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import BackButton from '@/components/ui/BackButton'
-import { getAv, fmtBday, normBirthday, toWhatsAppNumber, fmtDate } from '@/lib/utils'
+import { getAv, fmtBday, normBirthday } from '@/lib/utils'
+import { Search, Plus, Upload, ChevronRight, X, Pencil, Users, Check, AlertTriangle } from 'lucide-react'
 
 export default function MembersClient({ churchId, members: initMembers, groups }) {
-  const [members, setMembers] = useState(initMembers)
-  const [search, setSearch] = useState('')
+  const router = useRouter()
+  const [members, setMembers]           = useState(initMembers)
+  const [search, setSearch]             = useState('')
   const [statusFilter, setStatusFilter] = useState('active')
-  const [sortBy, setSortBy] = useState('name') // name | newest
-  const [selected, setSelected] = useState(null) // member profile
-  const [showAdd, setShowAdd]    = useState(false)
-  const [showImport, setShowImport] = useState(false)
-  const [editTarget, setEditTarget] = useState(null)
+  const [sortBy, setSortBy]             = useState('name')
+  const [showAdd, setShowAdd]           = useState(false)
+  const [showImport, setShowImport]     = useState(false)
+  const [editTarget, setEditTarget]     = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [inactivePrompts, setInactivePrompts] = useState([])
+  const [saving, setSaving]             = useState(false)
+  const [error, setError]               = useState('')
+
+  const defaultGroup = groups.find(g => g.name !== 'First Timers') ?? groups[0]
+  const [editingGroupName, setEditingGroupName] = useState(false)
+  const [groupNameVal, setGroupNameVal]         = useState(defaultGroup?.name ?? '')
+  const [savingGroupName, setSavingGroupName]   = useState(false)
+
+  const groupMap = Object.fromEntries(groups.map(g => [g.id, g.name]))
 
   const filtered = useMemo(() => {
     let list = members.filter(m => {
@@ -29,17 +39,24 @@ export default function MembersClient({ churchId, members: initMembers, groups }
     return list
   }, [members, search, statusFilter, sortBy])
 
-  const groupMap = Object.fromEntries(groups.map(g => [g.id, g.name]))
-
-  function openProfile(member) {
-    setSelected(member)
-    setEditTarget(null)
+  const counts = {
+    active:   members.filter(m => m.status === 'active').length,
+    inactive: members.filter(m => m.status === 'inactive').length,
+    away:     members.filter(m => m.status === 'away').length,
   }
 
-  function openEdit(member, e) {
-    e?.stopPropagation()
-    setEditTarget({ ...member, birthday: normBirthday(member.birthday) ?? '' })
-    setSelected(null)
+  async function saveGroupName() {
+    if (!defaultGroup || !groupNameVal.trim()) return
+    setSavingGroupName(true)
+    try {
+      await fetch('/api/groups/' + defaultGroup.id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: groupNameVal.trim(), leader: defaultGroup.leader ?? '' }),
+      })
+      setEditingGroupName(false)
+      router.refresh()
+    } finally { setSavingGroupName(false) }
   }
 
   async function handleSaveMember(formData, isNew) {
@@ -52,105 +69,155 @@ export default function MembersClient({ churchId, members: initMembers, groups }
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed')
-
       if (isNew) {
         setMembers(prev => [...prev, data.member].sort((a, b) => a.name.localeCompare(b.name)))
         setShowAdd(false)
       } else {
         setMembers(prev => prev.map(m => m.id === data.member.id ? data.member : m))
         setEditTarget(null)
-        setSelected(data.member)
       }
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setSaving(false)
-    }
+    } catch (err) { setError(err.message) }
+    finally { setSaving(false) }
+  }
+
+  async function confirmInactive(member) {
+    setInactivePrompts(p => p.filter(x => x.member.id !== member.id))
+    const res = await fetch('/api/members', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: member.id, status: 'inactive' }),
+    })
+    const data = await res.json()
+    if (res.ok) setMembers(prev => prev.map(m => m.id === member.id ? data.member : m))
   }
 
   async function handleDelete() {
     if (!deleteTarget) return
     setSaving(true)
     try {
-      const res = await fetch(`/api/members?id=${deleteTarget.id}`, { method: 'DELETE' })
+      const res = await fetch('/api/members?id=' + deleteTarget.id, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed')
       setMembers(prev => prev.filter(m => m.id !== deleteTarget.id))
       setDeleteTarget(null)
-      setSelected(null)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setSaving(false)
-    }
+    } catch (err) { setError(err.message) }
+    finally { setSaving(false) }
   }
 
-  const activeCount = members.filter(m => m.status === 'active').length
-  const inactiveCount = members.filter(m => m.status === 'inactive').length
+  const STATUS_TABS = [
+    { val: 'active',   label: 'Active',   count: counts.active   },
+    { val: 'inactive', label: 'Inactive', count: counts.inactive  },
+    { val: 'away',     label: 'Away',     count: counts.away      },
+    { val: 'all',      label: 'All',      count: members.length   },
+  ]
 
   return (
     <div className="page-content">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <div>
-          <BackButton />
-        <h1 className="font-display text-2xl font-semibold text-forest">Members</h1>
-          <p className="text-sm text-mist mt-0.5">
-            {activeCount} active{inactiveCount > 0 ? ` · ${inactiveCount} inactive` : ''}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowImport(true)} className="btn-outline btn-sm gap-1.5">
-            <UploadIcon /> Import
-          </button>
-          <button onClick={() => { setShowAdd(true); setError('') }} className="btn-primary btn-sm gap-2">
-            <PlusIcon /> Add
-          </button>
-        </div>
-      </div>
-
-      {/* Search + filters */}
-      <div className="space-y-2">
-        <div className="relative">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-mist w-4 h-4 pointer-events-none" />
-          <input
-            type="search" placeholder="Search by name or phone…"
-            className="input pl-9 text-sm" style={{ minHeight: 40 }}
-            value={search} onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {[['active', 'Active'], ['inactive', 'Inactive'], ['all', 'All']].map(([val, label]) => (
-            <button
-              key={val}
-              onClick={() => setStatusFilter(val)}
-              className={`btn-sm text-xs ${statusFilter === val ? 'btn-primary' : 'btn-outline'}`}
-            >
-              {label}
+      <div>
+        <BackButton />
+        <div className="flex items-start justify-between mt-1">
+          <div className="min-w-0">
+            {defaultGroup && (
+              <div className="flex items-center gap-1.5 mb-0.5">
+                {editingGroupName ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      className="input text-sm" style={{ minHeight: 32, padding: '0 10px', width: 160 }}
+                      value={groupNameVal} autoFocus
+                      onChange={e => setGroupNameVal(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') saveGroupName(); if (e.key === 'Escape') setEditingGroupName(false) }}
+                    />
+                    <button onClick={saveGroupName} disabled={savingGroupName}
+                      className="btn btn-primary btn-sm" style={{ minHeight: 32, padding: '0 10px' }}>
+                      {savingGroupName ? '…' : <Check size={13} />}
+                    </button>
+                    <button onClick={() => setEditingGroupName(false)}
+                      className="btn btn-ghost btn-sm" style={{ minHeight: 32, padding: '0 8px' }}>
+                      <X size={13} />
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => setEditingGroupName(true)}
+                    className="flex items-center gap-1 text-xs text-mist hover:text-forest transition-colors group">
+                    <span>{defaultGroup.name}</span>
+                    <Pencil size={10} className="opacity-0 group-hover:opacity-60 transition-opacity" />
+                  </button>
+                )}
+              </div>
+            )}
+            <h1 className="font-display text-2xl font-semibold text-forest">Members</h1>
+            <p className="text-sm text-mist mt-0.5">
+              {counts.active} active
+              {counts.inactive > 0 ? ' · ' + counts.inactive + ' inactive' : ''}
+              {counts.away > 0 ? ' · ' + counts.away + ' away' : ''}
+            </p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button onClick={() => setShowImport(true)} className="btn btn-outline btn-sm gap-1.5">
+              <Upload size={13} strokeWidth={2} /> Import
             </button>
-          ))}
-          <div className="ml-auto">
-            <select
-              className="text-xs border border-forest/20 rounded-lg px-2 py-1.5 text-forest bg-white"
-              value={sortBy}
-              onChange={e => setSortBy(e.target.value)}
-            >
-              <option value="name">A–Z</option>
-              <option value="newest">Newest first</option>
-            </select>
+            <button onClick={() => { setShowAdd(true); setError('') }} className="btn btn-primary btn-sm gap-1.5">
+              <Plus size={13} strokeWidth={2.5} /> Add
+            </button>
           </div>
         </div>
       </div>
 
-      {/* List */}
+      <div className="relative">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-mist pointer-events-none" />
+        <input type="search" placeholder="Search by name or phone…"
+          className="input pl-9 text-sm" style={{ minHeight: 42 }}
+          value={search} onChange={e => setSearch(e.target.value)} />
+      </div>
+
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {STATUS_TABS.map(({ val, label, count }) => (
+          <button key={val} onClick={() => setStatusFilter(val)}
+            className={'btn btn-sm gap-1.5 ' + (statusFilter === val ? 'btn-primary' : 'btn-outline')}>
+            {label}
+            {count > 0 && (
+              <span className={'text-[10px] font-bold rounded-full px-1.5 ' +
+                (statusFilter === val ? 'bg-white/20 text-ivory' : 'bg-forest/8 text-mist')}>
+                {count}
+              </span>
+            )}
+          </button>
+        ))}
+        <div className="ml-auto">
+          <select className="text-xs border border-forest/20 rounded-lg px-2 py-1.5 text-forest bg-white outline-none"
+            value={sortBy} onChange={e => setSortBy(e.target.value)}>
+            <option value="name">A–Z</option>
+            <option value="newest">Newest first</option>
+          </select>
+        </div>
+      </div>
+
+      {inactivePrompts.map(({ member, missedCount }) => (
+        <div key={member.id} className="card" style={{ borderColor: 'rgba(217,119,6,0.3)', background: 'rgba(217,119,6,0.04)' }}>
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'rgba(217,119,6,0.15)' }}>
+              <AlertTriangle size={14} style={{ color: '#d97706' }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-forest">{member.name} missed {missedCount} Sundays</p>
+              <p className="text-xs text-mist mt-0.5">Move to inactive?</p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button onClick={() => setInactivePrompts(p => p.filter(x => x.member.id !== member.id))}
+                className="btn btn-ghost btn-sm text-xs text-mist">Dismiss</button>
+              <button onClick={() => confirmInactive(member)}
+                className="btn btn-sm text-xs" style={{ border: '1px solid rgba(217,119,6,0.4)', color: '#d97706', background: 'rgba(217,119,6,0.08)' }}>
+                Move
+              </button>
+            </div>
+          </div>
+        </div>
+      ))}
+
       {filtered.length === 0 ? (
         <div className="empty-state card">
-          <p className="text-3xl">👤</p>
-          <p className="font-semibold text-forest">
-            {members.length === 0 ? 'No members yet' : 'No results'}
-          </p>
-          {members.length === 0 && (
-            <p className="text-sm text-mist">Add your first member or import from Excel in a Group.</p>
-          )}
+          <Users size={36} className="text-mist" strokeWidth={1.5} />
+          <p className="font-semibold text-forest">{members.length === 0 ? 'No members yet' : 'No results'}</p>
+          {members.length === 0 && <p className="text-sm text-mist text-center">Add your first member or import from Excel / CSV.</p>}
         </div>
       ) : (
         <div className="space-y-2">
@@ -158,381 +225,161 @@ export default function MembersClient({ churchId, members: initMembers, groups }
             const av = getAv(m.name)
             const memberGroups = (m.groupIds ?? []).map(id => groupMap[id]).filter(Boolean)
             return (
-              <button
-                key={m.id}
-                onClick={() => openProfile(m)}
-                className="card w-full text-left flex items-center gap-3 hover:shadow-card-hover
-                  transition-all active:scale-[0.99] animate-slide-up animate-fill-both"
-                style={{ animationDelay: `${Math.min(i * 0.03, 0.3)}s` }}
-              >
-                <div className="avatar shrink-0" style={{ background: av.bg, color: av.color }}>
-                  {av.initials}
-                </div>
+              <button key={m.id} onClick={() => router.push('/members/' + m.id)}
+                className="card w-full text-left flex items-center gap-3 hover:shadow-card-hover transition-all active:scale-[0.99] animate-slide-up animate-fill-both"
+                style={{ animationDelay: Math.min(i * 0.03, 0.3) + 's' }}>
+                <div className="avatar shrink-0" style={{ background: av.bg, color: av.color }}>{av.initials}</div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <p className="font-semibold text-forest text-[14px] truncate">{m.name}</p>
-                    {m.status === 'inactive' && (
-                      <span className="badge-muted text-[10px] shrink-0">inactive</span>
-                    )}
+                    {m.status === 'inactive' && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-forest/8 text-mist shrink-0">inactive</span>}
+                    {m.status === 'away' && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'rgba(217,119,6,0.1)', color: '#a8862e' }}>away</span>}
                   </div>
                   {m.phone && <p className="text-xs text-mist truncate">{m.phone}</p>}
-                  {memberGroups.length > 0 && (
-                    <p className="text-xs text-forest-muted truncate">{memberGroups.join(', ')}</p>
-                  )}
+                  {memberGroups.length > 0 && <p className="text-xs text-forest-muted truncate">{memberGroups.join(', ')}</p>}
                 </div>
-                {m.birthday && (
-                  <span className="text-xs text-gold-dark shrink-0">
-                    🎂 {fmtBday(normBirthday(m.birthday))}
-                  </span>
-                )}
-                <ChevronRight className="text-mist shrink-0" />
+                {m.birthday && <span className="text-xs text-gold-dark shrink-0">🎂 {fmtBday(normBirthday(m.birthday))}</span>}
+                <ChevronRight size={16} className="text-mist shrink-0" />
               </button>
             )
           })}
         </div>
       )}
 
-      {/* Member profile sheet */}
-      {selected && !editTarget && (
-        <MemberProfile
-          member={selected}
-          groups={groups}
-          groupMap={groupMap}
-          onEdit={() => openEdit(selected)}
-          onDelete={() => { setDeleteTarget(selected); setSelected(null) }}
-          onClose={() => setSelected(null)}
-        />
-      )}
-
-      {/* Add / Edit modal */}
       {showImport && (
         <MemberImportModal
+          defaultGroupId={defaultGroup?.id ?? null}
           onClose={() => setShowImport(false)}
           onImported={imported => {
             setMembers(prev => {
               const ids = new Set(prev.map(m => m.id))
-              return [...prev, ...imported.filter(m => !ids.has(m.id))]
-                .sort((a, b) => a.name.localeCompare(b.name))
+              return [...prev, ...imported.filter(m => !ids.has(m.id))].sort((a, b) => a.name.localeCompare(b.name))
             })
             setShowImport(false)
           }}
         />
       )}
 
-      {(showAdd || editTarget) && (
+      {showAdd && (
         <MemberFormModal
-          initial={editTarget ?? { name: '', phone: '', address: '', birthday: '', groupIds: [], status: 'active' }}
-          groups={groups}
-          isNew={!!showAdd}
-          saving={saving}
-          error={error}
+          initial={{ name: '', phone: '', address: '', birthday: '', groupIds: defaultGroup?.id ? [defaultGroup.id] : [], status: 'active' }}
+          groups={groups.filter(g => g.name !== 'First Timers')}
+          isNew={true} saving={saving} error={error}
           onSave={handleSaveMember}
-          onClose={() => { setShowAdd(false); setEditTarget(null); setError('') }}
+          onClose={() => { setShowAdd(false); setError('') }}
         />
       )}
 
-      {/* Delete confirm */}
       {deleteTarget && (
-        <Modal title="Delete member?" onClose={() => setDeleteTarget(null)}>
-          <p className="text-sm text-forest-muted mb-4">
-            <strong>{deleteTarget.name}</strong> will be permanently deleted. This cannot be undone.
-          </p>
+        <ModalShell title="Delete member?" onClose={() => setDeleteTarget(null)}>
+          <p className="text-sm text-forest-muted mb-4"><strong>{deleteTarget.name}</strong> will be permanently deleted.</p>
           {error && <p className="text-sm text-error mb-3">{error}</p>}
           <div className="flex gap-3">
-            <button onClick={() => setDeleteTarget(null)} className="btn-outline flex-1">Cancel</button>
-            <button onClick={handleDelete} disabled={saving} className="btn-danger flex-1">
-              {saving ? 'Deleting…' : 'Delete'}
-            </button>
+            <button onClick={() => setDeleteTarget(null)} className="btn btn-outline flex-1">Cancel</button>
+            <button onClick={handleDelete} disabled={saving} className="btn btn-danger flex-1">{saving ? 'Deleting…' : 'Delete permanently'}</button>
           </div>
-        </Modal>
+        </ModalShell>
       )}
-
-      <div className="h-6" />
+      <div className="h-8" />
     </div>
   )
 }
 
-// ─── Member Profile Sheet ───────────────────────────────────────────────────────
-function MemberProfile({ member, groupMap, onEdit, onDelete, onClose }) {
-  const av = getAv(member.name)
-  const waNum = toWhatsAppNumber(member.phone ?? '')
-  const memberGroups = (member.groupIds ?? []).map(id => groupMap[id]).filter(Boolean)
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 backdrop-blur-sm"
-      onClick={e => e.target === e.currentTarget && onClose()}
-    >
-      <div className="bg-white w-full max-w-md rounded-t-3xl p-6 shadow-modal animate-slide-up safe-bottom">
-        {/* Handle */}
-        <div className="w-10 h-1 bg-forest/20 rounded-full mx-auto mb-5" />
-
-        {/* Avatar + name */}
-        <div className="flex items-start gap-4 mb-5">
-          <div
-            className="avatar-lg shrink-0 font-semibold text-base"
-            style={{ background: av.bg, color: av.color, width: 56, height: 56, fontSize: 18, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          >
-            {av.initials}
-          </div>
-          <div className="flex-1 min-w-0">
-            <h2 className="font-display text-xl font-semibold text-forest">{member.name}</h2>
-            {memberGroups.length > 0 && (
-              <p className="text-sm text-mist truncate">{memberGroups.join(', ')}</p>
-            )}
-            <span className={`badge mt-1 ${member.status === 'active' ? 'badge-green' : 'badge-muted'}`}>
-              {member.status}
-            </span>
-          </div>
-        </div>
-
-        {/* Details */}
-        <div className="space-y-2 mb-5">
-          {member.phone && (
-            <InfoRow icon="📞" label="Phone" value={member.phone} />
-          )}
-          {member.address && (
-            <InfoRow icon="📍" label="Address" value={member.address} />
-          )}
-          {member.birthday && (
-            <InfoRow icon="🎂" label="Birthday" value={fmtBday(normBirthday(member.birthday))} />
-          )}
-        </div>
-
-        {/* Contact buttons */}
-        {(member.phone || waNum) && (
-          <div className="flex gap-2 mb-4">
-            {member.phone && (
-              <a href={`tel:${member.phone}`} className="btn-outline btn-sm flex-1 gap-1.5">
-                <PhoneIcon /> Call
-              </a>
-            )}
-            {waNum && (
-              <a href={`https://wa.me/${waNum}`} target="_blank" rel="noreferrer"
-                className="btn-sm flex-1 gap-1.5" style={{ background: '#25D366', color: '#fff' }}>
-                <WhatsAppIcon /> WhatsApp
-              </a>
-            )}
-          </div>
-        )}
-
-        {/* Edit / Delete */}
-        <div className="flex gap-3">
-          <button onClick={onEdit} className="btn-outline flex-1">Edit member</button>
-          <button onClick={onDelete} className="btn-danger btn-sm px-4">Delete</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function InfoRow({ icon, label, value }) {
-  return (
-    <div className="flex items-start gap-3 text-sm">
-      <span className="text-base w-5 shrink-0 mt-0.5">{icon}</span>
-      <div>
-        <p className="text-mist text-xs">{label}</p>
-        <p className="text-forest font-medium">{value}</p>
-      </div>
-    </div>
-  )
-}
-
-// ─── Member Form Modal ──────────────────────────────────────────────────────────
-function MemberFormModal({ initial, groups, isNew, saving, error, onSave, onClose }) {
+export function MemberFormModal({ initial, groups, isNew, saving, error, onSave, onClose }) {
   const [form, setForm] = useState({
-    name: initial.name ?? '',
-    phone: initial.phone ?? '',
-    address: initial.address ?? '',
-    birthday: initial.birthday ?? '',
-    groupIds: initial.groupIds ?? [],
-    status: initial.status ?? 'active',
+    name: initial.name ?? '', phone: initial.phone ?? '', address: initial.address ?? '',
+    birthday: initial.birthday ?? '', groupIds: initial.groupIds ?? [], status: initial.status ?? 'active',
   })
-
   function toggleGroup(gid) {
-    setForm(p => ({
-      ...p,
-      groupIds: p.groupIds.includes(gid)
-        ? p.groupIds.filter(id => id !== gid)
-        : [...p.groupIds, gid],
-    }))
+    setForm(p => ({ ...p, groupIds: p.groupIds.includes(gid) ? p.groupIds.filter(id => id !== gid) : [...p.groupIds, gid] }))
   }
-
   return (
-    <Modal title={isNew ? 'Add member' : 'Edit member'} onClose={onClose}>
+    <ModalShell title={isNew ? 'Add member' : 'Edit member'} onClose={onClose}>
       <div className="space-y-3">
-        <div>
-          <label className="input-label">Name *</label>
-          <input className="input" placeholder="Full name" autoFocus
-            value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
-        </div>
-        <div>
-          <label className="input-label">Phone</label>
-          <input className="input" type="tel" placeholder="+234…"
-            value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
-        </div>
-        <div>
-          <label className="input-label">Address</label>
-          <input className="input" placeholder="Optional"
-            value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} />
-        </div>
-        <div>
-          <label className="input-label">Birthday</label>
-          <input className="input" type="date"
-            value={form.birthday} onChange={e => setForm(p => ({ ...p, birthday: e.target.value }))} />
-        </div>
+        <div><label className="input-label">Full name *</label>
+          <input className="input" placeholder="Full name" autoFocus value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} /></div>
+        <div><label className="input-label">Phone</label>
+          <input className="input" type="tel" placeholder="+234…" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} /></div>
+        <div><label className="input-label">Address</label>
+          <input className="input" placeholder="Optional" value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} /></div>
+        <div><label className="input-label">Birthday</label>
+          <input className="input" type="date" value={form.birthday} onChange={e => setForm(p => ({ ...p, birthday: e.target.value }))} /></div>
         {groups.length > 0 && (
-          <div>
-            <label className="input-label">Groups</label>
+          <div><label className="input-label">Groups</label>
             <div className="flex flex-wrap gap-2">
               {groups.map(g => (
-                <button
-                  key={g.id}
-                  type="button"
-                  onClick={() => toggleGroup(g.id)}
-                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors
-                    ${form.groupIds.includes(g.id)
-                      ? 'bg-forest text-ivory border-forest'
-                      : 'border-forest/20 text-mist hover:border-forest/40'
-                    }`}
-                >
+                <button key={g.id} type="button" onClick={() => toggleGroup(g.id)}
+                  className={'text-xs px-3 py-1.5 rounded-full border transition-colors ' +
+                    (form.groupIds.includes(g.id) ? 'bg-forest text-ivory border-forest' : 'border-forest/20 text-mist hover:border-forest/40')}>
                   {g.name}
                 </button>
               ))}
             </div>
           </div>
         )}
-        <div>
-          <label className="input-label">Status</label>
-          <select className="input" value={form.status}
-            onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>
+        <div><label className="input-label">Status</label>
+          <select className="input" value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
-          </select>
-        </div>
+            <option value="away">Away (travelling / on leave)</option>
+          </select></div>
         {error && <p className="text-sm text-error">{error}</p>}
         <div className="flex gap-3 pt-1">
-          <button onClick={onClose} className="btn-outline flex-1">Cancel</button>
-          <button
-            onClick={() => onSave({
-              name: form.name.trim(),
-              phone: form.phone.trim() || null,
-              address: form.address.trim() || null,
-              birthday: form.birthday || null,
-              groupIds: form.groupIds,
-              status: form.status,
-            }, isNew)}
-            disabled={saving || !form.name.trim()}
-            className="btn-primary flex-1"
-          >
+          <button onClick={onClose} className="btn btn-outline flex-1">Cancel</button>
+          <button onClick={() => onSave({ name: form.name.trim(), phone: form.phone.trim() || null, address: form.address.trim() || null, birthday: form.birthday || null, groupIds: form.groupIds, status: form.status }, isNew)}
+            disabled={saving || !form.name.trim()} className="btn btn-primary flex-1">
             {saving ? 'Saving…' : (isNew ? 'Add member' : 'Save changes')}
           </button>
         </div>
       </div>
-    </Modal>
+    </ModalShell>
   )
 }
 
-function Modal({ title, onClose, children }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink/40 backdrop-blur-sm p-4"
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-modal animate-slide-up safe-bottom max-h-[90dvh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="font-display text-lg font-semibold text-forest">{title}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-mist hover:text-forest hover:bg-ivory">
-            <CloseIcon />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  )
-}
-
-// Icons
-function UploadIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg> }
-function PlusIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> }
-function SearchIcon({ className = '' }) { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`w-4 h-4 ${className}`}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> }
-function ChevronRight({ className = '' }) { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="9 18 15 12 9 6"/></svg> }
-function PhoneIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.67A2 2 0 012 1h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 8.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg> }
-function WhatsAppIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> }
-function CloseIcon() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> }
-
-// ─── Member Import Modal ────────────────────────────────────────────────────────
-function MemberImportModal({ onClose, onImported }) {
-  const [stage,    setStage]    = useState('upload')  // upload | map | preview | importing
-  const [headers,  setHeaders]  = useState([])
-  const [rows,     setRows]     = useState([])
-  const [colMap,   setColMap]   = useState({ firstName: '', lastName: '', name: '', phone: '', address: '', birthday: '' })
-  const [preview,  setPreview]  = useState([])
+function MemberImportModal({ onClose, onImported, defaultGroupId }) {
+  const [stage, setStage]     = useState('upload')
+  const [headers, setHeaders] = useState([])
+  const [rows, setRows]       = useState([])
+  const [colMap, setColMap]   = useState({ firstName: '', lastName: '', name: '', phone: '', address: '', birthday: '' })
+  const [preview, setPreview] = useState([])
   const [progress, setProgress] = useState(0)
-  const [error,    setError]    = useState('')
+  const [error, setError]     = useState('')
   const fileRef = useRef()
 
-  // ── Robust birthday parser ─────────────────────────────────────────────────
   function parseBirthday(raw) {
-    if (raw === null || raw === undefined || raw === '') return ''
-    // Excel serial number
-    if (typeof raw === 'number' || /^\d{5}$/.test(String(raw))) {
-      const serial = Number(raw)
-      if (serial > 1000) {
-        const d = new Date((serial - 25569) * 86400 * 1000)
-        if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10)
-      }
+    if (!raw && raw !== 0) return ''
+    if (typeof raw === 'number') {
+      if (raw > 1000) { const d = new Date((raw - 25569) * 86400 * 1000); if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10) }
+      return ''
     }
     const s = String(raw).trim()
     if (!s) return ''
-    // YYYY-MM-DD
     if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
-    // DD/MM/YYYY  or  MM/DD/YYYY — try DD/MM first (more common outside US)
     const slash4 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-    if (slash4) {
-      const [, a, b, y] = slash4
-      // If first part > 12 it must be the day
-      const day   = parseInt(a) > 12 ? a : a
-      const month = parseInt(a) > 12 ? b : b
-      return `${y}-${month.padStart(2,'0')}-${day.padStart(2,'0')}`
-    }
-    // DD-MM-YYYY
+    if (slash4) { const [, a, b, y] = slash4; const d = parseInt(a) > 12 ? a : b; const m = parseInt(a) > 12 ? b : a; return y + '-' + m.padStart(2,'0') + '-' + d.padStart(2,'0') }
     const dash4 = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/)
-    if (dash4) {
-      const [, d, m, y] = dash4
-      return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`
-    }
-    // DD/MM/YY  two-digit year
+    if (dash4) { const [, d, m, y] = dash4; return y + '-' + m.padStart(2,'0') + '-' + d.padStart(2,'0') }
     const slash2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/)
-    if (slash2) {
-      const [, d, m, y] = slash2
-      const year = parseInt(y) > 30 ? `19${y}` : `20${y}`
-      return `${year}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`
-    }
-    // D-Mon-YYYY  e.g. "5-Jan-1990"
-    const monFull = s.match(/^(\d{1,2})[- ]([A-Za-z]{3,})[- ](\d{2,4})$/)
-    if (monFull) {
-      const months = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 }
-      const [, d, mon, y] = monFull
-      const m = months[mon.toLowerCase().slice(0,3)]
-      if (m) {
-        const year = y.length === 2 ? (parseInt(y) > 30 ? `19${y}` : `20${y}`) : y
-        return `${year}-${String(m).padStart(2,'0')}-${d.padStart(2,'0')}`
-      }
+    if (slash2) { const [, d, m, y] = slash2; const yr = parseInt(y) > 30 ? '19' + y : '20' + y; return yr + '-' + m.padStart(2,'0') + '-' + d.padStart(2,'0') }
+    const mon = s.match(/^(\d{1,2})[- ]([A-Za-z]{3,})[- ](\d{2,4})$/)
+    if (mon) {
+      const months = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12}
+      const [, d, mo, y] = mon; const mv = months[mo.toLowerCase().slice(0,3)]
+      if (mv) { const yr = y.length === 2 ? (parseInt(y) > 30 ? '19' + y : '20' + y) : y; return yr + '-' + String(mv).padStart(2,'0') + '-' + d.padStart(2,'0') }
     }
     return ''
   }
 
-  // ── Auto-detect column mapping ─────────────────────────────────────────────
   function autoDetect(hdrs) {
     const m = { firstName: '', lastName: '', name: '', phone: '', address: '', birthday: '' }
     hdrs.forEach((h, i) => {
-      const l = h.toLowerCase().trim()
-      const idx = String(i)
-      if (!m.firstName  && (l === 'first_name' || l === 'firstname' || l === 'first name'))  m.firstName  = idx
-      if (!m.lastName   && (l === 'last_name'  || l === 'lastname'  || l === 'last name'))   m.lastName   = idx
-      if (!m.name       && !m.firstName && (l === 'name' || l === 'full name' || l === 'full_name')) m.name = idx
-      if (!m.phone      && (l.includes('phone') || l.includes('mobile') || l.includes('tel')))      m.phone    = idx
-      if (!m.address    && (l.includes('address') || l.includes('location') || l.includes('city'))) m.address  = idx
-      if (!m.birthday   && (l.includes('birth') || l.includes('dob') || l === 'date_of_birth'))     m.birthday = idx
+      const l = h.toLowerCase().trim(); const idx = String(i)
+      if (!m.firstName && (l === 'first_name' || l === 'firstname' || l === 'first name')) m.firstName = idx
+      if (!m.lastName && (l === 'last_name' || l === 'lastname' || l === 'last name')) m.lastName = idx
+      if (!m.name && !m.firstName && (l === 'name' || l === 'full name' || l === 'full_name')) m.name = idx
+      if (!m.phone && (l.includes('phone') || l.includes('mobile') || l.includes('tel'))) m.phone = idx
+      if (!m.address && (l.includes('address') || l.includes('location'))) m.address = idx
+      if (!m.birthday && (l.includes('birth') || l.includes('dob') || l === 'date_of_birth')) m.birthday = idx
     })
     return m
   }
@@ -542,180 +389,153 @@ function MemberImportModal({ onClose, onImported }) {
     if (!file) return
     setError('')
     try {
-      const XLSX = (await import('xlsx')).default
-      const buf  = await file.arrayBuffer()
-      const wb   = XLSX.read(buf, { type: 'array', cellDates: false })
-      const ws   = wb.Sheets[wb.SheetNames[0]]
-      const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
-      if (data.length < 2) { setError('File appears to be empty'); return }
-      const hdrs     = data[0].map(String)
-      const dataRows = data.slice(1).filter(r => r.some(c => String(c).trim() !== ''))
-      setHeaders(hdrs)
-      setRows(dataRows)
-      setColMap(autoDetect(hdrs))
-      setStage('map')
-    } catch {
-      setError('Could not read file. Try saving as .xlsx or .csv first.')
-    }
+      const { read, utils } = await import('xlsx')
+      const buf = await file.arrayBuffer()
+      const wb  = read(new Uint8Array(buf), { type: 'array', cellDates: false, raw: true })
+      const ws  = wb.Sheets[wb.SheetNames[0]]
+      const data = utils.sheet_to_json(ws, { header: 1, defval: '', raw: true })
+      if (!data || data.length < 2) { setError('File appears to be empty'); return }
+      const hdrs = (data[0] ?? []).map(String)
+      const dataRows = data.slice(1).filter(r => Array.isArray(r) && r.some(c => String(c ?? '').trim()))
+      setHeaders(hdrs); setRows(dataRows); setColMap(autoDetect(hdrs)); setStage('map')
+    } catch { setError('Could not read file. Ensure it is a valid .xlsx or .csv file.') }
   }
 
   function buildPreview() {
-    const hasName  = colMap.name !== ''
-    const hasFName = colMap.firstName !== ''
-    if (!hasName && !hasFName) { setError('Please map at least a Name or First Name column'); return }
-
+    if (!colMap.name && !colMap.firstName) { setError('Map at least a Name or First Name column'); return }
     const mapped = rows.map(row => {
       let name = ''
-      if (colMap.firstName !== '') {
-        const first = String(row[parseInt(colMap.firstName)] ?? '').trim()
-        const last  = colMap.lastName !== '' ? String(row[parseInt(colMap.lastName)] ?? '').trim() : ''
-        name = last ? `${first} ${last}` : first
-      } else if (colMap.name !== '') {
-        name = String(row[parseInt(colMap.name)] ?? '').trim()
+      if (colMap.firstName) { const first = String(row[parseInt(colMap.firstName)] ?? '').trim(); const last = colMap.lastName ? String(row[parseInt(colMap.lastName)] ?? '').trim() : ''; name = [first, last].filter(Boolean).join(' ') }
+      else { name = String(row[parseInt(colMap.name)] ?? '').trim() }
+      return {
+        name,
+        phone:    colMap.phone    ? String(row[parseInt(colMap.phone)]    ?? '').trim() || null : null,
+        address:  colMap.address  ? String(row[parseInt(colMap.address)]  ?? '').trim() || null : null,
+        birthday: colMap.birthday ? parseBirthday(row[parseInt(colMap.birthday)]) || null : null,
       }
-      const phone    = colMap.phone    !== '' ? String(row[parseInt(colMap.phone)]    ?? '').trim() : ''
-      const address  = colMap.address  !== '' ? String(row[parseInt(colMap.address)]  ?? '').trim() : ''
-      const bdayRaw  = colMap.birthday !== '' ? row[parseInt(colMap.birthday)] : ''
-      const birthday = parseBirthday(bdayRaw)
-      return { name, phone: phone || null, address: address || null, birthday: birthday || null }
     }).filter(r => r.name)
-
-    if (mapped.length === 0) { setError('No valid rows found with the selected columns'); return }
-    setPreview(mapped)
-    setStage('preview')
-    setError('')
+    if (!mapped.length) { setError('No valid rows found. Check your column mapping.'); return }
+    setPreview(mapped); setStage('preview'); setError('')
   }
 
   async function handleImport() {
-    setStage('importing')
-    setProgress(0)
-    const imported = []
-    const BATCH = 10
+    setStage('importing'); setProgress(0)
+    const imported = []; const BATCH = 10
     for (let i = 0; i < preview.length; i += BATCH) {
-      const batch = preview.slice(i, i + BATCH)
-      await Promise.all(batch.map(async member => {
-        try {
-          const res  = await fetch('/api/members', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...member, status: 'active', groupIds: [] }),
-          })
-          const data = await res.json()
-          if (data.member) imported.push(data.member)
-        } catch {}
+      await Promise.all(preview.slice(i, i + BATCH).map(async m => {
+        try { const res = await fetch('/api/members', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...m, status: 'active', groupIds: defaultGroupId ? [defaultGroupId] : [] }) }); const data = await res.json(); if (data.member) imported.push(data.member) } catch {}
       }))
       setProgress(Math.min(100, Math.round(((i + BATCH) / preview.length) * 100)))
     }
     onImported(imported)
   }
 
+  function downloadSample() {
+    const csv = 'first_name,last_name,phone,address,birthday\nAda,Okafor,+2348012345678,Lagos,15/03/1990\nEmeka,Nwosu,,Abuja,22-Jul-1985'
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'members-template.csv'; a.click()
+  }
+
   const fieldLabels = [
     { key: 'firstName', label: 'First Name' },
-    { key: 'lastName',  label: 'Last Name' },
-    { key: 'name',      label: 'Full Name (if no first/last)' },
+    { key: 'lastName',  label: 'Last Name (optional)' },
+    { key: 'name',      label: 'Full Name (alternative to first/last)' },
     { key: 'phone',     label: 'Phone' },
     { key: 'address',   label: 'Address' },
     { key: 'birthday',  label: 'Birthday / Date of Birth' },
   ]
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(15,26,19,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-sm p-4"
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, padding: '1.5rem', maxHeight: '90dvh', overflowY: 'auto', boxShadow: '0 -8px 40px rgba(0,0,0,0.15)' }}>
-
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
-          <h3 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 18, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>
-            Import Members
-          </h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8a9e90', padding: 4 }}>
-            <CloseIcon />
-          </button>
-        </div>
-
-        {/* STAGE: upload */}
-        {stage === 'upload' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div
-              onClick={() => fileRef.current?.click()}
-              style={{ border: '2px dashed rgba(26,58,42,0.2)', borderRadius: 16, padding: '2.5rem 1rem', textAlign: 'center', cursor: 'pointer', transition: 'all 0.15s' }}
-              onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(26,58,42,0.4)'}
-              onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(26,58,42,0.2)'}
-            >
-              <p style={{ fontSize: 32, marginBottom: 10 }}>📊</p>
-              <p style={{ fontSize: 15, fontWeight: 700, color: '#1a3a2a', margin: '0 0 6px' }}>Click to upload file</p>
-              <p style={{ fontSize: 13, color: '#8a9e90', margin: 0 }}>.xlsx, .xls or .csv</p>
-              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleFile} />
-            </div>
-            <div style={{ background: 'rgba(26,58,42,0.04)', borderRadius: 12, padding: '0.75rem 1rem', fontSize: 13, color: '#4a8a65', lineHeight: 1.5 }}>
-              <strong>Supported columns:</strong> first_name / last_name / name, phone, address, birthday (any date format)
-            </div>
-            {error && <p style={{ fontSize: 14, color: '#dc2626', margin: 0 }}>{error}</p>}
-            <button onClick={onClose} className="btn-outline w-full">Cancel</button>
+      <div className="bg-white rounded-3xl w-full max-w-md shadow-modal animate-slide-up max-h-[90dvh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="font-display text-lg font-semibold text-forest">Import Members</h3>
+            <button onClick={onClose} className="btn btn-ghost btn-sm p-1.5"><X size={18} /></button>
           </div>
-        )}
-
-        {/* STAGE: map */}
-        {stage === 'map' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <p style={{ fontSize: 14, color: '#8a9e90', margin: 0 }}>{rows.length} rows found · Map your columns below</p>
-            {fieldLabels.map(({ key, label }) => (
-              <div key={key}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#2d4a36', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</label>
-                <select
-                  style={{ width: '100%', border: '1px solid rgba(26,58,42,0.18)', borderRadius: 11, padding: '0.65rem 0.875rem', fontSize: 14, outline: 'none', background: '#fff', color: '#1a2e22', cursor: 'pointer', minHeight: 44 }}
-                  value={colMap[key]}
-                  onChange={e => setColMap(p => ({ ...p, [key]: e.target.value }))}
-                >
-                  <option value="">— not mapped —</option>
-                  {headers.map((h, i) => <option key={i} value={String(i)}>{h} (col {i+1})</option>)}
-                </select>
+          {stage === 'upload' && (
+            <div className="space-y-4">
+              <div onClick={() => fileRef.current?.click()}
+                className="border-2 border-dashed border-forest/20 rounded-2xl p-8 text-center cursor-pointer hover:border-forest/40 hover:bg-forest/[0.02] transition-all">
+                <Upload size={28} className="text-forest/30 mx-auto mb-3" strokeWidth={1.5} />
+                <p className="font-semibold text-forest mb-1">Click to upload</p>
+                <p className="text-sm text-mist">.xlsx, .xls or .csv</p>
+                <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} />
               </div>
-            ))}
-            {error && <p style={{ fontSize: 14, color: '#dc2626', margin: 0 }}>{error}</p>}
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setStage('upload')} className="btn-outline flex-1">Back</button>
-              <button onClick={buildPreview} className="btn-primary flex-1">Preview →</button>
+              <div className="bg-forest/4 rounded-2xl p-4 space-y-1.5">
+                <p className="text-xs font-bold text-forest uppercase tracking-wide">File format</p>
+                <p className="text-sm text-mist">Include a <strong className="text-forest">name</strong> or <strong className="text-forest">first_name</strong> column. Optional: last_name, phone, address, birthday (any date format).</p>
+              </div>
+              <button onClick={downloadSample} className="btn btn-ghost btn-sm w-full gap-2 text-mist">Download sample template ↓</button>
+              {error && <p className="text-sm text-error">{error}</p>}
+              <button onClick={onClose} className="btn btn-outline w-full">Cancel</button>
             </div>
-          </div>
-        )}
-
-        {/* STAGE: preview */}
-        {stage === 'preview' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <p style={{ fontSize: 14, fontWeight: 600, color: '#1a3a2a', margin: 0 }}>{preview.length} members ready to import</p>
-            <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {preview.slice(0, 50).map((m, i) => (
-                <div key={i} style={{ display: 'flex', gap: 8, padding: '0.5rem 0.75rem', background: '#f7f5f0', borderRadius: 9 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 14, fontWeight: 600, color: '#1a3a2a', margin: '0 0 1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</p>
-                    <p style={{ fontSize: 12, color: '#8a9e90', margin: 0 }}>
-                      {[m.phone, m.birthday].filter(Boolean).join(' · ') || 'No additional info'}
-                    </p>
-                  </div>
+          )}
+          {stage === 'map' && (
+            <div className="space-y-4">
+              <p className="text-sm text-mist">{rows.length} rows found — map your columns</p>
+              {fieldLabels.map(({ key, label }) => (
+                <div key={key}><label className="input-label">{label}</label>
+                  <select className="input text-sm" value={colMap[key]} onChange={e => setColMap(p => ({ ...p, [key]: e.target.value }))}>
+                    <option value="">— not mapped —</option>
+                    {headers.map((h, i) => <option key={i} value={String(i)}>{h}</option>)}
+                  </select>
                 </div>
               ))}
-              {preview.length > 50 && (
-                <p style={{ fontSize: 12, color: '#8a9e90', textAlign: 'center', padding: '0.5rem' }}>…and {preview.length - 50} more</p>
-              )}
+              {error && <p className="text-sm text-error">{error}</p>}
+              <div className="flex gap-3">
+                <button onClick={() => setStage('upload')} className="btn btn-outline flex-1">Back</button>
+                <button onClick={buildPreview} className="btn btn-primary flex-1">Preview →</button>
+              </div>
             </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setStage('map')} className="btn-outline flex-1">Back</button>
-              <button onClick={handleImport} className="btn-primary flex-1">Import {preview.length} members</button>
+          )}
+          {stage === 'preview' && (
+            <div className="space-y-4">
+              <p className="text-sm font-semibold text-forest">{preview.length} members ready to import</p>
+              <div className="max-h-64 overflow-y-auto space-y-1.5">
+                {preview.slice(0, 50).map((m, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2 bg-ivory rounded-xl">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-forest truncate">{m.name}</p>
+                      {(m.phone || m.birthday) && <p className="text-xs text-mist">{[m.phone, m.birthday].filter(Boolean).join(' · ')}</p>}
+                    </div>
+                    <Check size={12} className="text-success shrink-0" />
+                  </div>
+                ))}
+                {preview.length > 50 && <p className="text-xs text-mist text-center py-2">…and {preview.length - 50} more</p>}
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setStage('map')} className="btn btn-outline flex-1">Back</button>
+                <button onClick={handleImport} className="btn btn-primary flex-1">Import {preview.length}</button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+          {stage === 'importing' && (
+            <div className="text-center py-8 space-y-4">
+              <p className="text-3xl">⏳</p>
+              <p className="font-semibold text-forest">Importing members…</p>
+              <div className="h-2 bg-ivory-deeper rounded-full overflow-hidden">
+                <div className="h-full bg-forest rounded-full transition-all duration-300" style={{ width: progress + '%' }} />
+              </div>
+              <p className="text-sm text-mist">{progress}%</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
-        {/* STAGE: importing */}
-        {stage === 'importing' && (
-          <div style={{ textAlign: 'center', padding: '2rem 0' }}>
-            <p style={{ fontSize: 32, marginBottom: 16 }}>⏳</p>
-            <p style={{ fontSize: 15, fontWeight: 700, color: '#1a3a2a', margin: '0 0 12px' }}>Importing…</p>
-            <div style={{ height: 8, background: '#ede9e0', borderRadius: 4, overflow: 'hidden' }}>
-              <div style={{ height: '100%', background: '#1a3a2a', borderRadius: 4, width: `${progress}%`, transition: 'width 0.3s' }} />
-            </div>
-            <p style={{ fontSize: 13, color: '#8a9e90', marginTop: 8 }}>{progress}%</p>
-          </div>
-        )}
+function ModalShell({ title, onClose, children }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink/40 backdrop-blur-sm p-4"
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-modal animate-slide-up safe-bottom max-h-[90dvh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="font-display text-lg font-semibold text-forest">{title}</h3>
+          <button onClick={onClose} className="btn btn-ghost btn-sm p-1.5"><X size={18} /></button>
+        </div>
+        {children}
       </div>
     </div>
   )
