@@ -1,452 +1,609 @@
 'use client'
 
+import { useState, useMemo, useRef, useCallback } from 'react'
 import BackButton from '@/components/ui/BackButton'
-import { useState, useRef, useCallback, useMemo } from 'react'
-import { fmtDate, fmtMonthYear, attendanceRate } from '@/lib/utils'
+import { fmtDate } from '@/lib/utils'
+import {
+  FileText, Download, Share2, Calendar, ChevronLeft, ChevronRight,
+  Users, TrendingUp, Star, UserMinus, UserCheck, Plane
+} from 'lucide-react'
+
+// ── Brand colors ──────────────────────────────────────────────────────────────
+const C = {
+  forest:'#1a3a2a', mid:'#2d5a42', light:'#4a8a65', muted:'#8a9e90',
+  gold:'#c9a84c', goldDk:'#a8862e', goldLt:'#e8d5a0',
+  ivory:'#f7f5f0', ivoryDk:'#ede9e0', ivoryDeep:'#e0dbd0',
+  success:'#16a34a', error:'#dc2626', warning:'#d97706',
+}
 
 const MONTHS = ['January','February','March','April','May','June',
   'July','August','September','October','November','December']
 
-export default function ReportClient({ church, groups, sessions, members }) {
-  const [reportType, setReportType] = useState('sunday') // 'sunday' | 'monthly'
+function rateColor(r) {
+  if (r >= 75) return C.success
+  if (r >= 50) return C.warning
+  return C.error
+}
 
-  // Sunday report state
-  const [selectedSession, setSelectedSession] = useState(null)
+function ordinal(n) {
+  const s = ['th','st','nd','rd'], v = n % 100
+  return n + (s[(v-20)%10] || s[v] || s[0])
+}
 
-  // Monthly report state
-  const now = new Date()
-  const [reportMonth, setReportMonth] = useState(now.getMonth())
-  const [reportYear, setReportYear] = useState(now.getFullYear())
+function formatSundayLabel(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00')
+  return `Sunday ${ordinal(d.getDate())} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
+}
 
-  const [generating, setGenerating] = useState(false)
-  const [generated, setGenerated] = useState(false)
+function formatMonthLabel(month, year) {
+  return `${MONTHS[month]} ${year}`
+}
+
+// ── The premium report card ───────────────────────────────────────────────────
+// This is what gets exported as PNG/PDF — self-contained, no Tailwind classes
+function ReportCard({ church, data, type, reportRef }) {
+  const rate = data.total > 0 ? Math.round((data.present / data.total) * 100) : 0
+  const rc = rateColor(rate)
+
+  return (
+    <div
+      ref={reportRef}
+      id="report-card"
+      style={{
+        width: 480,
+        background: '#ffffff',
+        borderRadius: 20,
+        overflow: 'hidden',
+        fontFamily: 'var(--font-dm-sans, system-ui, sans-serif)',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+        position: 'relative',
+      }}
+    >
+      {/* ── Header band ── */}
+      <div style={{
+        background: `linear-gradient(135deg, ${C.forest} 0%, ${C.mid} 100%)`,
+        padding: '24px 28px 20px',
+      }}>
+        {/* Torch icon + name */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: 'rgba(201,168,76,0.2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round">
+              <path d="M6 2L3 6l9 14 9-14-3-4z"/><path d="M3 6h18"/>
+            </svg>
+          </div>
+          <div>
+            <p style={{ fontSize: 10, color: 'rgba(232,213,160,0.55)', margin: 0, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              Torch Tracker
+            </p>
+            <p style={{ fontSize: 15, color: C.goldLt, margin: 0, fontWeight: 700, letterSpacing: '-0.01em' }}>
+              {church.name}
+            </p>
+          </div>
+        </div>
+
+        {/* Report period */}
+        <div>
+          <p style={{ fontSize: 11, color: 'rgba(232,213,160,0.5)', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
+            {type === 'sunday' ? 'Sunday Report' : 'Monthly Report'}
+          </p>
+          <p style={{
+            fontSize: 20, fontFamily: 'var(--font-playfair, Georgia, serif)',
+            fontWeight: 700, color: '#fff', margin: 0, letterSpacing: '-0.02em',
+          }}>
+            {data.periodLabel}
+          </p>
+        </div>
+      </div>
+
+      {/* ── Main attendance stat ── */}
+      <div style={{
+        padding: '24px 28px 0',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        {/* Big rate ring */}
+        <div style={{ position: 'relative', width: 100, height: 100 }}>
+          <svg width="100" height="100" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="40" fill="none" stroke={C.ivoryDeep} strokeWidth="9" />
+            <circle
+              cx="50" cy="50" r="40" fill="none"
+              stroke={rc} strokeWidth="9"
+              strokeDasharray={`${2 * Math.PI * 40}`}
+              strokeDashoffset={`${2 * Math.PI * 40 * (1 - rate / 100)}`}
+              strokeLinecap="round"
+              transform="rotate(-90 50 50)"
+              style={{ transition: 'stroke-dashoffset 1s ease' }}
+            />
+          </svg>
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            <span style={{ fontSize: 22, fontWeight: 800, color: rc, lineHeight: 1, fontFamily: 'var(--font-playfair, Georgia, serif)' }}>
+              {rate}%
+            </span>
+            <span style={{ fontSize: 9, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              attendance
+            </span>
+          </div>
+        </div>
+
+        {/* Present / Absent / Total */}
+        <div style={{ flex: 1, paddingLeft: 24, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+          {[
+            { label: 'Present', value: data.present, color: C.success },
+            { label: 'Absent',  value: data.absent,  color: C.error   },
+            { label: 'Total',   value: data.total,   color: C.forest  },
+          ].map(({ label, value, color }) => (
+            <div key={label} style={{
+              background: C.ivory, borderRadius: 10, padding: '10px 8px', textAlign: 'center',
+            }}>
+              <p style={{ fontSize: 22, fontWeight: 800, color, margin: '0 0 2px', lineHeight: 1, fontFamily: 'var(--font-playfair, Georgia, serif)' }}>
+                {value}
+              </p>
+              <p style={{ fontSize: 9, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>
+                {label}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Stats grid ── */}
+      <div style={{ padding: '16px 28px 0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        {[
+          { icon: '⭐', label: 'First Timers',  value: data.firstTimers,  accent: C.goldDk   },
+          { icon: '✅', label: 'Followed Up',   value: data.followedUp,   accent: C.success  },
+          { icon: '📋', label: 'Pending Follow-Up', value: data.pendingFollowUp, accent: C.warning },
+          { icon: '✈️', label: 'Away Members',  value: data.awayCount,    accent: C.muted    },
+        ].map(({ icon, label, value, accent }) => (
+          <div key={label} style={{
+            background: C.ivory, borderRadius: 12, padding: '12px 14px',
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            <span style={{ fontSize: 18 }}>{icon}</span>
+            <div>
+              <p style={{ fontSize: 18, fontWeight: 800, color: accent, margin: '0 0 1px', lineHeight: 1, fontFamily: 'var(--font-playfair, Georgia, serif)' }}>
+                {value}
+              </p>
+              <p style={{ fontSize: 10, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>
+                {label}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Monthly week-by-week breakdown ── */}
+      {type === 'monthly' && data.weeks && data.weeks.length > 0 && (
+        <div style={{ padding: '16px 28px 0' }}>
+          <p style={{ fontSize: 10, color: C.muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' }}>
+            Week by Week
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {data.weeks.map((w, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <p style={{ fontSize: 11, color: C.muted, width: 64, flexShrink: 0, margin: 0 }}>
+                  {new Date(w.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                </p>
+                <div style={{ flex: 1, height: 6, background: C.ivoryDeep, borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%', borderRadius: 3,
+                    width: `${w.rate}%`,
+                    background: rateColor(w.rate),
+                    transition: 'width 0.5s ease',
+                  }} />
+                </div>
+                <p style={{ fontSize: 11, fontWeight: 700, color: rateColor(w.rate), width: 36, textAlign: 'right', margin: 0 }}>
+                  {w.rate}%
+                </p>
+                <p style={{ fontSize: 10, color: C.muted, width: 40, textAlign: 'right', margin: 0 }}>
+                  {w.present}/{w.total}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Footer ── */}
+      <div style={{
+        margin: '20px 28px 0',
+        paddingTop: 14, paddingBottom: 20,
+        borderTop: `1px solid ${C.ivoryDeep}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <p style={{ fontSize: 10, color: C.muted, margin: 0 }}>
+          Generated {new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round">
+            <path d="M6 2L3 6l9 14 9-14-3-4z"/><path d="M3 6h18"/>
+          </svg>
+          <p style={{ fontSize: 10, color: C.muted, margin: 0, fontWeight: 600 }}>Torch Tracker</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+export default function ReportClient({
+  church, sessions, members, firstTimers, awayMembers
+}) {
+  const [reportType, setReportType] = useState('sunday')  // 'sunday' | 'monthly'
+  const [generated, setGenerated]   = useState(false)
+  const [exporting, setExporting]   = useState(false)
   const reportRef = useRef(null)
-  const canvasRef = useRef(null)
 
-  // Unique dates with data
-  const sessionDates = useMemo(() => {
-    const seen = new Set()
-    return sessions.filter(s => { if (seen.has(s.date)) return false; seen.add(s.date); return true })
-      .map(s => s.date).slice(0, 20)
-  }, [sessions])
+  // ── Sunday report state ──────────────────────────────────────────────────
+  const realSessions = sessions.filter(s =>
+    s.groups?.name !== 'First Timers' &&
+    (s.attendance_records ?? []).some(r => r.member_id !== null)
+  )
+  const sessionDates = [...new Set(realSessions.map(s => s.date))].sort((a, b) => b.localeCompare(a))
+  const [sundayIdx, setSundayIdx] = useState(0)
+  const selectedDate = sessionDates[sundayIdx] ?? null
 
-  // Monthly sessions
-  const monthlySessions = useMemo(() =>
-    sessions.filter(s => {
-      const d = new Date(s.date)
-      return d.getMonth() === reportMonth && d.getFullYear() === reportYear
-    }), [sessions, reportMonth, reportYear])
+  // ── Monthly report state ─────────────────────────────────────────────────
+  const now = new Date()
+  const [month, setMonth] = useState(now.getMonth())
+  const [year, setYear]   = useState(now.getFullYear())
 
-  async function handleGenerate() {
-    setGenerating(true)
+  function prevMonth() {
+    if (month === 0) { setMonth(11); setYear(y => y - 1) }
+    else setMonth(m => m - 1)
     setGenerated(false)
-    // Small delay to let DOM render the off-screen report
-    await new Promise(r => setTimeout(r, 100))
+  }
+  function nextMonth() {
+    const next = new Date(year, month + 1, 1)
+    if (next <= now) {
+      if (month === 11) { setMonth(0); setYear(y => y + 1) }
+      else setMonth(m => m + 1)
+      setGenerated(false)
+    }
+  }
+  const isCurrentMonth = month === now.getMonth() && year === now.getFullYear()
+
+  // ── Compute report data ──────────────────────────────────────────────────
+  const reportData = useMemo(() => {
+    if (reportType === 'sunday') {
+      if (!selectedDate) return null
+      const daySessions = realSessions.filter(s => s.date === selectedDate)
+      let present = 0, total = 0
+      for (const s of daySessions) {
+        for (const r of (s.attendance_records ?? [])) {
+          if (r.member_id === null) continue
+          total++
+          if (r.present) present++
+        }
+      }
+      const absent = total - present
+      const dayFTs = firstTimers.filter(ft => ft.date === selectedDate)
+      const absentIds = new Set(
+        daySessions.flatMap(s =>
+          (s.attendance_records ?? []).filter(r => !r.present && r.member_id).map(r => r.member_id)
+        )
+      )
+      const followData = church.follow_up_data ?? {}
+      let followedUp = 0, pendingFollowUp = 0
+      for (const id of absentIds) {
+        const sessionId = daySessions[0]?.id
+        const key = sessionId ? `${sessionId}_${id}` : null
+        if (key && followData[key]?.reached) followedUp++
+        else pendingFollowUp++
+      }
+      return {
+        periodLabel: formatSundayLabel(selectedDate),
+        present, absent, total,
+        firstTimers: dayFTs.length,
+        followedUp, pendingFollowUp,
+        awayCount: awayMembers.length,
+        weeks: null,
+      }
+    } else {
+      // Monthly
+      const monthSessions = realSessions.filter(s => {
+        const d = new Date(s.date + 'T00:00:00')
+        return d.getMonth() === month && d.getFullYear() === year
+      })
+      // Week by week
+      const byDate = {}
+      for (const s of monthSessions) {
+        if (!byDate[s.date]) byDate[s.date] = { present: 0, total: 0 }
+        for (const r of (s.attendance_records ?? [])) {
+          if (r.member_id === null) continue
+          byDate[s.date].total++
+          if (r.present) byDate[s.date].present++
+        }
+      }
+      const weeks = Object.entries(byDate)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, { present, total }]) => ({
+          date, present, total,
+          rate: total > 0 ? Math.round((present / total) * 100) : 0,
+        }))
+      const present = weeks.reduce((s, w) => s + w.present, 0)
+      const total   = weeks.reduce((s, w) => s + w.total, 0)
+      const absent  = total - present
+      const monthFTs = firstTimers.filter(ft => {
+        const d = new Date(ft.date + 'T00:00:00')
+        return d.getMonth() === month && d.getFullYear() === year
+      })
+      const followData = church.follow_up_data ?? {}
+      let followedUp = 0, pendingFollowUp = 0
+      for (const s of monthSessions) {
+        for (const r of (s.attendance_records ?? [])) {
+          if (r.present || !r.member_id) continue
+          const key = `${s.id}_${r.member_id}`
+          if (followData[key]?.reached) followedUp++
+          else pendingFollowUp++
+        }
+      }
+      return {
+        periodLabel: formatMonthLabel(month, year),
+        present, absent, total: total > 0 ? total : members.filter(m => m.status === 'active').length,
+        firstTimers: monthFTs.length,
+        followedUp, pendingFollowUp,
+        awayCount: awayMembers.length,
+        weeks,
+      }
+    }
+  }, [reportType, selectedDate, month, year, realSessions, firstTimers, awayMembers, members, church])
+
+  // ── Export as PNG ────────────────────────────────────────────────────────
+  async function exportPNG() {
+    if (!reportRef.current) return
+    setExporting(true)
     try {
       const html2canvas = (await import('html2canvas')).default
-      const el = reportRef.current
-      if (!el) return
-      el.style.visibility = 'visible'
-      const canvas = await html2canvas(el, {
-        scale: 3,
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
         useCORS: true,
-        backgroundColor: '#f7f5f0',
-        width: 800,
+        backgroundColor: '#ffffff',
         logging: false,
       })
-      el.style.visibility = 'hidden'
-      // Draw onto preview canvas
-      const preview = canvasRef.current
-      if (preview) {
-        preview.width = canvas.width
-        preview.height = canvas.height
-        const ctx = preview.getContext('2d')
-        ctx.drawImage(canvas, 0, 0)
-      }
-      setGenerated(true)
+      // Compress to JPEG for smaller file size (WhatsApp friendly)
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.88))
+      const url  = URL.createObjectURL(blob)
+      const a    = Object.assign(document.createElement('a'), {
+        href: url,
+        download: `${church.name.replace(/\s+/g, '-')}-report-${reportData.periodLabel.replace(/\s+/g, '-')}.jpg`,
+      })
+      a.click()
+      URL.revokeObjectURL(url)
     } catch (err) {
-      console.error('Report generation failed', err)
-      alert('Report generation failed: ' + err.message)
+      console.error('PNG export failed:', err)
+      alert('Export failed. Please try again.')
     } finally {
-      setGenerating(false)
+      setExporting(false)
     }
   }
 
-  function handleDownloadJPEG() {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const link = document.createElement('a')
-    link.download = `churchtrakr-report-${Date.now()}.jpg`
-    link.href = canvas.toDataURL('image/jpeg', 0.95)
-    link.click()
-  }
-
-  async function handleDownloadPDF() {
-    const canvas = canvasRef.current
-    if (!canvas) return
+  // ── Export as PDF ────────────────────────────────────────────────────────
+  async function exportPDF() {
+    if (!reportRef.current) return
+    setExporting(true)
     try {
+      const html2canvas = (await import('html2canvas')).default
       const { jsPDF } = await import('jspdf')
-      const imgData = canvas.toDataURL('image/jpeg', 0.95)
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [canvas.width / 3, canvas.height / 3] })
-      pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width / 3, canvas.height / 3)
-      pdf.save(`churchtrakr-report-${Date.now()}.pdf`)
-    } catch {
-      // jsPDF not installed — download as JPEG instead
-      handleDownloadJPEG()
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false,
+      })
+      const imgData = canvas.toDataURL('image/jpeg', 0.92)
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const pdfWidth = pdf.internal.pageSize.getWidth()
+      const imgWidth = pdfWidth - 30  // 15mm margins
+      const imgHeight = (canvas.height / canvas.width) * imgWidth
+      pdf.addImage(imgData, 'JPEG', 15, 15, imgWidth, imgHeight)
+      pdf.save(`${church.name.replace(/\s+/g, '-')}-report.pdf`)
+    } catch (err) {
+      console.error('PDF export failed:', err)
+      alert('PDF export failed. Please try again.')
+    } finally {
+      setExporting(false)
     }
   }
 
-  // Compute report data
-  const sundayData = useMemo(() => {
-    if (!selectedSession) return null
-    const daysSessions = sessions.filter(s => s.date === selectedSession)
-    const allRecords = daysSessions.flatMap(s => s.attendance_records ?? [])
-    const present = allRecords.filter(r => r.present).length
-    const absent = allRecords.filter(r => !r.present).length
-    const total = allRecords.length
-    const rate = attendanceRate(present, total)
+  // ── Share via Web Share API (WhatsApp) ───────────────────────────────────
+  async function shareWhatsApp() {
+    if (!reportRef.current) return
+    setExporting(true)
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false,
+      })
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85))
+      const fileName = `${church.name}-attendance-report.jpg`
 
-    // Follow-up stats
-    const followUp = church.follow_up_data ?? {}
-    const attendeeFu = church.attendee_followup_data ?? {}
-    const absentKeys = daysSessions.flatMap(s =>
-      (s.attendance_records ?? []).filter(r => !r.present).map(r => `${s.id}_${r.member_id}`)
-    )
-    const attendeeKeys = daysSessions.flatMap(s =>
-      (s.attendance_records ?? []).filter(r => r.present).map(r => `att_${s.id}_${r.member_id}`)
-    )
-    const absenteesReached = absentKeys.filter(k => followUp[k]?.reached).length
-    const attendeesThanked = attendeeKeys.filter(k => attendeeFu[k]?.messaged).length
-
-    // Per-group breakdown
-    const groupBreakdown = daysSessions.map(s => {
-      const g = groups.find(g => g.id === s.group_id)
-      const recs = s.attendance_records ?? []
-      const gPresent = recs.filter(r => r.present).length
-      return { name: g?.name ?? 'Unknown', present: gPresent, total: recs.length, rate: attendanceRate(gPresent, recs.length) }
-    })
-
-    return {
-      date: selectedSession,
-      present, absent, total, rate,
-      absenteesReached, totalAbsent: absent,
-      attendeesThanked, totalAttendees: present,
-      groupBreakdown,
-    }
-  }, [selectedSession, sessions, groups, church])
-
-  const monthlyData = useMemo(() => {
-    if (!monthlySessions.length) return null
-    const byDate = {}
-    for (const s of monthlySessions) {
-      if (!byDate[s.date]) byDate[s.date] = { date: s.date, present: 0, total: 0 }
-      const recs = s.attendance_records ?? []
-      byDate[s.date].present += recs.filter(r => r.present).length
-      byDate[s.date].total += recs.length
-    }
-    const sundays = Object.values(byDate).sort((a, b) => new Date(a.date) - new Date(b.date))
-      .map((w, i) => ({ ...w, rate: attendanceRate(w.present, w.total), ordinal: ['1st','2nd','3rd','4th','5th'][i] ?? `${i+1}th` }))
-
-    const avgRate = Math.round(sundays.reduce((s, w) => s + w.rate, 0) / sundays.length)
-
-    // Members absent 2+ times
-    const absentCount = {}
-    for (const s of monthlySessions) {
-      for (const r of (s.attendance_records ?? [])) {
-        if (!r.present) absentCount[r.name] = (absentCount[r.name] ?? 0) + 1
+      if (navigator.share && navigator.canShare) {
+        const file = new File([blob], fileName, { type: 'image/jpeg' })
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: `${church.name} — ${reportData.periodLabel}`,
+            text: `Attendance report for ${reportData.periodLabel}`,
+          })
+          return
+        }
       }
+      // Fallback: download + prompt user to share manually
+      const url = URL.createObjectURL(blob)
+      const a = Object.assign(document.createElement('a'), { href: url, download: fileName })
+      a.click()
+      URL.revokeObjectURL(url)
+      setTimeout(() => alert('Image downloaded — open WhatsApp and share it from your gallery.'), 300)
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error('Share failed:', err)
+      }
+    } finally {
+      setExporting(false)
     }
-    const frequentAbsent = Object.entries(absentCount).filter(([, c]) => c >= 2).map(([name]) => name).slice(0, 12)
+  }
 
-    // Members with no attendance this month
-    const monthMemberIds = new Set(monthlySessions.flatMap(s => (s.attendance_records ?? []).map(r => r.member_id)))
-    const noAttendance = members.filter(m => !monthMemberIds.has(m.id)).map(m => m.name).slice(0, 12)
-
-    // Trend
-    const prevMonth = reportMonth === 0 ? 11 : reportMonth - 1
-    const prevYear = reportMonth === 0 ? reportYear - 1 : reportYear
-    const prevSessions = sessions.filter(s => {
-      const d = new Date(s.date)
-      return d.getMonth() === prevMonth && d.getFullYear() === prevYear
-    })
-    const prevRecords = prevSessions.flatMap(s => s.attendance_records ?? [])
-    const prevRate = prevRecords.length ? attendanceRate(prevRecords.filter(r => r.present).length, prevRecords.length) : null
-    const trendDelta = prevRate !== null ? avgRate - prevRate : null
-    const trendLabel = trendDelta === null ? 'Stable →' : trendDelta > 2 ? 'Growing ↑' : trendDelta < -2 ? 'Declining ↓' : 'Stable →'
-    const trendColor = trendDelta === null ? '#d97706' : trendDelta > 2 ? '#16a34a' : trendDelta < -2 ? '#dc2626' : '#d97706'
-
-    return {
-      month: MONTHS[reportMonth], year: reportYear,
-      avgRate, sundays, frequentAbsent, noAttendance,
-      trendLabel, trendColor,
-    }
-  }, [monthlySessions, sessions, members, reportMonth, reportYear])
-
-  const canGenerate = reportType === 'sunday' ? !!sundayData : !!monthlyData
+  const canGenerate = reportType === 'sunday' ? !!selectedDate : true
 
   return (
-    <div className="page-content">
-      <h1 className="font-display text-2xl font-semibold text-forest mb-2">Reports</h1>
+    <div className="page-content pb-12">
+      <BackButton />
 
-      {/* Report type toggle */}
-      <div className="flex gap-2">
-        {[['sunday', '📋 Sunday Report'], ['monthly', '📅 Monthly Report']].map(([val, label]) => (
-          <button key={val} onClick={() => { setReportType(val); setGenerated(false) }}
-            className={`btn-sm flex-1 text-sm ${reportType === val ? 'btn-primary' : 'btn-outline'}`}>
-            {label}
-          </button>
-        ))}
+      {/* ── Page header ── */}
+      <div>
+        <h1 className="font-display text-2xl font-bold text-forest">Reports</h1>
+        <p className="text-sm text-mist mt-0.5">Generate and share attendance reports</p>
       </div>
 
-      {/* Sunday: select a session date */}
-      {reportType === 'sunday' && (
-        <div className="card">
-          <label className="input-label">Select service date</label>
-          {sessionDates.length === 0 ? (
-            <p className="text-sm text-mist">No attendance sessions recorded yet.</p>
-          ) : (
-            <select className="input" value={selectedSession ?? ''}
-              onChange={e => { setSelectedSession(e.target.value || null); setGenerated(false) }}>
-              <option value="">— choose a date —</option>
-              {sessionDates.map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
-            </select>
-          )}
-        </div>
-      )}
-
-      {/* Monthly: select month/year */}
-      {reportType === 'monthly' && (
-        <div className="card flex gap-3">
-          <div className="flex-1">
-            <label className="input-label">Month</label>
-            <select className="input" value={reportMonth}
-              onChange={e => { setReportMonth(Number(e.target.value)); setGenerated(false) }}>
-              {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
-            </select>
-          </div>
-          <div className="w-24">
-            <label className="input-label">Year</label>
-            <input type="number" className="input" min="2020" max={now.getFullYear()}
-              value={reportYear} onChange={e => { setReportYear(Number(e.target.value)); setGenerated(false) }} />
-          </div>
-        </div>
-      )}
-
-      {/* Generate button */}
-      <button onClick={handleGenerate} disabled={!canGenerate || generating} className="btn btn-primary w-full btn-lg">
-        {generating ? (
-          <span className="flex items-center gap-2"><Spinner /> Generating…</span>
-        ) : '⚡ Generate Report'}
-      </button>
-
-      {/* Preview canvas — always mounted, visibility toggled */}
-      <canvas ref={canvasRef} className={`w-full rounded-2xl shadow-card ${generated ? 'block' : 'hidden'}`} />
-
-      {/* Download buttons */}
-      {generated && (
-        <div className="flex gap-3">
-          <button onClick={handleDownloadJPEG} className="btn btn-primary flex-1 gap-2">
-            <DownloadIcon /> Save as image
+      {/* ── Report type toggle ── */}
+      <div className="card">
+        <p className="text-xs font-bold text-forest uppercase tracking-wide mb-3">Report Type</p>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setReportType('sunday'); setGenerated(false) }}
+            className={`btn flex-1 gap-2 ${reportType === 'sunday' ? 'btn-primary' : 'btn-outline'}`}
+          >
+            <Calendar size={15} />
+            Single Sunday
           </button>
-          <button onClick={handleDownloadPDF} className="btn btn-outline flex-1 gap-2">
-            <DownloadIcon /> Save as PDF
+          <button
+            onClick={() => { setReportType('monthly'); setGenerated(false) }}
+            className={`btn flex-1 gap-2 ${reportType === 'monthly' ? 'btn-primary' : 'btn-outline'}`}
+          >
+            <FileText size={15} />
+            Monthly
           </button>
         </div>
-      )}
 
-      {/* ── Off-screen report DOM (always mounted, visibility:hidden until capture) ── */}
-      <div style={{ position: 'fixed', top: 0, left: '-9999px', width: 800, zIndex: -1 }}>
-        {/* Canvas ref fix: always mounted, visibility controlled */}
-        <div ref={reportRef} style={{ visibility: 'hidden', width: 800 }}>
-          {reportType === 'sunday' && sundayData && (
-            <SundayReportTemplate data={sundayData} churchName={church.name} />
-          )}
-          {reportType === 'monthly' && monthlyData && (
-            <MonthlyReportTemplate data={monthlyData} churchName={church.name} />
-          )}
-        </div>
-      </div>
-
-      <div className="h-6" />
-    </div>
-  )
-}
-
-// ─── Sunday Report Template (rendered off-screen at 800px) ─────────────────────
-function SundayReportTemplate({ data, churchName }) {
-  const rateColor = data.rate >= 75 ? '#16a34a' : data.rate >= 50 ? '#d97706' : '#dc2626'
-  return (
-    <div style={{ width: 800, background: '#f7f5f0', fontFamily: 'sans-serif', padding: 48 }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
-        <div>
-          <h1 style={{ fontFamily: 'serif', fontSize: 28, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>{churchName}</h1>
-          <p style={{ color: '#8a9e90', fontSize: 13, marginTop: 4 }}>Attendance Report</p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: '#1a3a2a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ color: '#c9a84c', fontSize: 18, fontWeight: 700 }}>✓</span>
-          </div>
-          <span style={{ color: '#1a3a2a', fontWeight: 700, fontSize: 15 }}>ChurchTrakr</span>
-        </div>
-      </div>
-
-      {/* Date */}
-      <p style={{ fontFamily: 'serif', fontSize: 22, fontWeight: 700, color: '#1a3a2a', marginBottom: 24 }}>
-        {fmtDate(data.date)}
-      </p>
-
-      {/* Stat cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 32 }}>
-        {[
-          { label: 'Present', value: data.present, sub: `${data.rate}%`, color: '#16a34a' },
-          { label: 'Absent', value: data.absent, sub: `${100 - data.rate}%`, color: '#dc2626' },
-          { label: 'Total', value: data.total, sub: 'members', color: '#1a3a2a' },
-        ].map(({ label, value, sub, color }) => (
-          <div key={label} style={{ background: 'white', borderRadius: 16, padding: 20, textAlign: 'center', border: '1px solid rgba(26,58,42,0.08)' }}>
-            <p style={{ fontSize: 36, fontWeight: 800, color, fontFamily: 'serif', margin: 0 }}>{value}</p>
-            <p style={{ fontSize: 11, color: '#8a9e90', marginTop: 4 }}>{sub}</p>
-            <p style={{ fontSize: 13, fontWeight: 600, color: '#1a3a2a', marginTop: 2 }}>{label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Rate ring */}
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 32 }}>
-        <InlineRateRing rate={data.rate} size={160} />
-      </div>
-
-      {/* Follow-up section */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 32 }}>
-        <div style={{ background: 'white', borderRadius: 16, padding: 20, textAlign: 'center', border: '1px solid rgba(26,58,42,0.08)' }}>
-          <p style={{ fontSize: 13, fontWeight: 600, color: '#1a3a2a', marginBottom: 12 }}>Absentees Reached</p>
-          <InlineRateRing rate={data.totalAbsent > 0 ? attendanceRate(data.absenteesReached, data.totalAbsent) : 100} size={80} />
-          <p style={{ fontSize: 11, color: '#8a9e90', marginTop: 8 }}>{data.absenteesReached}/{data.totalAbsent}</p>
-        </div>
-        <div style={{ background: 'white', borderRadius: 16, padding: 20, textAlign: 'center', border: '1px solid rgba(26,58,42,0.08)' }}>
-          <p style={{ fontSize: 13, fontWeight: 600, color: '#1a3a2a', marginBottom: 12 }}>Attendees Thanked</p>
-          <InlineRateRing rate={data.totalAttendees > 0 ? attendanceRate(data.attendeesThanked, data.totalAttendees) : 100} size={80} />
-          <p style={{ fontSize: 11, color: '#8a9e90', marginTop: 8 }}>{data.attendeesThanked}/{data.totalAttendees}</p>
-        </div>
-      </div>
-
-      {/* Group breakdown */}
-      {data.groupBreakdown.length > 1 && (
-        <div>
-          <p style={{ fontWeight: 700, color: '#1a3a2a', fontSize: 15, marginBottom: 12 }}>Group Breakdown</p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
-            {data.groupBreakdown.map(g => (
-              <div key={g.name} style={{ background: 'white', borderRadius: 12, padding: 16, textAlign: 'center', border: '1px solid rgba(26,58,42,0.08)' }}>
-                <InlineRateRing rate={g.rate} size={60} />
-                <p style={{ fontSize: 12, fontWeight: 600, color: '#1a3a2a', marginTop: 8, marginBottom: 2 }}>{g.name}</p>
-                <p style={{ fontSize: 11, color: '#8a9e90' }}>{g.present}/{g.total}</p>
+        {/* Sunday picker */}
+        {reportType === 'sunday' && (
+          <div className="mt-4">
+            {sessionDates.length === 0 ? (
+              <p className="text-sm text-mist text-center py-4">No attendance sessions yet</p>
+            ) : (
+              <div>
+                <p className="text-xs text-mist mb-2">Select a Sunday</p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setSundayIdx(i => Math.min(i + 1, sessionDates.length - 1)); setGenerated(false) }}
+                    disabled={sundayIdx >= sessionDates.length - 1}
+                    className="btn btn-ghost btn-sm px-2"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <div className="flex-1 text-center">
+                    <p className="font-semibold text-forest text-[15px]">
+                      {selectedDate ? fmtDate(selectedDate) : '—'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => { setSundayIdx(i => Math.max(i - 1, 0)); setGenerated(false) }}
+                    disabled={sundayIdx <= 0}
+                    className="btn btn-ghost btn-sm px-2"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
               </div>
-            ))}
+            )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Footer */}
-      <p style={{ textAlign: 'center', color: '#8a9e90', fontSize: 11, marginTop: 40 }}>
-        Generated by ChurchTrakr · {new Date().toLocaleDateString()}
-      </p>
-    </div>
-  )
-}
-
-// ─── Monthly Report Template ────────────────────────────────────────────────────
-function MonthlyReportTemplate({ data, churchName }) {
-  return (
-    <div style={{ width: 800, background: '#f7f5f0', fontFamily: 'sans-serif', padding: 48 }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
-        <div>
-          <h1 style={{ fontFamily: 'serif', fontSize: 28, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>{churchName}</h1>
-          <p style={{ color: '#8a9e90', fontSize: 13, marginTop: 4 }}>{data.month} {data.year} Report</p>
-        </div>
-        <span style={{ background: data.trendColor, color: '#fff', borderRadius: 20, padding: '6px 16px', fontWeight: 700, fontSize: 14 }}>
-          {data.trendLabel}
-        </span>
-      </div>
-
-      {/* Average ring */}
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 40 }}>
-        <InlineRateRing rate={data.avgRate} size={160} label="Average Attendance" />
-      </div>
-
-      {/* Sunday-by-Sunday */}
-      <div style={{ marginBottom: 32 }}>
-        <p style={{ fontWeight: 700, color: '#1a3a2a', fontSize: 15, marginBottom: 16 }}>Sunday Breakdown</p>
-        {data.sundays.map(w => {
-          const barColor = w.rate >= 75 ? '#16a34a' : w.rate >= 50 ? '#d97706' : '#dc2626'
-          return (
-            <div key={w.date} style={{ marginBottom: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ fontSize: 13, color: '#1a3a2a', fontWeight: 600 }}>{w.ordinal} Sunday · {fmtDate(w.date)}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: barColor }}>{w.rate}% ({w.present}/{w.total})</span>
+        {/* Month picker */}
+        {reportType === 'monthly' && (
+          <div className="mt-4">
+            <p className="text-xs text-mist mb-2">Select a month</p>
+            <div className="flex items-center gap-2">
+              <button onClick={prevMonth} className="btn btn-ghost btn-sm px-2">
+                <ChevronLeft size={16} />
+              </button>
+              <div className="flex-1 text-center">
+                <p className="font-semibold text-forest text-[15px]">
+                  {MONTHS[month]} {year}
+                </p>
               </div>
-              <div style={{ height: 8, background: '#e0dbd0', borderRadius: 4, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${w.rate}%`, background: barColor, borderRadius: 4 }} />
-              </div>
+              <button onClick={nextMonth} disabled={isCurrentMonth} className="btn btn-ghost btn-sm px-2">
+                <ChevronRight size={16} />
+              </button>
             </div>
-          )
-        })}
+          </div>
+        )}
+
+        {/* Generate button */}
+        <button
+          onClick={() => setGenerated(true)}
+          disabled={!canGenerate}
+          className="btn btn-primary w-full mt-4 gap-2"
+        >
+          <FileText size={15} />
+          Generate Report
+        </button>
       </div>
 
-      {/* Chips */}
-      {data.frequentAbsent.length > 0 && (
-        <div style={{ marginBottom: 24 }}>
-          <p style={{ fontWeight: 700, color: '#dc2626', fontSize: 14, marginBottom: 10 }}>Absent More Than Once</p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {data.frequentAbsent.map(name => (
-              <span key={name} style={{ background: 'rgba(220,38,38,0.1)', color: '#dc2626', borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: 500 }}>{name}</span>
-            ))}
+      {/* ── Generated report card + export buttons ── */}
+      {generated && reportData && (
+        <>
+          {/* Export actions */}
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={exportPNG}
+              disabled={exporting}
+              className="btn btn-primary flex-1 gap-2"
+            >
+              <Download size={15} />
+              {exporting ? 'Saving…' : 'Save Image'}
+            </button>
+            <button
+              onClick={exportPDF}
+              disabled={exporting}
+              className="btn btn-outline flex-1 gap-2"
+            >
+              <FileText size={15} />
+              PDF
+            </button>
+            <button
+              onClick={shareWhatsApp}
+              disabled={exporting}
+              className="btn btn-sm gap-2 px-4"
+              style={{ background: '#25D366', color: '#fff', border: 'none', borderRadius: 12 }}
+            >
+              <Share2 size={14} />
+              WhatsApp
+            </button>
           </div>
-        </div>
-      )}
-      {data.noAttendance.length > 0 && (
-        <div style={{ marginBottom: 32 }}>
-          <p style={{ fontWeight: 700, color: '#8a9e90', fontSize: 14, marginBottom: 10 }}>No Attendance This Month</p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {data.noAttendance.map(name => (
-              <span key={name} style={{ background: 'rgba(138,158,144,0.15)', color: '#4a6358', borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: 500 }}>{name}</span>
-            ))}
+
+          {/* The report card preview */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              overflowX: 'auto',
+              paddingBottom: 8,
+            }}
+          >
+            <ReportCard
+              church={church}
+              data={reportData}
+              type={reportType}
+              reportRef={reportRef}
+            />
           </div>
-        </div>
+        </>
       )}
 
-      <p style={{ textAlign: 'center', color: '#8a9e90', fontSize: 11 }}>
-        Generated by ChurchTrakr · {new Date().toLocaleDateString()}
-      </p>
+      {/* No sessions empty state */}
+      {reportType === 'sunday' && sessionDates.length === 0 && (
+        <div className="card text-center py-12 space-y-3">
+          <Calendar size={40} className="text-mist mx-auto" strokeWidth={1.5} />
+          <p className="font-semibold text-forest">No sessions yet</p>
+          <p className="text-sm text-mist">Take attendance first to generate a report.</p>
+          <a href="/attendance" className="btn btn-primary inline-flex gap-2">Take Attendance</a>
+        </div>
+      )}
     </div>
   )
 }
-
-// Inline SVG ring (no CSS classes — for off-screen render)
-function InlineRateRing({ rate, size, label }) {
-  const r = size * 0.38
-  const circ = 2 * Math.PI * r
-  const offset = circ - (rate / 100) * circ
-  const color = rate >= 75 ? '#16a34a' : rate >= 50 ? '#d97706' : '#dc2626'
-  return (
-    <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
-      <div style={{ position: 'relative', width: size, height: size }}>
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#e0dbd0" strokeWidth={size * 0.09} />
-          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color}
-            strokeWidth={size * 0.09} strokeDasharray={circ} strokeDashoffset={offset}
-            strokeLinecap="round" transform={`rotate(-90 ${size/2} ${size/2})`} />
-        </svg>
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontFamily: 'serif', fontWeight: 800, fontSize: size * 0.22, color, lineHeight: 1 }}>
-            {rate}%
-          </span>
-        </div>
-      </div>
-      {label && <p style={{ fontSize: 12, color: '#8a9e90', marginTop: 6 }}>{label}</p>}
-    </div>
-  )
-}
-
-function Spinner() { return <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.37 0 0 5.37 0 12h4z"/></svg> }
-function DownloadIcon() { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> }
