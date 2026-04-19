@@ -3,10 +3,11 @@
 import BackButton from '@/components/ui/BackButton'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { usePWA } from '@/hooks/usePWA'
 import { createClient } from '@/lib/supabase/client'
 import dynamic from 'next/dynamic'
 import {
-  User, CalendarCheck, Bell, MessageSquare, Radio, ShieldAlert, ChevronRight
+  User, CalendarCheck, Bell, MessageSquare, Radio, ShieldAlert, ChevronRight, Smartphone
 } from 'lucide-react'
 
 const NotificationSettings = dynamic(() => import('./NotificationSettings'), { ssr: false })
@@ -473,10 +474,63 @@ function ProfileTab({ profile, setProfile, profileMsg, savingProfile, onSave }) 
           </div>
         )}
       </div>
+
+      {/* ── Install App ── */}
+      <InstallCard />
+
     </div>
   )
 }
 
+// ── Install Card (inside Profile tab) ─────────────────────────────────────────
+function InstallCard() {
+  const { installPrompt, promptInstall, isInstalled } = usePWA()
+  const isIOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent)
+
+  return (
+    <div className="card space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-forest/8 flex items-center justify-center shrink-0">
+          <Smartphone size={16} strokeWidth={1.75} className="text-forest" />
+        </div>
+        <div>
+          <h2 className="font-display text-base font-semibold text-forest">
+            {isInstalled ? 'App Installed ✓' : 'Install App'}
+          </h2>
+          <p className="text-xs text-mist mt-0.5">
+            {isInstalled
+              ? 'ChurchTrakr is installed on this device'
+              : 'Add to home screen for faster access and offline support'
+            }
+          </p>
+        </div>
+      </div>
+
+      {!isInstalled && (
+        installPrompt ? (
+          <button
+            onClick={promptInstall}
+            className="btn btn-primary w-full gap-2"
+          >
+            <Smartphone size={15} />
+            Install ChurchTrakr
+          </button>
+        ) : isIOS ? (
+          <div className="bg-ivory rounded-xl p-3">
+            <p className="text-sm text-forest-muted leading-relaxed">
+              Tap the <strong className="text-forest">Share</strong> button in Safari,
+              then tap <strong className="text-forest">"Add to Home Screen"</strong>
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-mist">
+            Open this app in Chrome on Android to install it.
+          </p>
+        )
+      )}
+    </div>
+  )
+}
 
 function PlusIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> }
 function TrashIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg> }

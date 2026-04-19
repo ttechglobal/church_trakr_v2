@@ -1,95 +1,92 @@
-// ChurchTrakr Service Worker v3
-// Placed in /public/sw.js — served at /sw.js
-// IMPORTANT: This file MUST be committed to git so Vercel includes it in the build.
+// ChurchTrakr Service Worker v4
+// Must be at /public/sw.js so it's served at /sw.js
+// Commit this file to git — Vercel won't serve it otherwise.
 
-const CACHE_NAME = 'churchtrakr-v3'
-const STATIC_URLS = ['/dashboard', '/manifest.json']
+const CACHE = 'ct-v4'
 
-// ── Install ────────────────────────────────────────────────────────────────────
-self.addEventListener('install', event => {
-  self.skipWaiting()
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache =>
-      Promise.allSettled(STATIC_URLS.map(url => cache.add(url).catch(() => null)))
-    )
+self.addEventListener('install', () => self.skipWaiting())
+
+self.addEventListener('activate', e => {
+  e.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
   )
 })
 
-// ── Activate ──────────────────────────────────────────────────────────────────
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
-  )
-})
-
-// ── Fetch ─────────────────────────────────────────────────────────────────────
-self.addEventListener('fetch', event => {
-  const { request } = event
+self.addEventListener('fetch', e => {
+  const { request } = e
   const url = new URL(request.url)
 
-  // Only handle same-origin GET requests
+  // Only handle same-origin GETs
   if (request.method !== 'GET' || url.origin !== self.location.origin) return
-
-  // Never intercept API calls — always go to network
+  // Never cache API calls
   if (url.pathname.startsWith('/api/')) return
+  // Never cache Next.js HMR / dev
+  if (url.pathname.startsWith('/_next/webpack-hmr')) return
 
-  // Static assets: cache first
-  if (url.pathname.startsWith('/_next/static/') ||
-      url.pathname.startsWith('/icons/') ||
-      url.pathname === '/manifest.json' ||
-      url.pathname.endsWith('.png') ||
-      url.pathname.endsWith('.ico')) {
-    event.respondWith(
-      caches.match(request).then(hit => {
-        if (hit) return hit
-        return fetch(request).then(res => {
-          if (res.ok) {
-            caches.open(CACHE_NAME).then(c => c.put(request, res.clone()))
-          }
-          return res
-        }).catch(() => hit)
-      })
+  const isStatic =
+    url.pathname.startsWith('/_next/static/') ||
+    url.pathname.startsWith('/icons/') ||
+    url.pathname === '/manifest.json' ||
+    url.pathname.endsWith('.png') ||
+    url.pathname.endsWith('.ico') ||
+    url.pathname.endsWith('.svg')
+
+  if (isStatic) {
+    // Cache-first: serve from cache, update cache in background
+    e.respondWith(
+      caches.open(CACHE).then(cache =>
+        cache.match(request).then(cached => {
+          const fetchPromise = fetch(request).then(res => {
+            // Clone BEFORE returning so we can put a copy in cache
+            if (res.ok) cache.put(request, res.clone())
+            return res
+          }).catch(() => cached)
+          return cached || fetchPromise
+        })
+      )
     )
     return
   }
 
-  // Navigation: network first, fall back to cache
+  // Navigation requests: network-first, cache fallback
   if (request.mode === 'navigate') {
-    event.respondWith(
+    e.respondWith(
       fetch(request)
         .then(res => {
-          if (res.ok) caches.open(CACHE_NAME).then(c => c.put(request, res.clone()))
+          if (res.ok) {
+            // Clone BEFORE using the response, then cache the clone
+            const clone = res.clone()
+            caches.open(CACHE).then(c => c.put(request, clone))
+          }
           return res
         })
-        .catch(() => caches.match(request) || caches.match('/dashboard'))
+        .catch(() =>
+          caches.match(request)
+            .then(cached => cached || caches.match('/dashboard'))
+        )
     )
-    return
   }
 })
 
-// ── Push notifications ────────────────────────────────────────────────────────
-self.addEventListener('push', event => {
-  if (!event.data) return
-  let payload = { title: 'ChurchTrakr', body: '' }
-  try { payload = { ...payload, ...event.data.json() } } catch { payload.body = event.data.text() }
-
-  event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body:  payload.body,
-      icon:  '/icons/icon-192.png',
-      badge: '/icons/icon-192.png',
-      tag:   payload.tag || 'churchtrakr',
-      data:  { url: payload.url || '/dashboard' },
+// Push notifications
+self.addEventListener('push', e => {
+  if (!e.data) return
+  let p = { title: 'ChurchTrakr', body: '', url: '/dashboard' }
+  try { p = { ...p, ...e.data.json() } } catch { p.body = e.data.text() }
+  e.waitUntil(
+    self.registration.showNotification(p.title, {
+      body: p.body, icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png', tag: 'ct', data: { url: p.url },
     })
   )
 })
 
-self.addEventListener('notificationclick', event => {
-  event.notification.close()
-  const url = event.notification.data?.url || '/dashboard'
-  event.waitUntil(
+self.addEventListener('notificationclick', e => {
+  e.notification.close()
+  const url = e.notification.data?.url || '/dashboard'
+  e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
       for (const c of clients) {
         if (c.url.includes(self.location.origin)) { c.navigate(url); c.focus(); return }
@@ -99,13 +96,6 @@ self.addEventListener('notificationclick', event => {
   )
 })
 
-// ── Messages from app ─────────────────────────────────────────────────────────
-self.addEventListener('message', event => {
-  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting()
-  if (event.data?.type === 'SYNC_OFFLINE_QUEUE') {
-    // Signal back to the app to process the offline queue
-    self.clients.matchAll().then(clients =>
-      clients.forEach(c => c.postMessage({ type: 'SYNC_OFFLINE_QUEUE' }))
-    )
-  }
+self.addEventListener('message', e => {
+  if (e.data?.type === 'SKIP_WAITING') self.skipWaiting()
 })
