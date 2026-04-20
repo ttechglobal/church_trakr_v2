@@ -50,7 +50,7 @@ function ReportCard({ church, data, type, reportRef }) {
       ref={reportRef}
       id="report-card"
       style={{
-        width: 480,
+        width: 500,
         background: '#ffffff',
         borderRadius: 20,
         overflow: 'hidden',
@@ -62,7 +62,7 @@ function ReportCard({ church, data, type, reportRef }) {
       {/* ── Header band ── */}
       <div style={{
         background: `linear-gradient(135deg, ${C.forest} 0%, ${C.mid} 100%)`,
-        padding: '24px 28px 20px',
+        padding: '28px 28px 24px',
       }}>
         {/* Torch icon + name */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
@@ -71,15 +71,17 @@ function ReportCard({ church, data, type, reportRef }) {
             background: 'rgba(201,168,76,0.2)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round">
-              <path d="M6 2L3 6l9 14 9-14-3-4z"/><path d="M3 6h18"/>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="4" stroke="#c9a84c" strokeWidth="1.5" fill="none"/>
+              <line x1="12" y1="7" x2="12" y2="17"/>
+              <line x1="7.5" y1="11" x2="16.5" y2="11"/>
             </svg>
           </div>
           <div>
-            <p style={{ fontSize: 10, color: 'rgba(232,213,160,0.55)', margin: 0, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              Torch Tracker
+            <p style={{ fontSize: 11, color: 'rgba(232,213,160,0.5)', margin: 0, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              ChurchTrakr
             </p>
-            <p style={{ fontSize: 15, color: C.goldLt, margin: 0, fontWeight: 700, letterSpacing: '-0.01em' }}>
+            <p style={{ fontSize: 16, color: C.goldLt, margin: 0, fontWeight: 700, letterSpacing: '-0.01em' }}>
               {church.name}
             </p>
           </div>
@@ -101,7 +103,7 @@ function ReportCard({ church, data, type, reportRef }) {
 
       {/* ── Main attendance stat ── */}
       <div style={{
-        padding: '24px 28px 0',
+        padding: '28px 28px 0',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         {/* Big rate ring */}
@@ -123,11 +125,11 @@ function ReportCard({ church, data, type, reportRef }) {
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
           }}>
-            <span style={{ fontSize: 22, fontWeight: 800, color: rc, lineHeight: 1, fontFamily: 'var(--font-playfair, Georgia, serif)' }}>
+            <span style={{ fontSize: 24, fontWeight: 800, color: rc, lineHeight: 1, fontFamily: 'var(--font-playfair, Georgia, serif)' }}>
               {rate}%
             </span>
-            <span style={{ fontSize: 9, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              attendance
+            <span style={{ fontSize: 8, color: C.muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2 }}>
+              rate
             </span>
           </div>
         </div>
@@ -142,7 +144,7 @@ function ReportCard({ church, data, type, reportRef }) {
             <div key={label} style={{
               background: C.ivory, borderRadius: 10, padding: '10px 8px', textAlign: 'center',
             }}>
-              <p style={{ fontSize: 22, fontWeight: 800, color, margin: '0 0 2px', lineHeight: 1, fontFamily: 'var(--font-playfair, Georgia, serif)' }}>
+              <p style={{ fontSize: 26, fontWeight: 800, color, margin: '0 0 2px', lineHeight: 1, fontFamily: 'var(--font-playfair, Georgia, serif)' }}>
                 {value}
               </p>
               <p style={{ fontSize: 9, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>
@@ -154,20 +156,20 @@ function ReportCard({ church, data, type, reportRef }) {
       </div>
 
       {/* ── Stats grid ── */}
-      <div style={{ padding: '16px 28px 0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+      <div style={{ padding: '20px 28px 0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         {[
-          { icon: '⭐', label: 'First Timers',  value: data.firstTimers,  accent: C.goldDk   },
-          { icon: '✅', label: 'Followed Up',   value: data.followedUp,   accent: C.success  },
-          { icon: '📋', label: 'Pending Follow-Up', value: data.pendingFollowUp, accent: C.warning },
-          { icon: '✈️', label: 'Away Members',  value: data.awayCount,    accent: C.muted    },
+          { icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.goldDk} strokeWidth="2.5" strokeLinecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>, label: 'First Timers',  value: data.firstTimers,  accent: C.goldDk   },
+          { icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.success} strokeWidth="2.5" strokeLinecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>, label: 'Followed Up',   value: data.followedUp,   accent: C.success  },
+          { icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.warning} strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>, label: 'Pending Follow-Up', value: data.pendingFollowUp, accent: C.warning },
+          { icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19.5 2.5c-1.5-1.5-3.5-1.5-5 0L11 6 2.8 4.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 1 1h2l1 1v2l1 1 1-1V18l3-2 5.7 7.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg>, label: 'Away Members',  value: data.awayCount,    accent: C.muted    },
         ].map(({ icon, label, value, accent }) => (
           <div key={label} style={{
-            background: C.ivory, borderRadius: 12, padding: '12px 14px',
+            background: C.ivory, borderRadius: 12, padding: '14px 16px',
             display: 'flex', alignItems: 'center', gap: 10,
           }}>
-            <span style={{ fontSize: 18 }}>{icon}</span>
+            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 7, background: `${accent}18`, flexShrink: 0 }}>{icon}</span>
             <div>
-              <p style={{ fontSize: 18, fontWeight: 800, color: accent, margin: '0 0 1px', lineHeight: 1, fontFamily: 'var(--font-playfair, Georgia, serif)' }}>
+              <p style={{ fontSize: 22, fontWeight: 800, color: accent, margin: '0 0 1px', lineHeight: 1, fontFamily: 'var(--font-playfair, Georgia, serif)' }}>
                 {value}
               </p>
               <p style={{ fontSize: 10, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>
@@ -180,7 +182,7 @@ function ReportCard({ church, data, type, reportRef }) {
 
       {/* ── Monthly week-by-week breakdown ── */}
       {type === 'monthly' && data.weeks && data.weeks.length > 0 && (
-        <div style={{ padding: '16px 28px 0' }}>
+        <div style={{ padding: '20px 28px 0' }}>
           <p style={{ fontSize: 10, color: C.muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' }}>
             Week by Week
           </p>
@@ -221,10 +223,12 @@ function ReportCard({ church, data, type, reportRef }) {
           Generated {new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
         </p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round">
-            <path d="M6 2L3 6l9 14 9-14-3-4z"/><path d="M3 6h18"/>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="4" strokeWidth="1.5" fill="none"/>
+            <line x1="12" y1="7" x2="12" y2="17"/>
+            <line x1="7.5" y1="11" x2="16.5" y2="11"/>
           </svg>
-          <p style={{ fontSize: 10, color: C.muted, margin: 0, fontWeight: 600 }}>Torch Tracker</p>
+          <p style={{ fontSize: 10, color: C.muted, margin: 0, fontWeight: 600 }}>ChurchTrakr</p>
         </div>
       </div>
     </div>

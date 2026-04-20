@@ -4,6 +4,13 @@ import { NextResponse } from 'next/server'
 export async function middleware(request) {
   const { pathname } = request.nextUrl
 
+  // ── Super admin routes — handled separately ──────────────────────────────
+  if (pathname.startsWith('/admin')) {
+    // Admin routes have their own auth check built into the page
+    // Just skip supabase auth middleware for them
+    return NextResponse.next()
+  }
+
   // ── Skip middleware entirely for static files and PWA assets ────────────
   // These must NEVER go through auth middleware or they 404 in production.
   if (
@@ -85,7 +92,8 @@ export async function middleware(request) {
     pathname.startsWith('/report') ||
     pathname.startsWith('/messaging') ||
     pathname.startsWith('/settings') ||
-    pathname.startsWith('/profile')
+    pathname.startsWith('/profile') ||
+    pathname.startsWith('/church-dashboard')
 
   if (isAppRoute && !user) {
     const loginUrl = new URL('/login', request.url)

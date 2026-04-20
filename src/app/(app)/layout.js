@@ -1,4 +1,5 @@
 import { getUser, getChurch } from '@/lib/auth'
+import { createAdminClient } from '@/lib/supabase/admin'
 import AppShell from '@/components/layout/AppShell'
 import PWAInit from '@/components/PWAInit'
 import FollowUpBanner from '@/components/FollowUpBanner'
@@ -35,15 +36,37 @@ export default async function AppLayout({ children }) {
     )
   }
 
-  // Count pending follow-ups for banner + notifications
+  // Count pending follow-ups — only from the most recent attendance session
+  // Using the same logic as the dashboard to prevent count mismatches.
+  // We count absent members from the last session who haven't been marked reached.
   let pendingFollowUps = 0
   try {
-    pendingFollowUps = Object.values(church.follow_up_data ?? {})
-      .filter(v => !v.reached).length
+    const admin = createAdminClient()
+    const { data: latestSession } = await admin
+      .from('attendance_sessions')
+      .select('id, attendance_records(member_id, present)')
+      .eq('church_id', church.id)
+      .order('date', { ascending: false })
+      .limit(10)
+
+    // Find most recent non-FT session with real members
+    const realSession = (latestSession ?? []).find(s =>
+      (s.attendance_records ?? []).some(r => r.member_id !== null)
+    )
+
+    if (realSession) {
+      const followUpData = church.follow_up_data ?? {}
+      const absentUnreached = (realSession.attendance_records ?? []).filter(r => {
+        if (!r.member_id || r.present) return false
+        const key = `${realSession.id}_${r.member_id}`
+        return !(followUpData[key]?.reached)
+      })
+      pendingFollowUps = absentUnreached.length
+    }
   } catch {}
 
   return (
-    <AppShell church={church} user={user}>
+    <AppShell church={church} user={user} pendingFollowUps={pendingFollowUps}>
       <PWAInit pendingFollowUps={pendingFollowUps} />
       <FollowUpBanner pendingCount={pendingFollowUps} />
       <PWAPromptLoader />

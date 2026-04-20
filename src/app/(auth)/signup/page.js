@@ -4,10 +4,21 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { Users, Building2, CheckCircle2 } from 'lucide-react'
+
+
+function generateConnectionCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'  // no confusable chars
+  const segments = [4, 4]
+  return segments.map(len =>
+    Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  ).join('-')
+}
 
 export default function SignupPage() {
   const router = useRouter()
 
+  const [accountType, setAccountType] = useState(null)  // null | 'group' | 'church'
   const [form, setForm] = useState({
     groupName: '',
     adminName: '',
@@ -74,6 +85,7 @@ export default function SignupPage() {
           admin_name: form.adminName.trim(),
           plan: 'free',
           sms_credits: 0,
+          account_type: accountType === 'church' ? 'church' : 'group',
         })
         .select('id')
         .single()
@@ -84,16 +96,25 @@ export default function SignupPage() {
         return
       }
 
-      // 3. Auto-create a default group using the church/group name
-      // This means new users can take attendance immediately without creating a group first
-      await supabase
-        .from('groups')
-        .insert({
-          church_id: churchData.id,
-          name: form.groupName.trim(),
-          leader: form.adminName.trim(),
-        })
-      // Non-fatal if this fails — user can create groups manually
+      // 3. For group accounts: auto-create a default group
+      // Church dashboard accounts don't need groups — they connect to subgroups
+      if (accountType !== 'church') {
+        await supabase
+          .from('groups')
+          .insert({
+            church_id: churchData.id,
+            name: form.groupName.trim(),
+            leader: form.adminName.trim(),
+          })
+        // Non-fatal if this fails — user can create groups manually
+      } else {
+        // Church accounts: generate a unique connection code
+        const code = generateConnectionCode()
+        await supabase
+          .from('churches')
+          .update({ connection_code: code })
+          .eq('id', churchData.id)
+      }
     }
 
     setLoading(false)

@@ -7,7 +7,7 @@ import { usePWA } from '@/hooks/usePWA'
 import { createClient } from '@/lib/supabase/client'
 import dynamic from 'next/dynamic'
 import {
-  User, CalendarCheck, Bell, MessageSquare, Radio, ShieldAlert, ChevronRight, Smartphone
+  User, CalendarCheck, Bell, MessageSquare, Radio, ShieldAlert, ChevronRight, Smartphone, Link2
 } from 'lucide-react'
 
 const NotificationSettings = dynamic(() => import('./NotificationSettings'), { ssr: false })
@@ -18,6 +18,7 @@ const TABS = [
   { id: 'notifications', label: 'Notifications',  Icon: Bell },
   { id: 'templates',     label: 'SMS Templates',  Icon: MessageSquare },
   { id: 'sender',        label: 'Sender ID',      Icon: Radio },
+  { id: 'church',        label: 'Church Link',    Icon: Link2 },
   { id: 'account',       label: 'Account',        Icon: ShieldAlert },
 ]
 
@@ -485,7 +486,21 @@ function ProfileTab({ profile, setProfile, profileMsg, savingProfile, onSave }) 
 // ── Install Card (inside Profile tab) ─────────────────────────────────────────
 function InstallCard() {
   const { installPrompt, promptInstall, isInstalled } = usePWA()
+  const [showGuide, setShowGuide] = useState(false)
   const isIOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent)
+
+  // The button is ALWAYS shown — never hidden, never disabled.
+  // If the native prompt is available: trigger it.
+  // If suppressed/dismissed: show the manual guide sheet.
+  // If already installed: still show but with "installed" state.
+  function handleInstallClick() {
+    if (isInstalled) return
+    if (installPrompt) {
+      promptInstall()
+    } else {
+      setShowGuide(true)
+    }
+  }
 
   return (
     <div className="card space-y-3">
@@ -500,34 +515,221 @@ function InstallCard() {
           <p className="text-xs text-mist mt-0.5">
             {isInstalled
               ? 'ChurchTrakr is installed on this device'
-              : 'Add to home screen for faster access and offline support'
-            }
+              : 'Add to your home screen for faster access'}
           </p>
         </div>
       </div>
 
-      {!isInstalled && (
-        installPrompt ? (
-          <button
-            onClick={promptInstall}
-            className="btn btn-primary w-full gap-2"
-          >
-            <Smartphone size={15} />
-            Install ChurchTrakr
-          </button>
-        ) : isIOS ? (
-          <div className="bg-ivory rounded-xl p-3">
-            <p className="text-sm text-forest-muted leading-relaxed">
-              Tap the <strong className="text-forest">Share</strong> button in Safari,
-              then tap <strong className="text-forest">"Add to Home Screen"</strong>
-            </p>
+      {isInstalled ? (
+        <div className="flex items-center gap-2 p-3 bg-success/8 rounded-xl">
+          <CheckCircle size={14} className="text-success shrink-0" />
+          <p className="text-sm text-success font-medium">Installed on this device</p>
+        </div>
+      ) : (
+        <button onClick={handleInstallClick} className="btn btn-primary w-full gap-2">
+          <Smartphone size={15} />
+          Install ChurchTrakr
+        </button>
+      )}
+
+      {/* Manual installation guide sheet */}
+      {showGuide && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 backdrop-blur-sm p-4"
+          onClick={() => setShowGuide(false)}>
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-modal animate-slide-up"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-display text-lg font-semibold text-forest">Install ChurchTrakr</h3>
+              <button onClick={() => setShowGuide(false)} className="btn btn-ghost btn-sm p-1.5">
+                <X size={16} />
+              </button>
+            </div>
+
+            {isIOS ? (
+              <div className="space-y-3">
+                <p className="text-sm text-mist font-medium mb-3">On iPhone / iPad (Safari):</p>
+                {[
+                  { step: '1', text: 'Tap the Share button at the bottom of Safari (the box with an arrow)' },
+                  { step: '2', text: 'Scroll down and tap "Add to Home Screen"' },
+                  { step: '3', text: 'Tap "Add" in the top right corner' },
+                ].map(({ step, text }) => (
+                  <div key={step} className="flex items-start gap-3">
+                    <span className="w-6 h-6 rounded-full bg-forest text-ivory text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+                      {step}
+                    </span>
+                    <p className="text-sm text-forest">{text}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-mist font-medium mb-3">On Android (Chrome):</p>
+                {[
+                  { step: '1', text: 'Tap the three-dot menu (⋮) in the top-right of Chrome' },
+                  { step: '2', text: 'Tap "Add to Home Screen" or "Install App"' },
+                  { step: '3', text: 'Tap "Install" to confirm' },
+                ].map(({ step, text }) => (
+                  <div key={step} className="flex items-start gap-3">
+                    <span className="w-6 h-6 rounded-full bg-forest text-ivory text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+                      {step}
+                    </span>
+                    <p className="text-sm text-forest">{text}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button onClick={() => setShowGuide(false)} className="btn btn-primary w-full mt-5">
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Church Link Tab ──────────────────────────────────────────────────────────
+function ChurchLinkTab() {
+  const [code, setCode]       = useState('')
+  const [status, setStatus]   = useState(null)  // null | { loading } | { connection } | { error }
+  const [preview, setPreview] = useState(null)   // { churchName }
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSub]  = useState(false)
+  const [msg, setMsg]         = useState('')
+
+  useEffect(() => {
+    // Load current connection status
+    fetch('/api/church/connect')
+      .then(r => r.json())
+      .then(d => setStatus(d.connection ?? null))
+      .catch(() => setStatus(null))
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function lookupCode() {
+    if (!code.trim()) return
+    setSub(true); setMsg(''); setPreview(null)
+    const res = await fetch(`/api/church/lookup?code=${encodeURIComponent(code.trim().toUpperCase())}`)
+    const d = await res.json()
+    setSub(false)
+    if (d.churchName) setPreview(d)
+    else setMsg(d.error ?? 'No church found with that code')
+  }
+
+  async function sendRequest() {
+    if (!preview) return
+    setSub(true); setMsg('')
+    const res = await fetch('/api/church/connect', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify({ code: code.trim().toUpperCase() }),
+    })
+    const d = await res.json()
+    setSub(false)
+    if (d.success) {
+      setStatus({ status:'pending', churchName: preview.churchName })
+      setPreview(null); setCode('')
+    } else {
+      setMsg(d.error ?? 'Request failed')
+    }
+  }
+
+  async function disconnect() {
+    if (!confirm('Disconnect from this church dashboard? Your own data is unaffected.')) return
+    setSub(true)
+    await fetch('/api/church/connect', { method:'DELETE' })
+    setStatus(null)
+    setSub(false)
+  }
+
+  if (loading) {
+    return <div className="card" style={{ height:100, background:'rgba(26,58,42,0.04)', borderRadius:14 }} />
+  }
+
+  const C = { forest:'#1a3a2a', muted:'#8a9e90', success:'#16a34a', warning:'#d97706', error:'#dc2626', gold:'#c9a84c' }
+
+  return (
+    <div className="space-y-4 animate-fade-in">
+      <div className="card space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-forest/8 flex items-center justify-center shrink-0">
+            <Link2 size={16} strokeWidth={1.75} className="text-forest" />
+          </div>
+          <div>
+            <h2 className="font-display text-base font-semibold text-forest">Church Dashboard</h2>
+            <p className="text-xs text-mist mt-0.5">Link this group to a church-level dashboard</p>
+          </div>
+        </div>
+
+        {/* Already connected / pending */}
+        {status ? (
+          <div>
+            {status.status === 'approved' && (
+              <div style={{ background:'rgba(22,163,74,0.08)', border:'1px solid rgba(22,163,74,0.2)', borderRadius:12, padding:'0.875rem 1rem', display:'flex', alignItems:'center', gap:10 }}>
+                <div style={{ width:8, height:8, borderRadius:'50%', background:C.success, flexShrink:0 }} />
+                <div style={{ flex:1 }}>
+                  <p style={{ fontSize:13, fontWeight:700, color:C.forest, margin:'0 0 2px' }}>Connected to {status.churchName}</p>
+                  <p style={{ fontSize:11, color:C.muted, margin:0 }}>Your attendance data is visible to the church admin.</p>
+                </div>
+              </div>
+            )}
+            {status.status === 'pending' && (
+              <div style={{ background:'rgba(201,168,76,0.08)', border:'1px solid rgba(201,168,76,0.25)', borderRadius:12, padding:'0.875rem 1rem', display:'flex', alignItems:'center', gap:10 }}>
+                <div style={{ width:8, height:8, borderRadius:'50%', background:C.gold, flexShrink:0 }} />
+                <div style={{ flex:1 }}>
+                  <p style={{ fontSize:13, fontWeight:700, color:C.forest, margin:'0 0 2px' }}>Request pending — {status.churchName}</p>
+                  <p style={{ fontSize:11, color:C.muted, margin:0 }}>Waiting for the church admin to approve your request.</p>
+                </div>
+              </div>
+            )}
+            <button onClick={disconnect} disabled={submitting} className="btn btn-outline btn-sm w-full mt-3"
+              style={{ color:C.error, borderColor:'rgba(220,38,38,0.3)' }}>
+              Disconnect
+            </button>
           </div>
         ) : (
-          <p className="text-sm text-mist">
-            Open this app in Chrome on Android to install it.
-          </p>
-        )
-      )}
+          <div className="space-y-3">
+            <p className="text-sm text-mist">Not linked to any church dashboard. Enter the connection code shared by your church admin.</p>
+
+            {/* Code input */}
+            <div>
+              <label className="input-label">Connection Code</label>
+              <div className="flex gap-2">
+                <input
+                  className="input flex-1"
+                  placeholder="e.g. ABCD-1234"
+                  value={code}
+                  onChange={e => { setCode(e.target.value.toUpperCase()); setPreview(null); setMsg('') }}
+                  onKeyDown={e => e.key === 'Enter' && lookupCode()}
+                  style={{ textTransform:'uppercase', letterSpacing:'0.08em', fontFamily:'monospace', fontWeight:700 }}
+                />
+                <button onClick={lookupCode} disabled={submitting || !code.trim()} className="btn btn-outline">
+                  {submitting && !preview ? 'Looking up…' : 'Look Up'}
+                </button>
+              </div>
+            </div>
+
+            {msg && <p style={{ fontSize:12, color:C.error, margin:0 }}>{msg}</p>}
+
+            {/* Confirmation */}
+            {preview && (
+              <div style={{ background:'rgba(26,58,42,0.04)', border:'1px solid rgba(26,58,42,0.12)', borderRadius:12, padding:'0.875rem 1rem' }}>
+                <p style={{ fontSize:13, fontWeight:700, color:C.forest, margin:'0 0 6px' }}>Connect to: {preview.churchName}</p>
+                <p style={{ fontSize:12, color:C.muted, margin:'0 0 12px', lineHeight:1.5 }}>
+                  The church admin will need to approve your request. Your data will be read-only on their dashboard.
+                </p>
+                <div className="flex gap-2">
+                  <button onClick={() => { setPreview(null); setMsg('') }} className="btn btn-outline flex-1">Cancel</button>
+                  <button onClick={sendRequest} disabled={submitting} className="btn btn-primary flex-1">
+                    {submitting ? 'Sending…' : 'Send Request'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

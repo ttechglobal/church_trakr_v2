@@ -11,6 +11,7 @@ import {
   Users, User, MessageSquare, BarChart2, FileText,
   Settings, LogOut, Menu, X,
 } from 'lucide-react'
+const NotificationBell = dynamic(() => import('@/components/NotificationBell'), { ssr: false })
 
 // Lazy-load non-critical UI — doesn't block first paint
 const NAV = [
@@ -28,7 +29,7 @@ const NAV = [
 
 const SIDEBAR_W = 248
 
-export default function AppShell({ church, user, children }) {
+export default function AppShell({ church, user, children, pendingFollowUps = 0 }) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
   const drawerRef = useRef(null)
@@ -143,9 +144,12 @@ export default function AppShell({ church, user, children }) {
             </div>
             <span style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontWeight: 700, fontSize: 16, color: '#fff' }}>ChurchTrakr</span>
           </div>
-          <button onClick={() => setOpen(true)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 8, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff' }} aria-label="Open menu">
-            <Menu size={18} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <NotificationBell pendingFollowUps={pendingFollowUps} />
+            <button onClick={() => setOpen(true)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 8, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff' }} aria-label="Open menu">
+              <Menu size={18} />
+            </button>
+          </div>
         </header>
 
         <div className={"shell-backdrop" + (open ? " vis" : "")} onClick={() => setOpen(false)} />
