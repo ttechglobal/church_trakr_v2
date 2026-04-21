@@ -75,6 +75,8 @@ export async function middleware(request) {
     pathname.startsWith('/forgot')
 
   if (isAuthPage && user) {
+    // Route to /dashboard — dashboard/page.js detects church accounts and redirects
+    // to /church-dashboard. This avoids DB lookups in middleware.
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 

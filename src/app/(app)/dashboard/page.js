@@ -14,6 +14,12 @@ export default async function DashboardPage() {
   const church = await getChurch(user.id, user.user_metadata)
   if (!church) return <div style={{padding:'2rem'}}><p>Could not load. <a href="/dashboard">Retry</a></p></div>
 
+  // Church dashboard accounts should never land here — redirect them
+  if (church.account_type === 'church') {
+    const { redirect } = await import('next/navigation')
+    redirect('/church-dashboard')
+  }
+
   const admin = createAdminClient()
   const [membersRes, sessionsRes, firstTimersRes] = await Promise.allSettled([
     admin.from('members').select('id').eq('church_id', church.id).eq('status', 'active'),

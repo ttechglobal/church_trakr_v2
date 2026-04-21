@@ -7,18 +7,17 @@ import { usePWA } from '@/hooks/usePWA'
 import { createClient } from '@/lib/supabase/client'
 import dynamic from 'next/dynamic'
 import {
-  User, CalendarCheck, Bell, MessageSquare, Radio, ShieldAlert, ChevronRight, Smartphone, Link2
+  User, Bell, X, MessageSquare, Radio, ShieldAlert, ChevronRight, Smartphone, Link2
 } from 'lucide-react'
 
 const NotificationSettings = dynamic(() => import('./NotificationSettings'), { ssr: false })
 
 const TABS = [
   { id: 'profile',       label: 'Profile',        Icon: User },
-  { id: 'attendance',    label: 'Attendance',     Icon: CalendarCheck },
+  { id: 'church',        label: 'Church Link',    Icon: Link2 },
   { id: 'notifications', label: 'Notifications',  Icon: Bell },
   { id: 'templates',     label: 'SMS Templates',  Icon: MessageSquare },
   { id: 'sender',        label: 'Sender ID',      Icon: Radio },
-  { id: 'church',        label: 'Church Link',    Icon: Link2 },
   { id: 'account',       label: 'Account',        Icon: ShieldAlert },
 ]
 
@@ -47,16 +46,7 @@ export default function SettingsClient({ church: initialChurch, user }) {
   const [savingProfile, setSavingProfile] = useState(false)
   const [profileMsg, setProfileMsg] = useState('')
 
-  // Attendance mode
-  const [markMode, setMarkMode] = useState('present')
-  useEffect(() => {
-    const saved = localStorage.getItem('ct_mark_mode')
-    if (saved === 'present' || saved === 'absent') setMarkMode(saved)
-  }, [])
-  function saveMarkMode(mode) {
-    setMarkMode(mode)
-    localStorage.setItem('ct_mark_mode', mode)
-  }
+
 
   // Custom templates
   const [customTemplates, setCustomTemplates] = useState([])
@@ -98,14 +88,35 @@ export default function SettingsClient({ church: initialChurch, user }) {
       const res = await fetch('/api/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(profile),
+        body: JSON.stringify({
+          name:       profile.name,
+          admin_name: profile.admin_name,
+          phone:      profile.phone,
+          location:   profile.location,
+        }),
       })
-      if (!res.ok) throw new Error('Failed')
-      setChurch(prev => ({ ...prev, ...profile }))
-      setProfileMsg('Saved ✓')
-      router.refresh()
-    } catch { setProfileMsg('Failed to save') }
-    finally { setSavingProfile(false); setTimeout(() => setProfileMsg(''), 3000) }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Save failed')
+      }
+      const { church: updated } = await res.json()
+      // Update local state with server response so UI reflects persisted values
+      if (updated) {
+        setChurch(updated)
+        setProfile({
+          name:       updated.name       ?? '',
+          admin_name: updated.admin_name ?? '',
+          phone:      updated.phone      ?? '',
+          location:   updated.location   ?? '',
+        })
+      }
+      setProfileMsg('Profile updated ✓')
+    } catch (err) {
+      setProfileMsg(`Failed to save: ${err.message}`)
+    } finally {
+      setSavingProfile(false)
+      setTimeout(() => setProfileMsg(''), 4000)
+    }
   }
 
   async function handleApplySenderId() {
@@ -171,34 +182,7 @@ export default function SettingsClient({ church: initialChurch, user }) {
         />
       )}
 
-      {/* ── Attendance tab ── */}
-      {tab === 'attendance' && (
-        <div className="card animate-fade-in space-y-4">
-          <h2 className="font-display text-lg font-semibold text-forest">Attendance mode</h2>
-          <p className="text-sm text-mist">Choose how members start when you open the attendance sheet.</p>
-          <div className="space-y-3">
-            {[
-              { val: 'present', label: 'Mark Present mode', desc: 'Everyone starts absent — tap to mark present. Best for smaller groups.' },
-              { val: 'absent', label: 'Mark Absent mode', desc: 'Everyone starts present — tap to mark absent. Best for large groups where most will attend.' },
-            ].map(({ val, label, desc }) => (
-              <button key={val} onClick={() => saveMarkMode(val)}
-                className={`w-full text-left p-4 rounded-2xl border transition-all
-                  ${markMode === val ? 'bg-forest/8 border-forest/40' : 'border-forest/15 hover:border-forest/30'}`}>
-                <div className="flex items-start gap-3">
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5
-                    ${markMode === val ? 'border-forest bg-forest' : 'border-forest/30'}`}>
-                    {markMode === val && <div className="w-2 h-2 rounded-full bg-ivory" />}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-forest text-[14px]">{label}</p>
-                    <p className="text-xs text-mist mt-0.5">{desc}</p>
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+
 
       {/* ── SMS Templates tab ── */}
       {tab === 'templates' && (
@@ -313,6 +297,11 @@ export default function SettingsClient({ church: initialChurch, user }) {
         <div style={{ animation: 'var(--animate-fade-in)' }}>
           <NotificationSettings />
         </div>
+      )}
+
+      {/* ── Church Link tab ── */}
+      {tab === 'church' && (
+        <ChurchLinkTab />
       )}
 
       {/* ── Account tab ── */}
@@ -489,15 +478,18 @@ function InstallCard() {
   const [showGuide, setShowGuide] = useState(false)
   const isIOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent)
 
+  // PRIMARY behaviour: call promptInstall() directly — this triggers the
+  // browser's native install UI. This is the real install, not instructions.
+  // FALLBACK (only if event unavailable): show brief manual guide.
   // The button is ALWAYS shown — never hidden, never disabled.
-  // If the native prompt is available: trigger it.
-  // If suppressed/dismissed: show the manual guide sheet.
-  // If already installed: still show but with "installed" state.
   function handleInstallClick() {
     if (isInstalled) return
     if (installPrompt) {
+      // Call the native install prompt directly — this is the actual install
       promptInstall()
     } else {
+      // Event not available (browser suppressed it after a previous dismiss,
+      // or this browser doesn't support PWA install). Show manual fallback.
       setShowGuide(true)
     }
   }
@@ -523,13 +515,21 @@ function InstallCard() {
       {isInstalled ? (
         <div className="flex items-center gap-2 p-3 bg-success/8 rounded-xl">
           <CheckCircle size={14} className="text-success shrink-0" />
-          <p className="text-sm text-success font-medium">Installed on this device</p>
+          <p className="text-sm text-success font-medium">Already installed on this device ✓</p>
         </div>
       ) : (
-        <button onClick={handleInstallClick} className="btn btn-primary w-full gap-2">
-          <Smartphone size={15} />
-          Install ChurchTrakr
-        </button>
+        <div className="space-y-2">
+          <button onClick={handleInstallClick} className="btn btn-primary w-full gap-2">
+            <Smartphone size={15} />
+            {installPrompt ? 'Install ChurchTrakr' : 'How to Install'}
+          </button>
+          {!installPrompt && (
+            <p className="text-xs text-mist text-center">
+              {isIOS ? 'Use Safari → Share → Add to Home Screen'
+                     : 'Tap the button above for install instructions'}
+            </p>
+          )}
+        </div>
       )}
 
       {/* Manual installation guide sheet */}

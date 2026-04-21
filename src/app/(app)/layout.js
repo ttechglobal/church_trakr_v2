@@ -24,16 +24,10 @@ export default async function AppLayout({ children }) {
   const church = await getChurch(user.id, user.user_metadata)
 
   if (!church) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', fontFamily: 'system-ui' }}>
-        <div style={{ textAlign: 'center' }}>
-          <p style={{ color: '#8a9e90', marginBottom: 16 }}>Could not load account.</p>
-          <a href="/dashboard" style={{ background: '#1a3a2a', color: '#e8d5a0', padding: '0.625rem 1.5rem', borderRadius: 10, textDecoration: 'none', fontWeight: 700 }}>
-            Retry
-          </a>
-        </div>
-      </div>
-    )
+    // Profile doesn't exist — user's auth account was created but setup failed.
+    // Redirect to login where the CompleteSetupScreen will handle recovery.
+    const { redirect } = await import('next/navigation')
+    redirect('/login')
   }
 
   // Count pending follow-ups — only from the most recent attendance session

@@ -1,34 +1,28 @@
 import { createClient } from '@supabase/supabase-js'
 
-let adminClient = null
-
 /**
- * Service role client — bypasses RLS.
- * ONLY import this in:
- *   - src/app/api/** (Route Handlers)
- *   - src/app/(app)/**/
- 
-//  page.js server components that need it
-//  * NEVER import in client components or expose to the browser.
-//  */
+ * Admin (service role) Supabase client — bypasses RLS.
+ * Use ONLY in server-side code (Server Components, API routes).
+ * NEVER import this in Client Components.
+ *
+ * Requires SUPABASE_SERVICE_ROLE_KEY env var.
+ */
 export function createAdminClient() {
-  if (adminClient) return adminClient
-
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!url || !key) {
     throw new Error(
-      'Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars'
+      'Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars. ' +
+      'Add SUPABASE_SERVICE_ROLE_KEY to your Vercel environment variables.'
     )
   }
 
-  adminClient = createClient(url, key, {
+  return createClient(url, key, {
     auth: {
-      autoRefreshToken: false,
-      persistSession: false,
+      autoRefreshToken:  false,
+      persistSession:    false,
+      detectSessionInUrl: false,
     },
   })
-
-  return adminClient
 }
