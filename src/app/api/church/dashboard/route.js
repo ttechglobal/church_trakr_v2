@@ -1,18 +1,41 @@
 /**
- * GET /api/church/dashboard?period=1m|3m|6m|1y
- * Returns aggregated stats for all approved subgroups.
- * Only accessible by church accounts.
+ * GET /api/church/dashboard
+ * Query params:
+ *   view=sunday|month (default: sunday)
+ *   date=YYYY-MM-DD   (for sunday view — defaults to most recent Sunday)
+ *   month=YYYY-MM     (for month view)
  */
-import { createClient } from '@/lib/supabase/server'
+import { createClient }      from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { NextResponse } from 'next/server'
+import { NextResponse }      from 'next/server'
 
-function periodStart(p) {
-  const now = new Date()
-  if (p === '1m') return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10)
-  if (p === '3m') return new Date(now.getFullYear(), now.getMonth()-2, 1).toISOString().slice(0,10)
-  if (p === '6m') return new Date(now.getFullYear(), now.getMonth()-5, 1).toISOString().slice(0,10)
-  return new Date(now.getFullYear(), 0, 1).toISOString().slice(0,10)
+function getMostRecentSunday() {
+  const d = new Date()
+  d.setDate(d.getDate() - d.getDay())
+  return d.toISOString().slice(0, 10)
+}
+
+function getSundaysInMonth(yearMonth) {
+  const [year, month] = yearMonth.split('-').map(Number)
+  const sundays = []
+  const d = new Date(year, month - 1, 1)
+  while (d.getDay() !== 0) d.setDate(d.getDate() + 1)
+  while (d.getMonth() === month - 1) {
+    sundays.push(d.toISOString().slice(0, 10))
+    d.setDate(d.getDate() + 7)
+  }
+  return sundays
+}
+
+function getPastSundays(n = 12) {
+  const sundays = []
+  const d = new Date()
+  d.setDate(d.getDate() - d.getDay())
+  for (let i = 0; i < n; i++) {
+    sundays.push(d.toISOString().slice(0, 10))
+    d.setDate(d.getDate() - 7)
+  }
+  return sundays
 }
 
 export async function GET(request) {
@@ -21,125 +44,164 @@ export async function GET(request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const admin = createAdminClient()
-  const { data: church } = await admin.from('churches').select('*').eq('admin_user_id', user.id).single()
-  if (!church || church.account_type !== 'church') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const { data: church } = await admin
+    .from('churches').select('id,name,connection_code')
+    .eq('admin_user_id', user.id).single()
+  if (!church || !church.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  // Get approved subgroups
-  const { data: connections } = await admin.from('church_connections')
+  const { searchParams } = new URL(request.url)
+  const view  = searchParams.get('view')  ?? 'sunday'
+  const date  = searchParams.get('date')  ?? getMostRecentSunday()
+  const month = searchParams.get('month') ?? new Date().toISOString().slice(0, 7)
+
+  // Approved + disconnected connections
+  const { data: connections } = await admin
+    .from('church_connections')
     .select('subgroup_id, status, connected_at, disconnected_at')
     .eq('church_id', church.id)
 
-  const approved = (connections ?? []).filter(c => c.status === 'approved')
+  const approved     = (connections ?? []).filter(c => c.status === 'approved')
   const disconnected = (connections ?? []).filter(c => c.status === 'disconnected')
-  const allSubIds = [...approved, ...disconnected].map(c => c.subgroup_id)
+  const allSubIds    = [...approved, ...disconnected].map(c => c.subgroup_id)
 
-  if (!allSubIds.length) return NextResponse.json({ groups: [], aggregated: null })
+  if (!allSubIds.length) {
+    return NextResponse.json({
+      view, date, month,
+      pastSundays: getPastSundays(),
+      groups: [],
+      aggregated: null,
+      connectionCode: church.connection_code,
+    })
+  }
 
-  const { searchParams } = new URL(request.url)
-  const period = searchParams.get('period') ?? '1m'
-  const start = periodStart(period)
-
-  // Fetch subgroup info (name only — no PII)
-  const { data: subgroups } = await admin.from('churches')
-    .select('id, name, admin_name')
+  // Subgroup names
+  const { data: subgroups } = await admin
+    .from('churches').select('id,name,admin_name')
     .in('id', allSubIds)
+  const subMap  = Object.fromEntries((subgroups ?? []).map(s => [s.id, s]))
+  const connMap = Object.fromEntries((connections ?? []).map(c => [c.subgroup_id, c]))
 
-  // Fetch sessions + records for all approved subgroups
-  const { data: sessions } = await admin.from('attendance_sessions')
-    .select('id, date, church_id, groups(name), attendance_records(member_id, present)')
+  // Determine which dates to query
+  const targetDates = view === 'sunday'
+    ? [date]
+    : getSundaysInMonth(month)
+
+  // Fetch sessions + records for target dates across all subgroups
+  const { data: sessions } = await admin
+    .from('attendance_sessions')
+    .select('id,date,church_id,groups(name),attendance_records(member_id,present)')
     .in('church_id', allSubIds)
-    .gte('date', start)
-    .order('date', { ascending: false })
+    .in('date', targetDates)
 
-  // Fetch member counts (active only, name+status — no PII)
-  const { data: members } = await admin.from('members')
-    .select('id, church_id, status, name')
-    .in('church_id', allSubIds)
-    .eq('status', 'active')
+  // Fetch follow_up_data for each church to count reached
+  const { data: churchData } = await admin
+    .from('churches')
+    .select('id,follow_up_data')
+    .in('id', allSubIds)
+  const followMap = Object.fromEntries((churchData ?? []).map(c => [c.id, c.follow_up_data ?? {}]))
 
-  const subMap = Object.fromEntries((subgroups ?? []).map(s => [s.id, s]))
-  const connMap = Object.fromEntries(connections.map(c => [c.subgroup_id, c]))
-
-  // Build per-group stats
-  const groupStats = allSubIds.map(sid => {
-    const sub = subMap[sid] ?? { id: sid, name: 'Unknown', admin_name: '' }
+  // Compute stats per subgroup
+  const groups = allSubIds.map(sid => {
+    const sub  = subMap[sid] ?? { id: sid, name: 'Unknown', admin_name: '' }
     const conn = connMap[sid]
+    const isDisconnected = conn?.status === 'disconnected'
+
     const groupSessions = (sessions ?? []).filter(s =>
       s.church_id === sid &&
       s.groups?.name !== 'First Timers' &&
       (s.attendance_records ?? []).some(r => r.member_id !== null)
     )
-    const groupMembers = (members ?? []).filter(m => m.church_id === sid)
 
-    // Attendance trend
-    const byDate = {}
-    for (const s of groupSessions) {
-      if (!byDate[s.date]) byDate[s.date] = { present: 0, total: 0 }
-      for (const r of (s.attendance_records ?? [])) {
-        if (!r.member_id) continue
-        byDate[s.date].total++
-        if (r.present) byDate[s.date].present++
+    if (!groupSessions.length) {
+      return {
+        id: sid, name: sub.name, adminName: sub.admin_name,
+        status: conn?.status ?? 'unknown',
+        hasData: false,
+        present: 0, absent: 0, reached: 0, total: 0,
+        sessionCount: 0,
+        lastDate: null,
       }
     }
 
-    const trend = Object.entries(byDate)
-      .sort(([a],[b]) => a.localeCompare(b))
-      .map(([date, {present, total}]) => ({
-        date,
-        label: new Date(date+'T00:00:00').toLocaleDateString(undefined, {month:'short',day:'numeric'}),
-        present, total,
-        rate: total > 0 ? Math.round((present/total)*100) : 0,
-      }))
+    let present = 0, total = 0
+    const followUp = followMap[sid] ?? {}
 
-    const lastEntry = trend[trend.length - 1] ?? null
-    const avgRate = trend.length > 0
-      ? Math.round(trend.reduce((s,d) => s+d.rate, 0) / trend.length)
-      : null
+    for (const s of groupSessions) {
+      for (const r of (s.attendance_records ?? [])) {
+        if (!r.member_id) continue
+        total++
+        if (r.present) present++
+      }
+    }
+
+    const absent = total - present
+
+    // Count reached: follow_up entries that are reached, keyed to sessions in this date range
+    const sessionIds = new Set(groupSessions.map(s => s.id))
+    let reached = 0
+    for (const [key, entry] of Object.entries(followUp)) {
+      const sessionId = key.split('_')[0]
+      if (sessionIds.has(sessionId) && entry.reached) reached++
+    }
+
+    // Most recent session date
+    const lastDate = groupSessions
+      .map(s => s.date)
+      .sort((a, b) => b.localeCompare(a))[0] ?? null
 
     return {
-      id:          sid,
-      name:        sub.name,
-      adminName:   sub.admin_name,
-      status:      conn?.status ?? 'unknown',
-      connectedAt: conn?.connected_at ?? null,
-      disconnectedAt: conn?.disconnected_at ?? null,
-      memberCount:    groupMembers.length,
-      lastSession:    lastEntry,
-      avgRate,
-      trend,
-      totalSessions:  groupSessions.length,
+      id: sid, name: sub.name, adminName: sub.admin_name,
+      status: conn?.status ?? 'unknown',
+      hasData: total > 0,
+      present, absent, reached, total,
+      sessionCount: groupSessions.length,
+      lastDate,
     }
   })
 
-  // Aggregated totals
-  const approvedGroups = groupStats.filter(g => g.status === 'approved')
-  const totalMembers = approvedGroups.reduce((s,g) => s + g.memberCount, 0)
-  const overallRates = approvedGroups.filter(g => g.avgRate !== null).map(g => g.avgRate)
-  const overallAvgRate = overallRates.length > 0
-    ? Math.round(overallRates.reduce((s,r) => s+r, 0) / overallRates.length)
-    : null
+  // Aggregate
+  const reported = groups.filter(g => g.hasData && g.status === 'approved')
+  const totalPresent = reported.reduce((s, g) => s + g.present, 0)
+  const totalAbsent  = reported.reduce((s, g) => s + g.absent,  0)
+  const totalReached = reported.reduce((s, g) => s + g.reached, 0)
 
-  // Most recent Sunday across all groups
-  const allDates = approvedGroups.flatMap(g => g.trend.map(t => t.date))
-  const latestDate = allDates.sort((a,b) => b.localeCompare(a))[0] ?? null
-
-  let lastSunday = null
-  if (latestDate) {
-    let present = 0, total = 0
-    for (const g of approvedGroups) {
-      const d = g.trend.find(t => t.date === latestDate)
-      if (d) { present += d.present; total += d.total }
+  // Trend: compare to previous Sunday
+  let trendText = null
+  if (view === 'sunday' && totalPresent > 0) {
+    const prevDate = new Date(date + 'T00:00:00')
+    prevDate.setDate(prevDate.getDate() - 7)
+    const prevStr = prevDate.toISOString().slice(0, 10)
+    const { data: prevSessions } = await admin
+      .from('attendance_sessions')
+      .select('attendance_records(member_id,present)')
+      .in('church_id', approved.map(c => c.subgroup_id))
+      .eq('date', prevStr)
+    const prevPresent = (prevSessions ?? [])
+      .flatMap(s => s.attendance_records ?? [])
+      .filter(r => r.member_id && r.present).length
+    if (prevPresent > 0) {
+      const diff = totalPresent - prevPresent
+      if (diff > 0) trendText = `↑ Up ${diff} from last Sunday`
+      else if (diff < 0) trendText = `↓ Down ${Math.abs(diff)} from last Sunday`
+      else trendText = '→ Same as last Sunday'
     }
-    lastSunday = { date: latestDate, present, total, rate: total > 0 ? Math.round((present/total)*100) : 0 }
   }
 
   return NextResponse.json({
-    groups:   groupStats,
+    view, date, month,
+    pastSundays: getPastSundays(),
+    groups: groups.sort((a, b) => {
+      // Approved with data first, then approved no data, then disconnected
+      if (a.status !== b.status) return a.status === 'approved' ? -1 : 1
+      if (a.hasData !== b.hasData) return a.hasData ? -1 : 1
+      return a.name.localeCompare(b.name)
+    }),
     aggregated: {
-      totalMembers,
-      overallAvgRate,
-      lastSunday,
-      connectedCount: approvedGroups.length,
+      totalPresent, totalAbsent, totalReached,
+      reportedCount: reported.length,
+      approvedCount:  approved.length,
+      trendText,
     },
+    connectionCode: church.connection_code,
   })
 }

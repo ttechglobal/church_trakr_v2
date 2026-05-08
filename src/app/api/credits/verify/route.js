@@ -1,63 +1,72 @@
-import { createClient } from '@/lib/supabase/server'
-import { NextResponse } from 'next/server'
-
 /**
- * POST /api/credits/verify
- *
- * Called after a church admin confirms they've made a bank transfer.
- * In production, this would be triggered by a webhook or manual admin action.
- * For now, it's a self-service "I've paid" endpoint that logs the request
- * and sends a WhatsApp message to the admin for manual verification.
- *
- * Body: {
- *   package: number,      // credits being purchased
- *   amount: number,       // NGN amount paid
- *   reference?: string,   // bank transfer reference
- * }
+ * GET /api/credits/verify?ref=CT-XXXXXX
+ * Called by Paystack after payment. Verifies payment and adds credits.
+ * Redirects to /credits?status=success or /credits?status=failed
  */
-export async function POST(request) {
-  try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+import { createAdminClient } from '@/lib/supabase/admin'
+import { NextResponse }      from 'next/server'
 
-    const { data: church } = await supabase
-      .from('churches')
-      .select('id, name, admin_name, sms_credits')
-      .eq('admin_user_id', user.id)
+export async function GET(request) {
+  const { searchParams } = new URL(request.url)
+  const ref = searchParams.get('ref')
+
+  if (!ref) {
+    return NextResponse.redirect(new URL('/credits?status=failed', request.url))
+  }
+
+  try {
+    const paystackKey = process.env.PAYSTACK_SECRET_KEY
+    if (!paystackKey) {
+      return NextResponse.redirect(new URL('/credits?status=failed', request.url))
+    }
+
+    // Verify with Paystack
+    const verifyRes = await fetch(
+      `https://api.paystack.co/transaction/verify/${encodeURIComponent(ref)}`,
+      { headers: { Authorization: `Bearer ${paystackKey}` } }
+    )
+    const verifyData = await verifyRes.json()
+
+    if (!verifyData.status || verifyData.data?.status !== 'success') {
+      return NextResponse.redirect(new URL('/credits?status=failed', request.url))
+    }
+
+    const admin = createAdminClient()
+    const meta  = verifyData.data.metadata
+
+    // Check not already processed
+    const { data: tx } = await admin
+      .from('credit_transactions')
+      .select('id, status, credits, church_id')
+      .eq('reference', ref)
       .single()
 
-    if (!church) return NextResponse.json({ error: 'Church not found' }, { status: 404 })
+    if (!tx || tx.status === 'completed') {
+      return NextResponse.redirect(new URL('/credits?status=already_credited', request.url))
+    }
 
-    const body = await request.json()
-    const { package: creditPackage, amount, reference } = body
+    // Add credits to the church
+    const { data: church } = await admin
+      .from('churches')
+      .select('sms_credits')
+      .eq('id', tx.church_id)
+      .single()
 
-    // Log the purchase request
-    await supabase.from('usage_logs').insert({
-      church_id: church.id,
-      event_type: 'credits_purchase_request',
-      recipient_count: creditPackage,
-      metadata: {
-        amount,
-        reference,
-        church_name: church.name,
-        admin_name: church.admin_name,
-        current_balance: church.sms_credits,
-        email: user.email,
-      },
-    })
+    await admin.from('churches')
+      .update({ sms_credits: (church?.sms_credits ?? 0) + tx.credits })
+      .eq('id', tx.church_id)
 
-    // In production: trigger webhook or notification to admin
-    // For now, return a "pending" response with WhatsApp contact info
-    return NextResponse.json({
-      success: true,
-      status: 'pending',
-      message: 'Your payment request has been logged. Credits will be added once payment is confirmed.',
-      whatsappContact: '2348050340350',
-      reference: reference ?? `CT-${church.id.slice(0, 8).toUpperCase()}`,
-    })
+    // Mark transaction complete
+    await admin.from('credit_transactions')
+      .update({ status: 'completed', completed_at: new Date().toISOString() })
+      .eq('reference', ref)
+
+    return NextResponse.redirect(
+      new URL(`/credits?status=success&credits=${tx.credits}`, request.url)
+    )
+
   } catch (err) {
-    console.error('[POST /api/credits/verify]', err)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('[GET /api/credits/verify]', err)
+    return NextResponse.redirect(new URL('/credits?status=failed', request.url))
   }
 }
