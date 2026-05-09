@@ -1,119 +1,81 @@
 /**
  * POST /api/sms/send
  *
- * Pricing: 5 credits per SMS page per recipient.
- * Page boundary: 157 chars (accounts for personalisation overhead).
- *
- * Order of operations (CRITICAL):
- *   1. Validate inputs & check balance
- *   2. Format phone numbers
- *   3. Call Termii bulk API
- *   4. Parse response
- *   5. Deduct credits for successful sends only
- *   6. Log to sms_logs
- *   7. Return result to client
- *
- * Never deduct before Termii confirms.
+ * Uses admin client for ALL DB operations to bypass RLS.
+ * sms_logs insert is explicit with full error logging — never silently swallowed.
+ * Credits deducted AFTER Termii confirms delivery.
  */
 import { createClient }      from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse }      from 'next/server'
 
 const CREDITS_PER_PAGE = 5
-const PAGE_SIZE        = 157   // conservative single-page limit (accounts for {name} expansion)
-const MAX_PAGES        = 2     // hard limit on message length (2 pages max)
+const GSM7_PAGE        = 157
+const UCS2_PAGE        = 70
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// Unicode triggers — does NOT include [ ] (template placeholders)
+const UNICODE_TRIGGERS = ['^','{','}','\\','~','|','€','\u2018','\u2019','\u201C','\u201D']
 
-function smsPages(text) {
-  if (!text) return 1
-  const len = text.length
-  if (len <= PAGE_SIZE) return 1
-  return Math.min(MAX_PAGES, Math.ceil(len / 153))
+function analyseMessage(text) {
+  if (!text) return { pages: 1, creditsPerSms: CREDITS_PER_PAGE }
+  const resolved = text
+    .replace(/\{name\}/gi, 'Friend')
+    .replace(/\[Name\]/gi, 'Friend')
+    .replace(/\[Group Name\]/gi, 'Group')
+  const isUnicode = UNICODE_TRIGGERS.some(c => resolved.includes(c)) ||
+                    /\p{Emoji_Presentation}/u.test(resolved)
+  const pageSize  = isUnicode ? UCS2_PAGE : GSM7_PAGE
+  const pages     = Math.max(1, Math.ceil(resolved.length / pageSize))
+  return { pages, creditsPerSms: pages * CREDITS_PER_PAGE }
 }
 
-function formatToInternational(phone) {
-  if (!phone) return null
-  const cleaned = String(phone).replace(/\D/g, '')
-  if (cleaned.startsWith('234') && cleaned.length >= 13) return cleaned
-  if (cleaned.startsWith('0')   && cleaned.length === 11) return '234' + cleaned.slice(1)
-  if (cleaned.length === 10     && /^[789]/.test(cleaned)) return '234' + cleaned
-  if (cleaned.startsWith('234')) return cleaned
-  return cleaned || null
+function normalisePhone(raw) {
+  if (!raw) return null
+  const c = String(raw).replace(/\D/g, '')
+  if (c.startsWith('234') && c.length >= 13) return c
+  if (c.startsWith('0')   && c.length === 11) return '234' + c.slice(1)
+  if (c.length === 10     && /^[789]/.test(c)) return '234' + c
+  if (c.startsWith('234')) return c
+  return null
 }
-
-function personalise(message, name) {
-  const first = (name || '').split(' ')[0] || 'Friend'
-  return message.replace(/\{name\}/gi, first)
-}
-
-// ── Termii: send to a single recipient ───────────────────────────────────────
 
 async function termiiSingle({ to, message, senderId, apiKey }) {
-  const res = await fetch('https://api.ng.termii.com/api/sms/send', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      api_key: apiKey,
-      to,
-      from:    senderId,
-      sms:     message,
-      type:    'plain',
-      channel: 'generic',
-    }),
+  const res  = await fetch('https://api.ng.termii.com/api/sms/send', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ api_key: apiKey, to, from: senderId, sms: message, type: 'plain', channel: 'generic' }),
   })
   const text = await res.text()
-  let data
-  try { data = JSON.parse(text) } catch { data = { raw: text } }
-
-  const ok = res.ok && (
-    data.message_id ||
-    data.code === 'ok' ||
-    (typeof data.message === 'string' && data.message.toLowerCase().includes('success'))
-  )
+  let data; try { data = JSON.parse(text) } catch { data = { raw: text } }
+  const ok = res.ok && (data.message_id || data.code === 'ok' ||
+    (typeof data.message === 'string' && data.message.toLowerCase().includes('success')))
+  console.log(`[termii] to=${to} ok=${ok}`, JSON.stringify(data).slice(0, 200))
   return { success: ok, messageId: data.message_id ?? null, raw: data }
 }
 
-// ── Termii: bulk send (same message to multiple numbers, no personalisation) ─
-
 async function termiiBulk({ numbers, message, senderId, apiKey }) {
-  console.log(`[termii/bulk] sending to ${numbers.length} numbers, msg length ${message.length}`)
-  const res = await fetch('https://api.ng.termii.com/api/sms/send/bulk', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      api_key: apiKey,
-      to:      numbers,
-      from:    senderId,
-      sms:     message,
-      type:    'plain',
-      channel: 'generic',
-    }),
+  console.log(`[termii/bulk] → ${numbers.length} numbers`)
+  const res  = await fetch('https://api.ng.termii.com/api/sms/send/bulk', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ api_key: apiKey, to: numbers, from: senderId, sms: message, type: 'plain', channel: 'generic' }),
   })
   const text = await res.text()
-  let data
-  try { data = JSON.parse(text) } catch { data = { raw: text } }
-  console.log(`[termii/bulk] response status=${res.status}`, JSON.stringify(data).slice(0, 300))
-
-  const ok = res.ok && (
-    data.message_id ||
-    data.code === 'ok' ||
-    (typeof data.message === 'string' && data.message.toLowerCase().includes('success'))
-  )
+  let data; try { data = JSON.parse(text) } catch { data = { raw: text } }
+  const ok = res.ok && (data.message_id || data.code === 'ok' ||
+    (typeof data.message === 'string' && data.message.toLowerCase().includes('success')))
+  console.log(`[termii/bulk] status=${res.status} ok=${ok}`, JSON.stringify(data).slice(0, 300))
   return { success: ok, raw: data }
 }
 
-// ── Main handler ──────────────────────────────────────────────────────────────
-
 export async function POST(request) {
+  console.log('=== SMS SEND ATTEMPT ===')
   try {
-    // 1. Auth
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    // 2. Load church via admin client (bypasses RLS)
+    // Admin client bypasses RLS on churches AND sms_logs
     const admin = createAdminClient()
+
     const { data: church, error: churchErr } = await admin
       .from('churches')
       .select('id, name, sms_credits, sms_sender_id, sms_sender_id_status')
@@ -121,149 +83,156 @@ export async function POST(request) {
       .single()
 
     if (churchErr || !church) {
+      console.error('[sms/send] church fetch failed:', churchErr?.message)
       return NextResponse.json({ error: 'Church not found' }, { status: 404 })
     }
 
-    // 3. Parse body
     const body = await request.json()
     const { recipients, message, type } = body
+    console.log(`Recipients: ${recipients?.length} | Message length: ${message?.length} | Type: ${type}`)
 
-    if (!recipients?.length) return NextResponse.json({ error: 'No recipients provided' }, { status: 400 })
-    if (!message?.trim())    return NextResponse.json({ error: 'Message is required' }, { status: 400 })
+    if (!recipients?.length || !message?.trim()) {
+      return NextResponse.json({ error: 'Recipients and message are required' }, { status: 400 })
+    }
 
-    // 4. Calculate pages & credits
-    const pages          = smsPages(message)
-    const creditsPerSms  = pages * CREDITS_PER_PAGE
+    const { pages, creditsPerSms } = analyseMessage(message)
     const currentBalance = church.sms_credits ?? 0
     const maxCanSend     = Math.floor(currentBalance / creditsPerSms)
 
-    console.log(`[sms/send] pages=${pages} creditsPerSms=${creditsPerSms} balance=${currentBalance} maxCanSend=${maxCanSend} requested=${recipients.length}`)
+    console.log(`Pages: ${pages} | Credits/SMS: ${creditsPerSms} | Balance: ${currentBalance} | MaxCanSend: ${maxCanSend}`)
 
     if (maxCanSend === 0) {
       return NextResponse.json({
-        error: `Not enough credits. This message is ${pages} page${pages > 1 ? 's' : ''} — costs ${creditsPerSms} credits per person. You have ${currentBalance} credits.`,
-        creditsNeeded: creditsPerSms,
-        creditsAvailable: currentBalance,
+        error: `Not enough credits. This message costs ${creditsPerSms} credits per person. You have ${currentBalance}.`,
+        creditsNeeded: creditsPerSms, creditsAvailable: currentBalance,
       }, { status: 402 })
     }
 
-    // 5. Partial send: slice to what we can afford
     const toSend  = recipients.slice(0, maxCanSend)
     const skipped = recipients.slice(maxCanSend)
 
-    // 6. Determine sender ID (fallback to ChurchTrakr)
     const senderId = (church.sms_sender_id_status === 'approved' && church.sms_sender_id)
       ? church.sms_sender_id
       : (process.env.TERMII_SENDER_ID ?? 'ChurchTrakr')
 
     const apiKey = process.env.TERMII_API_KEY
+    console.log(`Sender: ${senderId} | API key present: ${!!apiKey} | Prefix: ${apiKey?.slice(0, 8)}`)
 
-    // ── No API key: simulate ──────────────────────────────────────────────────
+    // ── Simulate if no API key ────────────────────────────────────────────────
     if (!apiKey) {
-      console.warn('[sms/send] TERMII_API_KEY not set — simulating send')
+      console.warn('[sms/send] No TERMII_API_KEY — simulating')
       const creditsUsed = toSend.length * creditsPerSms
       const newBalance  = Math.max(0, currentBalance - creditsUsed)
+
       await admin.from('churches').update({ sms_credits: newBalance }).eq('id', church.id)
-      try {
-        await admin.from('sms_logs').insert({
-          church_id: church.id, type: type ?? 'custom', message,
-          recipient_count: toSend.length, success_count: toSend.length,
-          fail_count: 0, credits_used: creditsUsed,
-          sent_at: new Date().toISOString(), sent_by: user.id,
-        })
-      } catch (e) { console.warn('[sms/send] sms_logs insert failed:', e.message) }
-      return NextResponse.json({
-        success: true, sent: toSend.length, failed: 0,
-        skipped: skipped.length, skippedRecipients: skipped.map(r => r.name),
-        credits_used: creditsUsed, new_balance: newBalance, simulated: true,
-      })
-    }
 
-    // ── Check if message contains {name} — if so, must send individually ─────
-    const isPersonalised = /\{name\}/i.test(message)
-
-    let sentCount   = 0
-    let failCount   = 0
-    const results   = []
-
-    if (isPersonalised) {
-      // Send individually so each person gets their name in the message
-      // Batch in groups of 5 to avoid hammering Termii
-      const BATCH = 5
-      for (let i = 0; i < toSend.length; i += BATCH) {
-        const batch = toSend.slice(i, i + BATCH)
-        const batchResults = await Promise.all(batch.map(async (r) => {
-          const to = formatToInternational(r.phone)
-          if (!to) {
-            return { name: r.name, phone: r.phone, status: 'failed', error: 'Invalid phone number' }
-          }
-          const msg    = personalise(message, r.name)
-          const result = await termiiSingle({ to, message: msg, senderId, apiKey })
-          console.log(`[termii] ${to} → ${result.success ? 'sent' : 'failed'}`, result.raw?.message ?? '')
-          return {
-            name:   r.name,
-            phone:  r.phone,
-            status: result.success ? 'sent' : 'failed',
-            error:  result.success ? undefined : (result.raw?.message ?? 'Send failed'),
-          }
-        }))
-        results.push(...batchResults)
-        if (i + BATCH < toSend.length) await new Promise(res => setTimeout(res, 200))
-      }
-    } else {
-      // All recipients get the same message — use bulk endpoint
-      const numbers = toSend.map(r => formatToInternational(r.phone)).filter(Boolean)
-      const invalidCount = toSend.length - numbers.length
-
-      const bulkResult = await termiiBulk({ numbers, message, senderId, apiKey })
-
-      if (bulkResult.success) {
-        numbers.forEach((phone, i) => results.push({ name: toSend[i]?.name, phone, status: 'sent' }))
-        // Mark invalid phones as failed
-        toSend.filter(r => !formatToInternational(r.phone)).forEach(r => {
-          results.push({ name: r.name, phone: r.phone, status: 'failed', error: 'Invalid phone' })
-        })
-      } else {
-        // Bulk failed — mark all as failed, do not deduct credits
-        toSend.forEach(r => results.push({
-          name: r.name, phone: r.phone, status: 'failed',
-          error: bulkResult.raw?.message ?? 'Bulk send failed',
-        }))
-      }
-    }
-
-    sentCount = results.filter(r => r.status === 'sent').length
-    failCount = results.filter(r => r.status !== 'sent').length
-
-    // 7. Deduct credits ONLY for successful sends (AFTER Termii confirms)
-    const creditsUsed = sentCount * creditsPerSms
-    const newBalance  = Math.max(0, currentBalance - creditsUsed)
-
-    await Promise.allSettled([
-      admin.from('churches').update({ sms_credits: newBalance }).eq('id', church.id),
-      admin.from('sms_logs').insert({
+      const { error: logErr } = await admin.from('sms_logs').insert({
         church_id:       church.id,
         type:            type ?? 'custom',
         message,
         recipient_count: toSend.length,
-        success_count:   sentCount,
-        fail_count:      failCount,
+        success_count:   toSend.length,
+        fail_count:      0,
         credits_used:    creditsUsed,
         sent_at:         new Date().toISOString(),
         sent_by:         user.id,
-      }),
-    ])
+      })
+
+      if (logErr) {
+        console.error('[sms/send] sms_logs write failed (simulated):', {
+          code: logErr.code, message: logErr.message,
+          details: logErr.details, hint: logErr.hint,
+        })
+      } else {
+        console.log('[sms/send] sms_logs write succeeded (simulated)')
+      }
+
+      return NextResponse.json({
+        success: true, sent: toSend.length, failed: 0, simulated: true,
+        skipped: skipped.length, skippedRecipients: skipped.map(r => r.name),
+        credits_used: creditsUsed, new_balance: newBalance,
+        results: toSend.map(r => ({ name: r.name, phone: r.phone, status: 'sent' })),
+      })
+    }
+
+    // ── Real send ─────────────────────────────────────────────────────────────
+    const isPersonalised = /\{name\}|\[Name\]/i.test(message)
+    const results = []
+
+    if (isPersonalised) {
+      const BATCH = 5
+      for (let i = 0; i < toSend.length; i += BATCH) {
+        const batch = toSend.slice(i, i + BATCH)
+        const batchResults = await Promise.all(batch.map(async r => {
+          const to  = normalisePhone(r.phone)
+          if (!to)  return { name: r.name, phone: r.phone, status: 'failed', error: 'Invalid phone' }
+          const msg = message
+            .replace(/\{name\}/gi, (r.name || '').split(' ')[0] || 'Friend')
+            .replace(/\[Name\]/gi, (r.name || '').split(' ')[0] || 'Friend')
+          const result = await termiiSingle({ to, message: msg, senderId, apiKey })
+          return { name: r.name, phone: r.phone, status: result.success ? 'sent' : 'failed', error: result.success ? undefined : (result.raw?.message ?? 'Failed') }
+        }))
+        results.push(...batchResults)
+        if (i + BATCH < toSend.length) await new Promise(r => setTimeout(r, 200))
+      }
+    } else {
+      const numbers    = toSend.map(r => normalisePhone(r.phone)).filter(Boolean)
+      const bulkResult = await termiiBulk({ numbers, message, senderId, apiKey })
+      if (bulkResult.success) {
+        numbers.forEach((phone, i) => results.push({ name: toSend[i]?.name ?? '', phone, status: 'sent' }))
+        toSend.filter(r => !normalisePhone(r.phone)).forEach(r =>
+          results.push({ name: r.name, phone: r.phone, status: 'failed', error: 'Invalid phone' }))
+      } else {
+        return NextResponse.json({
+          error: `SMS gateway error: ${bulkResult.raw?.message ?? 'Unknown error'}`,
+        }, { status: 502 })
+      }
+    }
+
+    // ── Deduct credits AFTER successful send ──────────────────────────────────
+    const sentCount   = results.filter(r => r.status === 'sent').length
+    const failCount   = results.filter(r => r.status !== 'sent').length
+    const creditsUsed = sentCount * creditsPerSms
+    const newBalance  = Math.max(0, currentBalance - creditsUsed)
+
+    console.log(`Sent: ${sentCount} | Failed: ${failCount} | Credits used: ${creditsUsed} | New balance: ${newBalance}`)
+
+    // Update credits
+    const { error: creditErr } = await admin
+      .from('churches')
+      .update({ sms_credits: newBalance })
+      .eq('id', church.id)
+    if (creditErr) console.error('[sms/send] credit update failed:', creditErr.message)
+
+    // Log to sms_logs — explicit error logging, never swallowed
+    const { error: logErr } = await admin.from('sms_logs').insert({
+      church_id:       church.id,
+      type:            type ?? 'custom',
+      message,
+      recipient_count: toSend.length,
+      success_count:   sentCount,
+      fail_count:      failCount,
+      credits_used:    creditsUsed,
+      sent_at:         new Date().toISOString(),
+      sent_by:         user.id,
+    })
+
+    if (logErr) {
+      console.error('[sms/send] sms_logs write FAILED:', {
+        code:    logErr.code,
+        message: logErr.message,
+        details: logErr.details,
+        hint:    logErr.hint,
+      })
+    } else {
+      console.log('[sms/send] sms_logs write succeeded')
+    }
 
     return NextResponse.json({
-      success:           true,
-      sent:              sentCount,
-      failed:            failCount,
-      skipped:           skipped.length,
-      skippedRecipients: skipped.map(r => r.name),
-      credits_used:      creditsUsed,
-      new_balance:       newBalance,
-      results,
-      partial:           skipped.length > 0,
+      success: true, sent: sentCount, failed: failCount,
+      skipped: skipped.length, skippedRecipients: skipped.map(r => r.name),
+      credits_used: creditsUsed, new_balance: newBalance, results,
+      partial: skipped.length > 0,
     })
 
   } catch (err) {
