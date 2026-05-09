@@ -2,9 +2,12 @@
 
 import { useEffect, useState, useCallback } from 'react'
 
-// ── Module-level singleton — shared across ALL usePWA() instances ─────────────
-// beforeinstallprompt fires once per page load. Storing it here means
-// any component can call promptInstall() regardless of mount order.
+// ── Module-level singleton ────────────────────────────────────────────────────
+// beforeinstallprompt fires ONCE per page load. After the user dismisses
+// the native prompt, the browser does NOT fire it again — but the event
+// object is still valid and .prompt() can be called again.
+// Storing here (not in React state) prevents the event from losing its
+// .prompt() method through React's synthetic event system.
 let _installPromptEvent = null
 const _listeners = new Set()
 
@@ -20,30 +23,29 @@ function subscribeToPrompt(fn) {
 }
 
 export function usePWA() {
-  const [installPrompt, setInstallPrompt] = useState(null)
-  const [isInstalled, setIsInstalled]     = useState(false)
-  const [swReady, setSwReady]             = useState(false)
-  const [permission, setPermission]       = useState('default')
-  const [subscription, setSubscription]   = useState(null)
+  const [hasPrompt,    setHasPrompt]    = useState(false)
+  const [isInstalled,  setIsInstalled]  = useState(false)
+  const [swReady,      setSwReady]      = useState(false)
+  const [permission,   setPermission]   = useState('default')
+  const [subscription, setSubscription] = useState(null)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    // Check if already installed
+    // Check if already installed as PWA
     if (
       window.matchMedia('(display-mode: standalone)').matches ||
-      window.navigator.standalone
+      window.navigator.standalone === true
     ) {
       setIsInstalled(true)
     }
 
-    // Notification permission
     if ('Notification' in window) {
       setPermission(Notification.permission)
     }
 
-    // Subscribe to the global singleton (handles events that fired before mount)
-    const unsub = subscribeToPrompt(e => setInstallPrompt(e))
+    // Subscribe to the global singleton
+    const unsub = subscribeToPrompt(e => setHasPrompt(!!e))
 
     // Capture beforeinstallprompt into the global singleton
     const handleBeforeInstall = e => {
@@ -52,7 +54,16 @@ export function usePWA() {
     }
     window.addEventListener('beforeinstallprompt', handleBeforeInstall)
 
-    // Register SW — non-blocking, failure does NOT affect install prompt
+    // Track when app gets installed
+    const handleAppInstalled = () => {
+      setIsInstalled(true)
+      _installPromptEvent = null
+      setHasPrompt(false)
+      _listeners.forEach(fn => fn(null))
+    }
+    window.addEventListener('appinstalled', handleAppInstalled)
+
+    // Register service worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker
         .register('/sw.js', { scope: '/' })
@@ -66,42 +77,41 @@ export function usePWA() {
           })
         })
         .catch(err => {
-          // SW 404 or security error — log but don't crash
           console.warn('[usePWA] SW registration failed:', err.message)
         })
     }
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall)
+      window.removeEventListener('appinstalled', handleAppInstalled)
       unsub()
     }
   }, [])
 
-  // ── Trigger the native install prompt ─────────────────────────────────────
-  // Uses the global singleton directly so it always works regardless of
-  // which component instance captured the event.
+  // Trigger native install prompt
+  // IMPORTANT: on dismiss, we do NOT null out the event.
+  // The same event object can be used to re-prompt on next click.
   const promptInstall = useCallback(async () => {
     const event = _installPromptEvent
     if (!event) return false
     try {
-      event.prompt()
+      await event.prompt()
       const { outcome } = await event.userChoice
       if (outcome === 'accepted') {
         setIsInstalled(true)
-        localStorage.setItem('ct_pwa_installed', '1')
+        _installPromptEvent = null
+        setHasPrompt(false)
+        _listeners.forEach(fn => fn(null))
+        return true
       }
-      // Clear event — it can only be used once
-      _installPromptEvent = null
-      setInstallPrompt(null)
-      _listeners.forEach(fn => fn(null))
-      return outcome === 'accepted'
+      // Dismissed — keep the event so user can try again
+      return false
     } catch (err) {
       console.warn('[usePWA] promptInstall failed:', err.message)
       return false
     }
   }, [])
 
-  // Request push notification permission
   const requestPermission = useCallback(async () => {
     if (!('Notification' in window)) return 'denied'
     const result = await Notification.requestPermission()
@@ -110,8 +120,8 @@ export function usePWA() {
   }, [])
 
   return {
-    installPrompt: !!installPrompt,  // boolean — is native prompt available?
-    promptInstall,                   // function — triggers prompt or returns false
+    installPrompt: hasPrompt,  // boolean — native prompt is available
+    promptInstall,             // function — triggers native prompt
     isInstalled,
     swReady,
     permission,

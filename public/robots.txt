@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# Disallow admin and API routes from crawling
+Disallow: /admin
+Disallow: /api/
+
+Sitemap: https://churchtrakr.com/sitemap.xml

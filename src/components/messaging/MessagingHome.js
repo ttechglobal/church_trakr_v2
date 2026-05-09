@@ -5,11 +5,12 @@ import Link from 'next/link'
 import BackButton from '@/components/ui/BackButton'
 import { smsCount } from '@/lib/utils'
 
-// ── Constants ─────────────────────────────────────────────────────────────────
 const CREDITS_PER_PAGE = 5
-const PAGE_SIZE        = 157   // single-page limit
-const MAX_CHARS        = 314   // hard limit: 2 pages
-const WARN_CHARS       = 140   // amber warning threshold
+const PAGE_SIZE        = 157
+const MAX_CHARS        = 314
+const WARN_CHARS       = 140
+
+const SIGNATURE_PREF_KEY = 'ct_sms_add_signature'
 
 const BUILT_IN_TEMPLATES = [
   { id: 'missed',      label: 'We missed you',        body: "Hi {name}, we missed you at service this week. We hope you're well and look forward to seeing you soon. 🙏" },
@@ -34,14 +35,28 @@ export default function MessagingHome({ church, groups, members, latestByGroup, 
   const [sending,          setSending]           = useState(false)
   const [sendResult,       setSendResult]        = useState(null)
   const [credits,          setCredits]           = useState(church.sms_credits)
+  const [addSignature,     setAddSignature]      = useState(false)
 
+  // Load saved preferences
   useEffect(() => {
-    try { setCustomTemplates(JSON.parse(localStorage.getItem('ct_sms_templates') ?? '[]')) } catch {}
+    try {
+      setCustomTemplates(JSON.parse(localStorage.getItem('ct_sms_templates') ?? '[]'))
+      setAddSignature(localStorage.getItem(SIGNATURE_PREF_KEY) === 'true')
+    } catch {}
   }, [])
+
+  // Persist signature preference
+  useEffect(() => {
+    localStorage.setItem(SIGNATURE_PREF_KEY, String(addSignature))
+  }, [addSignature])
 
   const allTemplates = [...BUILT_IN_TEMPLATES, ...customTemplates]
 
-  // ── Recipients ──────────────────────────────────────────────────────────────
+  // ── Signature suffix ─────────────────────────────────────────────────────
+  const signatureSuffix = addSignature ? `\n\n- ${church.name}` : ''
+  const fullMessage     = message + signatureSuffix   // what actually gets sent
+
+  // ── Recipients ─────────────────────────────────────────────────────────────
   const recipients = useMemo(() => {
     if (recipientType === 'custom') {
       if (!customPhone.trim()) return []
@@ -70,34 +85,34 @@ export default function MessagingHome({ church, groups, members, latestByGroup, 
     return []
   }, [recipientType, selectedGroupId, customPhone, customName, members, latestByGroup, phoneMap])
 
-  // ── Credit calculation ──────────────────────────────────────────────────────
-  const msgLength      = message.length
-  const pages          = msgLength <= PAGE_SIZE ? 1 : Math.min(2, Math.ceil(msgLength / 153))
+  // ── Credit calculation (based on full message including signature) ─────────
+  const msgLen         = fullMessage.length
+  const pages          = msgLen <= PAGE_SIZE ? 1 : Math.min(2, Math.ceil(msgLen / 153))
   const creditsPerSms  = pages * CREDITS_PER_PAGE
   const creditsNeeded  = recipients.length * creditsPerSms
   const hasEnoughCredits = credits >= creditsNeeded
-  const overLimit      = msgLength > MAX_CHARS
+  const overLimit      = msgLen > MAX_CHARS
 
-  // ── Character counter colour ─────────────────────────────────────────────────
-  const charCountColor = overLimit
-    ? '#dc2626'              // red — over limit
-    : msgLength > PAGE_SIZE
-    ? '#d97706'              // amber — page 2
-    : msgLength >= WARN_CHARS
-    ? '#d97706'              // amber — approaching limit
-    : '#16a34a'              // green — good
+  // ── Character counter UI state ────────────────────────────────────────────
+  const bodyLen   = message.length
+  const sigLen    = signatureSuffix.length
+  const totalLen  = msgLen
 
-  const charCountLabel = overLimit
-    ? `${msgLength} / ${MAX_CHARS} — over limit`
+  const charColor = overLimit
+    ? '#dc2626'
+    : totalLen > PAGE_SIZE
+    ? '#d97706'
+    : totalLen >= WARN_CHARS
+    ? '#d97706'
+    : '#16a34a'
+
+  const charLabel = overLimit
+    ? `${totalLen} / ${MAX_CHARS} — over limit`
     : pages === 2
-    ? `${msgLength} / ${MAX_CHARS} chars — 2 pages`
-    : `${msgLength} / ${PAGE_SIZE} chars — 1 page`
+    ? `${totalLen} / ${MAX_CHARS} — 2 pages`
+    : `${totalLen} / ${PAGE_SIZE} — 1 page`
 
-  const costLabel = pages === 2
-    ? `${creditsPerSms} credits per person (2 pages × 5)`
-    : `${creditsPerSms} credits per person`
-
-  // ── Sender ID ───────────────────────────────────────────────────────────────
+  // ── Sender ID ─────────────────────────────────────────────────────────────
   const senderId = church.sms_sender_id_status === 'approved' && church.sms_sender_id
     ? church.sms_sender_id
     : 'ChurchTrakr'
@@ -125,13 +140,12 @@ export default function MessagingHome({ church, groups, members, latestByGroup, 
 
   async function handleSend() {
     if (!recipients.length || !message.trim() || !hasEnoughCredits || overLimit || sending) return
-    setSending(true)
-    setSendResult(null)
+    setSending(true); setSendResult(null)
     try {
       const res = await fetch('/api/sms/send', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipients, message, type: recipientType }),
+        body:    JSON.stringify({ recipients, message: fullMessage, type: recipientType }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Send failed')
@@ -144,7 +158,6 @@ export default function MessagingHome({ church, groups, members, latestByGroup, 
     }
   }
 
-  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="page-content pb-10">
       <BackButton />
@@ -157,23 +170,22 @@ export default function MessagingHome({ church, groups, members, latestByGroup, 
         </p>
       </div>
 
-      {/* Recipient type */}
+      {/* Recipients */}
       <div className="card space-y-3">
         <p className="text-sm font-semibold text-forest">Who are you messaging?</p>
         <div className="grid grid-cols-2 gap-2">
           {[
-            { id: 'all',       label: '📋 All members'   },
-            { id: 'absentees', label: '👋 Absentees'      },
-            { id: 'attendees', label: '✅ Attendees'       },
-            { id: 'group',     label: '👥 A specific group' },
-            { id: 'custom',    label: '📱 One person'      },
+            { id: 'all',       label: '📋 All members'    },
+            { id: 'absentees', label: '👋 Absentees'       },
+            { id: 'attendees', label: '✅ Attendees'        },
+            { id: 'group',     label: '👥 Specific group'  },
+            { id: 'custom',    label: '📱 One person'       },
           ].map(({ id, label }) => (
             <button key={id} onClick={() => setRecipientType(id)}
               className={`text-sm font-medium py-2.5 px-3 rounded-xl border transition-all text-left
                 ${recipientType === id
                   ? 'bg-forest text-ivory border-forest'
-                  : 'bg-white border-forest/15 text-forest hover:border-forest/40'
-                }`}>
+                  : 'bg-white border-forest/15 text-forest hover:border-forest/40'}`}>
               {label}
             </button>
           ))}
@@ -188,14 +200,12 @@ export default function MessagingHome({ church, groups, members, latestByGroup, 
 
         {recipientType === 'custom' && (
           <div className="space-y-2">
-            <input className="input text-sm" placeholder="Phone number (e.g. 08012345678)"
-              value={customPhone} onChange={e => setCustomPhone(e.target.value)} />
-            <input className="input text-sm" placeholder="Name (optional)"
-              value={customName} onChange={e => setCustomName(e.target.value)} />
+            <input className="input text-sm" placeholder="Phone number" value={customPhone} onChange={e => setCustomPhone(e.target.value)} />
+            <input className="input text-sm" placeholder="Name (optional)" value={customName} onChange={e => setCustomName(e.target.value)} />
           </div>
         )}
 
-        {recipientType && recipientType !== 'custom' && (
+        {recipientType && (
           <p className="text-sm text-forest">
             <strong>{recipients.length}</strong> recipient{recipients.length !== 1 ? 's' : ''}
             {recipients.length === 0 && recipientType !== 'custom' && (
@@ -219,13 +229,12 @@ export default function MessagingHome({ church, groups, members, latestByGroup, 
             </optgroup>
           )}
         </select>
-
         {customTemplates.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
+          <div className="flex flex-wrap gap-2">
             {customTemplates.map(t => (
               <span key={t.id} className="badge-muted gap-2">
                 {t.label}
-                <button onClick={() => deleteCustomTemplate(t.id)} className="text-error hover:text-error/80">×</button>
+                <button onClick={() => deleteCustomTemplate(t.id)} className="text-error">×</button>
               </span>
             ))}
           </div>
@@ -234,39 +243,86 @@ export default function MessagingHome({ church, groups, members, latestByGroup, 
 
       {/* Message composer */}
       <div className="card">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-start justify-between mb-2 gap-2">
           <p className="text-sm font-semibold text-forest">Message</p>
-          {/* ── Character counter ── */}
-          <div className="text-right">
-            <p className="text-xs font-semibold" style={{ color: charCountColor }}>
-              {charCountLabel}
-            </p>
+          {/* Character counter */}
+          <div className="text-right shrink-0">
+            <p className="text-xs font-semibold" style={{ color: charColor }}>{charLabel}</p>
             {message.length > 0 && (
-              <p className="text-xs" style={{ color: charCountColor, opacity: 0.8 }}>
-                {costLabel}
+              <p className="text-xs" style={{ color: charColor, opacity: 0.8 }}>
+                {pages} page{pages > 1 ? 's' : ''} · {creditsPerSms} credits/person
               </p>
             )}
           </div>
         </div>
+
         <textarea
           className="input resize-none text-sm"
           style={{ minHeight: 120, borderColor: overLimit ? '#dc2626' : undefined }}
           placeholder="Type your message… Use {name} to personalise"
           value={message}
-          onChange={e => {
-            // Enforce hard limit
-            if (e.target.value.length <= MAX_CHARS) setMessage(e.target.value)
-          }}
-          maxLength={MAX_CHARS}
+          onChange={e => { if (e.target.value.length + sigLen <= MAX_CHARS) setMessage(e.target.value) }}
         />
+
+        {/* Signature preview */}
+        {addSignature && (
+          <div className="mt-2 px-3 py-2 rounded-lg text-xs text-mist bg-ivory-dark font-mono">
+            {`\n- ${church.name}`}
+          </div>
+        )}
+
+        {/* Page 2 warning */}
+        {pages === 2 && message.length > 0 && (
+          <div className="mt-2 flex items-start gap-2 rounded-xl px-3 py-2" style={{ background:'rgba(217,119,6,0.08)', border:'1px solid rgba(217,119,6,0.2)' }}>
+            <span style={{ color:'#d97706', fontSize:14, lineHeight:1 }}>⚠️</span>
+            <p className="text-xs" style={{ color:'#d97706', lineHeight:1.4 }}>
+              {addSignature
+                ? `With your group name, this message is 2 pages (${totalLen} chars). `
+                : `This message is 2 pages (${totalLen} chars). `}
+              This costs <strong>{creditsPerSms} credits per person</strong> instead of {CREDITS_PER_PAGE}.
+              Shorten the message to save credits.
+            </p>
+          </div>
+        )}
+
         {overLimit && (
           <p className="text-xs text-error mt-1 font-semibold">
-            Message is too long. Maximum {MAX_CHARS} characters ({MAX_CHARS / PAGE_SIZE} pages).
+            Message is too long. Maximum {MAX_CHARS} characters (2 pages).
           </p>
         )}
+
         <p className="text-xs text-mist mt-2">
-          💡 Use <code className="bg-ivory-dark px-1 rounded">{'{name}'}</code> to insert the recipient's first name
+          💡 Use <code className="bg-ivory-dark px-1 rounded">{'{name}'}</code> to personalise each message
         </p>
+
+        {/* ── Signature toggle ── */}
+        <div className="flex items-center justify-between mt-3 pt-3 border-t border-forest/8">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-forest">Add group name as signature</p>
+            <p className="text-xs text-mist mt-0.5">
+              Appends "- {church.name}" to each message
+              {sigLen > 0 && <span className="ml-1 text-mist/70">(+{sigLen} chars)</span>}
+            </p>
+          </div>
+          {/* Toggle switch */}
+          <button
+            onClick={() => setAddSignature(v => !v)}
+            aria-checked={addSignature}
+            role="switch"
+            style={{
+              width: 44, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer', flexShrink: 0,
+              background: addSignature ? '#1a3a2a' : '#d1d5db',
+              position: 'relative', transition: 'background 0.2s',
+            }}
+          >
+            <span style={{
+              position: 'absolute', top: 3, width: 20, height: 20, borderRadius: '50%',
+              background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+              left: addSignature ? 21 : 3,
+              transition: 'left 0.2s',
+            }} />
+          </button>
+        </div>
       </div>
 
       {/* Credit preview */}
@@ -282,7 +338,7 @@ export default function MessagingHome({ church, groups, members, latestByGroup, 
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-mist">SMS pages</span>
-            <span className="font-medium text-forest">{pages} page{pages > 1 ? 's' : ''}</span>
+            <span className="font-medium text-forest">{pages}</span>
           </div>
           <div className="flex justify-between text-sm border-t border-forest/8 pt-2">
             <span className="text-mist font-semibold">Credits needed</span>
@@ -291,28 +347,30 @@ export default function MessagingHome({ church, groups, members, latestByGroup, 
               <span className="text-xs font-normal text-mist ml-1">
                 ({recipients.length} × {pages} × 5)
               </span>
-              {!hasEnoughCredits && <span className="text-xs font-semibold text-error ml-1">(insufficient)</span>}
+              {!hasEnoughCredits && (
+                <span className="text-xs font-semibold text-error ml-1">(insufficient)</span>
+              )}
             </span>
           </div>
           {!hasEnoughCredits && (
-            <Link href="/messaging/credits" className="btn btn-outline btn-sm w-full text-center">
+            <Link href="/credits" className="btn btn-outline btn-sm w-full text-center">
               Top up credits →
             </Link>
           )}
         </div>
       )}
 
-      {/* Send result */}
+      {/* Results */}
       {sendResult?.error && (
-        <div className="rounded-xl bg-error/8 border border-error/20 px-4 py-3 text-sm text-error">
+        <div className="rounded-xl px-4 py-3 text-sm text-error" style={{ background:'rgba(220,38,38,0.06)', border:'1px solid rgba(220,38,38,0.15)' }}>
           {sendResult.error}
         </div>
       )}
       {sendResult?.success && (
-        <div className="rounded-xl bg-success/8 border border-success/20 px-4 py-3 text-sm text-success font-semibold">
+        <div className="rounded-xl px-4 py-3 text-sm font-semibold text-success" style={{ background:'rgba(22,163,74,0.06)', border:'1px solid rgba(22,163,74,0.15)' }}>
           ✓ Sent to {sendResult.sent} recipient{sendResult.sent !== 1 ? 's' : ''} · {sendResult.credits_used} credits used
           {sendResult.skipped > 0 && (
-            <span className="text-warning font-normal ml-2">· {sendResult.skipped} skipped (insufficient credits)</span>
+            <span className="font-normal ml-2" style={{ color:'#d97706' }}>· {sendResult.skipped} skipped (insufficient credits)</span>
           )}
         </div>
       )}
@@ -325,7 +383,13 @@ export default function MessagingHome({ church, groups, members, latestByGroup, 
           className="btn btn-primary w-full btn-lg"
         >
           {sending ? (
-            <span className="flex items-center gap-2"><Spinner /> Sending…</span>
+            <span className="flex items-center gap-2">
+              <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.37 0 0 5.37 0 12h4z"/>
+              </svg>
+              Sending…
+            </span>
           ) : `Send to ${recipients.length} recipient${recipients.length !== 1 ? 's' : ''}`}
         </button>
 
@@ -346,14 +410,5 @@ export default function MessagingHome({ church, groups, members, latestByGroup, 
 
       <div className="h-6" />
     </div>
-  )
-}
-
-function Spinner() {
-  return (
-    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.37 0 0 5.37 0 12h4z"/>
-    </svg>
   )
 }
