@@ -1,5 +1,2 @@
-import { AnalyticsSkeleton } from '@/components/ui/Skeletons'
-
-export default function Loading() {
-  return <AnalyticsSkeleton />
-}
+import PageSkeleton from '@/components/ui/PageSkeleton'
+export default function Loading() { return <PageSkeleton /> }

@@ -1,10 +1,14 @@
+import { getUser, getChurch } from '@/lib/auth'
+import { redirect } from 'next/navigation'
+import CreditsClient from '@/components/credits/CreditsClient'
+
 export const metadata = { title: 'SMS Credits' }
 
-export default function SMSCreditsPage() {
-  return (
-    <div className="page-content">
-      <h1 className="font-display text-2xl font-semibold text-forest">SMS Credits</h1>
-      <p className="text-forest-muted text-sm mt-2">Coming in the next build phase.</p>
-    </div>
-  )
+export default async function SMSCreditsPage() {
+  const user = await getUser()
+  if (!user) redirect('/login')
+  const church = await getChurch(user.id, user.user_metadata)
+  if (!church) redirect('/login')
+
+  return <CreditsClient church={church} />
 }

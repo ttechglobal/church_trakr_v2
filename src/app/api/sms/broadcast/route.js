@@ -1,45 +1,46 @@
-/**
- * POST /api/sms/broadcast
- *
- * Sends an SMS blast to a group of members.
- * Body: {
- *   type: 'sunday_reminder' | 'special_program' | 'custom'
- *   message: string          — the text to send (personalised with {name})
- *   recipients: 'all' | 'group:{groupId}'
- *   programTitle?: string    — for special_program type display only
- * }
- */
-import { createClient } from '@/lib/supabase/server'
+// src/app/api/sms/broadcast/route.js
+
+import { createClient }      from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { NextResponse } from 'next/server'
+import { NextResponse }      from 'next/server'
 
-async function sendSMS({ to, message, senderId }) {
-  const apiKey    = process.env.TERMII_API_KEY
-  const provider  = process.env.SMS_PROVIDER ?? 'termii'
+function normalisePhone(raw) {
+  if (!raw) return null
+  let phone = String(raw).replace(/[\s\-().]/g, '')
+  if (phone.startsWith('+'))                              return phone.slice(1)
+  if (phone.startsWith('234'))                            return phone
+  if (phone.startsWith('0') && phone.length === 11)       return '234' + phone.slice(1)
+  if (phone.length === 10 && /^[789]/.test(phone))        return '234' + phone
+  return phone
+}
 
-  if (!apiKey) {
-    console.warn('[broadcast] No SMS API key — skipping actual send')
-    return { success: true, simulated: true }
-  }
+async function sendSMS({ to, message, senderId, apiKey }) {
+  const res = await fetch('https://api.ng.termii.com/api/sms/send', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      api_key: apiKey,
+      to,
+      from:    senderId,
+      sms:     message,
+      type:    'plain',
+      channel: 'generic',
+    }),
+  })
 
-  if (provider === 'termii') {
-    const res = await fetch('https://api.ng.termii.com/api/sms/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        to,
-        from:    senderId || 'ChurchTrakr',
-        sms:     message,
-        type:    'plain',
-        channel: 'generic',
-        api_key: apiKey,
-      }),
-    })
-    const data = await res.json()
-    return { success: res.ok, data }
-  }
+  const text = await res.text()
+  let data
+  try { data = JSON.parse(text) } catch { data = { raw: text } }
 
-  return { success: false, error: 'Unknown provider' }
+  console.log(`[termii/broadcast] to=${to} http=${res.status}`, JSON.stringify(data).slice(0, 200))
+
+  const isSuccess = res.ok && (
+    data.message_id ||
+    data.code === 'ok' ||
+    (typeof data.message === 'string' && data.message.toLowerCase().includes('success'))
+  )
+
+  return { success: isSuccess, data }
 }
 
 export async function POST(request) {
@@ -60,10 +61,9 @@ export async function POST(request) {
     const body = await request.json()
     const { type, message, recipients } = body
 
-    if (!message?.trim())   return NextResponse.json({ error: 'Message is required' }, { status: 400 })
-    if (!type)              return NextResponse.json({ error: 'Type is required' }, { status: 400 })
+    if (!message?.trim()) return NextResponse.json({ error: 'Message is required' }, { status: 400 })
+    if (!type)            return NextResponse.json({ error: 'Type is required'    }, { status: 400 })
 
-    // Fetch recipients
     let query = admin.from('members')
       .select('id, name, phone')
       .eq('church_id', church.id)
@@ -71,77 +71,71 @@ export async function POST(request) {
       .not('phone', 'is', null)
       .neq('phone', '')
 
-    if (recipients && recipients.startsWith('group:')) {
-      const groupId = recipients.replace('group:', '')
-      query = query.contains('groupIds', [groupId])
+    if (recipients?.startsWith('group:')) {
+      query = query.contains('groupIds', [recipients.replace('group:', '')])
     }
 
     const { data: members } = await query
-
     if (!members?.length) {
       return NextResponse.json({ error: 'No members with phone numbers found' }, { status: 400 })
     }
 
-    const msgCount = members.length
-    if (church.sms_credits < msgCount) {
+    if (church.sms_credits < members.length) {
       return NextResponse.json({
-        error: `Not enough SMS credits. Need ${msgCount}, have ${church.sms_credits}.`,
-        needed: msgCount,
-        have: church.sms_credits,
+        error: `Not enough SMS credits. Need ${members.length}, have ${church.sms_credits}.`,
       }, { status: 402 })
     }
 
-    // Send to each member
-    const results = []
-    let successCount = 0, failCount = 0
+    const apiKey   = process.env.TERMII_API_KEY
+    const senderId = church.sms_sender_id || process.env.TERMII_SENDER_ID || 'ChurchTrakr'
 
-    for (const member of members) {
-      const firstName = (member.name || '').split(' ')[0] || 'Friend'
-      const personalised = message.replace(/\{name\}/gi, firstName)
-      const phone = member.phone.replace(/\s+/g, '').replace(/^0/, '+234')
-
-      const result = await sendSMS({
-        to: phone,
-        message: personalised,
-        senderId: church.sms_sender_id || 'ChurchTrakr',
-      })
-
-      if (result.success) {
-        successCount++
-        results.push({ memberId: member.id, name: member.name, status: 'sent' })
-      } else {
-        failCount++
-        results.push({ memberId: member.id, name: member.name, status: 'failed', error: result.error })
-      }
+    if (!apiKey) {
+      console.warn('[broadcast] No TERMII_API_KEY — simulating')
+      const newBalance = church.sms_credits - members.length
+      await admin.from('churches').update({ sms_credits: newBalance }).eq('id', church.id)
+      return NextResponse.json({ success: true, sent: members.length, failed: 0, total: members.length, creditsRemaining: newBalance, simulated: true })
     }
 
-    // Deduct credits
-    await admin.from('churches')
-      .update({ sms_credits: church.sms_credits - successCount })
-      .eq('id', church.id)
+    let successCount = 0, failCount = 0
+    const results = []
 
-    // Log to sms_logs
-    await admin.from('sms_logs').insert({
-      church_id:    church.id,
-      type:         type,
-      message:      message,
-      recipient_count: msgCount,
-      success_count:   successCount,
-      fail_count:      failCount,
-      sent_at:      new Date().toISOString(),
-      sent_by:      user.id,
-    }).catch(() => {}) // non-fatal
+    for (const member of members) {
+      const to        = normalisePhone(member.phone)
+      const firstName = (member.name || '').split(' ')[0] || 'Friend'
+      const msg       = message.replace(/\{name\}/gi, firstName)
 
-    return NextResponse.json({
-      success: true,
-      sent:    successCount,
-      failed:  failCount,
-      total:   msgCount,
-      creditsRemaining: church.sms_credits - successCount,
-    })
+      if (!to) {
+        failCount++
+        results.push({ name: member.name, status: 'failed', error: 'Invalid phone' })
+        continue
+      }
+
+      const result = await sendSMS({ to, message: msg, senderId, apiKey })
+      if (result.success) { successCount++; results.push({ name: member.name, status: 'sent' }) }
+      else                { failCount++;    results.push({ name: member.name, status: 'failed', error: result.data?.message }) }
+    }
+
+    const newBalance = Math.max(0, church.sms_credits - successCount)
+
+    await Promise.allSettled([
+      admin.from('churches').update({ sms_credits: newBalance }).eq('id', church.id),
+      admin.from('sms_logs').insert({
+        church_id:       church.id,
+        type,
+        message,
+        recipient_count: members.length,
+        success_count:   successCount,
+        fail_count:      failCount,
+        credits_used:    successCount,
+        sent_at:         new Date().toISOString(),
+        sent_by:         user.id,
+      }),
+    ])
+
+    return NextResponse.json({ success: true, sent: successCount, failed: failCount, total: members.length, creditsRemaining: newBalance })
 
   } catch (err) {
     console.error('[POST /api/sms/broadcast]', err)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Internal server error', detail: err.message }, { status: 500 })
   }
 }
