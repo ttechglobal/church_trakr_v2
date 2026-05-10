@@ -435,6 +435,12 @@ function StepDate({ group, church, onSelect, onBack, isFirstTimers }) {
   const thisSunday = toISODate(getLastSunday())
   const lastSunday = toISODate(getPrevSunday())
 
+  // Auto-select this Sunday on mount
+  useEffect(() => {
+    setSelectedDate(thisSunday)
+    checkDate(thisSunday)
+  }, []) // eslint-disable-line
+
   async function checkDate(date) {
     if (existingMap[date] !== undefined) return existingMap[date]
     try {
@@ -497,31 +503,47 @@ function StepDate({ group, church, onSelect, onBack, isFirstTimers }) {
         {/* This Sunday */}
         <button
           onClick={() => handleQuickTap(thisSunday)}
-          className={`card w-full text-left flex items-center justify-between transition-all
-            ${selectedDate === thisSunday ? 'ring-2 ring-forest' : 'hover:shadow-md'}`}
+          className="card w-full text-left flex items-center justify-between transition-all"
+          style={selectedDate === thisSunday ? {
+            background: '#1a3a2a', borderColor: '#1a3a2a',
+            boxShadow: '0 4px 20px rgba(26,58,42,0.35)',
+          } : {}}
         >
           <div>
-            <p className="font-semibold text-forest">This Sunday</p>
-            <p className="text-xs text-mist mt-0.5">{fmtDate(thisSunday)}</p>
+            <p className="font-semibold" style={{ color: selectedDate === thisSunday ? '#e8d5a0' : undefined }}>
+              This Sunday
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: selectedDate === thisSunday ? 'rgba(232,213,160,0.6)' : undefined }}>
+              {fmtDate(thisSunday)}
+            </p>
           </div>
-          {existingMap[thisSunday] && (
-            <span className="badge-gold text-[11px]">Edit existing</span>
-          )}
+          {existingMap[thisSunday]
+            ? <span className="badge-gold text-[11px]">Edit existing</span>
+            : selectedDate === thisSunday && <span style={{ fontSize: 11, color: '#c9a84c', fontWeight: 700 }}>Selected ✓</span>
+          }
         </button>
 
         {/* Last Sunday */}
         <button
           onClick={() => handleQuickTap(lastSunday)}
-          className={`card w-full text-left flex items-center justify-between transition-all
-            ${selectedDate === lastSunday ? 'ring-2 ring-forest' : 'hover:shadow-md'}`}
+          className="card w-full text-left flex items-center justify-between transition-all"
+          style={selectedDate === lastSunday ? {
+            background: '#1a3a2a', borderColor: '#1a3a2a',
+            boxShadow: '0 4px 20px rgba(26,58,42,0.35)',
+          } : {}}
         >
           <div>
-            <p className="font-semibold text-forest">Last Sunday</p>
-            <p className="text-xs text-mist mt-0.5">{fmtDate(lastSunday)}</p>
+            <p className="font-semibold" style={{ color: selectedDate === lastSunday ? '#e8d5a0' : undefined }}>
+              Last Sunday
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: selectedDate === lastSunday ? 'rgba(232,213,160,0.6)' : undefined }}>
+              {fmtDate(lastSunday)}
+            </p>
           </div>
-          {existingMap[lastSunday] && (
-            <span className="badge-gold text-[11px]">Edit existing</span>
-          )}
+          {existingMap[lastSunday]
+            ? <span className="badge-gold text-[11px]">Edit existing</span>
+            : selectedDate === lastSunday && <span style={{ fontSize: 11, color: '#c9a84c', fontWeight: 700 }}>Selected ✓</span>
+          }
         </button>
 
         {/* Custom date */}
@@ -648,7 +670,7 @@ function StepMark({
             {search ? `No members matching "${search}"` : 'No members in this group'}
           </div>
         ) : (
-          <div className="space-y-1.5 pb-4">
+          <div className="space-y-1.5" style={{ paddingBottom: `calc(${BOTTOM_NAV_H}px + 64px + env(safe-area-inset-bottom, 0px))` }}>
             {filtered.map(member => {
               const isPresent = attendance[member.id] ?? false
               const av = getAv(member.name)
@@ -687,33 +709,39 @@ function StepMark({
         )}
       </div>
 
-      {/* ── Sticky save bar — stays within content flow, never overlaps sidebar ── */}
-      {/* position: sticky keeps it inside the scroll container on desktop.        */}
-      {/* On mobile, the extra bottom value clears the bottom navbar.              */}
-      <div
-        className="sticky bg-white px-4 pt-3"
-        style={{
-          bottom:        0,
-          paddingBottom: `calc(${BOTTOM_NAV_H}px + env(safe-area-inset-bottom, 0px) + 8px)`,
-          borderTop:     '1px solid var(--border)',
-          boxShadow:     '0 -4px 20px rgba(26,58,42,0.08)',
-          zIndex:        30,
-          marginTop:     'auto',
-        }}
-      >
+      {/* ── Fixed save bar — above bottom navbar, offset by sidebar on desktop ── */}
+      <div className="attendance-save-bar">
         <button
           onClick={onSave}
           disabled={saving || loading || members.length === 0}
           className="btn-primary btn-lg w-full"
-          style={{ background: 'linear-gradient(135deg,#1a3a2a,#2d5a42)' }}
+          style={{ background: 'linear-gradient(135deg,#1a3a2a,#2d5a42)', minHeight: 52 }}
         >
           {saving ? (
             <span className="flex items-center gap-2"><Spinner /> Saving…</span>
           ) : (
-            `Save · ${presentCount} present, ${absentCount} absent`
+            `Save Attendance — ${presentCount} Present · ${absentCount} Absent`
           )}
         </button>
       </div>
+      <style>{`
+        .attendance-save-bar {
+          position: fixed;
+          bottom: calc(${BOTTOM_NAV_H}px + env(safe-area-inset-bottom, 0px));
+          left: 248px;
+          right: 0;
+          padding: 10px 16px 12px;
+          background: #fff;
+          border-top: 1px solid rgba(26,58,42,0.1);
+          box-shadow: 0 -4px 20px rgba(26,58,42,0.08);
+          z-index: 110;
+        }
+        @media (max-width: 1023px) {
+          .attendance-save-bar {
+            left: 0;
+          }
+        }
+      `}</style>
     </div>
   )
 }
@@ -789,7 +817,7 @@ function StepMarkFirstTimers({ firstTimers, attendance, date, saving, onToggle, 
 
       {/* First timer list */}
       <div className="flex-1 overflow-y-auto px-4 py-2">
-        <div className="space-y-1.5 pb-4">
+        <div className="space-y-1.5" style={{ paddingBottom: `calc(${BOTTOM_NAV_H}px + 64px + env(safe-area-inset-bottom, 0px))` }}>
           {filtered.map(ft => {
             const isPresent = attendance[ft.id] ?? false
             const av = getAv(ft.name)
@@ -826,31 +854,37 @@ function StepMarkFirstTimers({ firstTimers, attendance, date, saving, onToggle, 
         </div>
       </div>
 
-      {/* ── Sticky save bar ── */}
-      <div
-        className="sticky bg-white px-4 pt-3"
-        style={{
-          bottom:        0,
-          paddingBottom: `calc(${BOTTOM_NAV_H}px + env(safe-area-inset-bottom, 0px) + 8px)`,
-          borderTop:     '1px solid var(--border)',
-          boxShadow:     '0 -4px 20px rgba(26,58,42,0.08)',
-          zIndex:        30,
-          marginTop:     'auto',
-        }}
-      >
+      {/* ── Fixed save bar ── */}
+      <div className="attendance-save-bar">
         <button
           onClick={onSave}
           disabled={saving || firstTimers.length === 0}
           className="btn-primary btn-lg w-full"
-          style={{ background: 'linear-gradient(135deg,#a8862e,#c9a84c)' }}
+          style={{ background: 'linear-gradient(135deg,#a8862e,#c9a84c)', minHeight: 52 }}
         >
           {saving ? (
             <span className="flex items-center gap-2"><Spinner /> Saving…</span>
           ) : (
-            `Save · ${presentCount} of ${firstTimers.length} present`
+            `Save Attendance — ${presentCount} Present · ${firstTimers.length - presentCount} Absent`
           )}
         </button>
       </div>
+      <style>{`
+        .attendance-save-bar {
+          position: fixed;
+          bottom: calc(${BOTTOM_NAV_H}px + env(safe-area-inset-bottom, 0px));
+          left: 248px;
+          right: 0;
+          padding: 10px 16px 12px;
+          background: #fff;
+          border-top: 1px solid rgba(26,58,42,0.1);
+          box-shadow: 0 -4px 20px rgba(26,58,42,0.08);
+          z-index: 110;
+        }
+        @media (max-width: 1023px) {
+          .attendance-save-bar { left: 0; }
+        }
+      `}</style>
     </div>
   )
 }
@@ -860,84 +894,151 @@ function StepMarkFirstTimers({ firstTimers, attendance, date, saving, onToggle, 
 // ─────────────────────────────────────────────────────────────────────────────
 
 function StepSummary({ group, date, members, attendance, result, onDone, onEdit }) {
+  const router = useRouter()
+  const [showAllPresent, setShowAllPresent] = useState(false)
+  const [showAllAbsent,  setShowAllAbsent]  = useState(false)
+
+  const PREVIEW = 5
+
   const allMembers    = result.isFirstTimers ? (result.ftMembers    ?? []) : members
   const allAttendance = result.isFirstTimers ? (result.ftAttendance ?? {}) : attendance
 
-  const presentMembers = allMembers.filter(m => allAttendance[m.id])
+  const presentMembers = allMembers.filter(m =>  allAttendance[m.id])
   const absentMembers  = allMembers.filter(m => !allAttendance[m.id])
   const rate = attendanceRate(presentMembers.length, allMembers.length)
 
+  const presentSlice = showAllPresent ? presentMembers : presentMembers.slice(0, PREVIEW)
+  const absentSlice  = showAllAbsent  ? absentMembers  : absentMembers.slice(0, PREVIEW)
+
   return (
     <div className="page-content pb-10">
-      {/* Stats card */}
-      <div className="card text-center py-6 animate-slide-up animate-fill-both">
-        <p className="text-sm text-mist mb-4">{group?.name ?? 'First Timers'} · {fmtDate(date)}</p>
 
+      {/* ── Header ── */}
+      <div className="text-center py-6">
+        <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+        <h2 className="font-display text-2xl font-bold text-forest">Attendance Saved</h2>
+        <p className="text-sm text-mist mt-1">{group?.name ?? 'First Timers'} · {fmtDate(date)}</p>
         {result.offline && (
-          <div className="mb-4 px-4 py-2 rounded-xl bg-warning/10 text-warning text-sm font-medium">
-            Saved offline — will sync when you're back online
+          <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium"
+            style={{ background: 'rgba(217,119,6,0.1)', color: '#d97706' }}>
+            Saved offline — will sync when back online
           </div>
         )}
-
-        <div className="flex justify-center gap-8 mb-4">
-          <div>
-            <p className="font-display text-4xl font-bold text-success">{presentMembers.length}</p>
-            <p className="text-xs text-mist mt-1 font-medium uppercase tracking-wide">Present</p>
-          </div>
-          <div>
-            <p className="font-display text-4xl font-bold text-error">{absentMembers.length}</p>
-            <p className="text-xs text-mist mt-1 font-medium uppercase tracking-wide">Absent</p>
-          </div>
-          <div>
-            <p className="font-display text-4xl font-bold" style={{ color: rateColor(rate) }}>
-              {rate}%
-            </p>
-            <p className="text-xs text-mist mt-1 font-medium uppercase tracking-wide">Rate</p>
-          </div>
-        </div>
       </div>
 
-      {/* Present list */}
+      {/* ── Stats ── */}
+      <div className="flex gap-3 mb-2">
+        <div className="flex-1 rounded-2xl py-4 text-center"
+          style={{ background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.2)' }}>
+          <p className="font-display text-4xl font-bold text-success">{presentMembers.length}</p>
+          <p className="text-xs text-mist mt-1 uppercase tracking-wide font-semibold">Present</p>
+        </div>
+        <div className="flex-1 rounded-2xl py-4 text-center"
+          style={{ background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.2)' }}>
+          <p className="font-display text-4xl font-bold text-error">{absentMembers.length}</p>
+          <p className="text-xs text-mist mt-1 uppercase tracking-wide font-semibold">Absent</p>
+        </div>
+        <div className="flex-1 rounded-2xl py-4 text-center"
+          style={{ background: 'rgba(26,58,42,0.05)', border: '1px solid rgba(26,58,42,0.1)' }}>
+          <p className="font-display text-4xl font-bold" style={{ color: rateColor(rate) }}>{rate}%</p>
+          <p className="text-xs text-mist mt-1 uppercase tracking-wide font-semibold">Rate</p>
+        </div>
+      </div>
+      <p className="text-xs text-mist text-center mb-5">out of {allMembers.length} members</p>
+
+      {/* ── Present list ── */}
       {presentMembers.length > 0 && (
-        <div className="card mt-4">
-          <p className="text-sm font-semibold text-forest mb-3">
-            Present ({presentMembers.length})
-          </p>
-          <div className="space-y-1">
-            {presentMembers.map(m => (
-              <div key={m.id} className="flex items-center gap-2 py-1">
+        <div className="card mb-3">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-bold text-success uppercase tracking-wide">Present</p>
+            <p className="text-xs text-mist">
+              {showAllPresent
+                ? `all ${presentMembers.length}`
+                : `showing ${Math.min(PREVIEW, presentMembers.length)} of ${presentMembers.length}`}
+            </p>
+          </div>
+          <div className="space-y-0">
+            {presentSlice.map(m => (
+              <div key={m.id} className="flex items-center gap-2.5 py-2 border-b border-forest/6 last:border-0">
                 <div className="w-2 h-2 rounded-full bg-success shrink-0" />
                 <span className="text-sm text-forest">{m.name}</span>
               </div>
             ))}
           </div>
+          {presentMembers.length > PREVIEW && (
+            <button
+              onClick={() => setShowAllPresent(v => !v)}
+              className="w-full mt-3 py-2.5 rounded-xl text-sm font-semibold text-success transition-colors"
+              style={{ background: 'rgba(22,163,74,0.07)' }}
+            >
+              {showAllPresent ? 'Show less' : `Show all ${presentMembers.length} present →`}
+            </button>
+          )}
         </div>
       )}
 
-      {/* Absent list */}
+      {/* ── Absent list ── */}
       {absentMembers.length > 0 && (
-        <div className="card mt-3">
-          <p className="text-sm font-semibold text-forest mb-3">
-            Absent ({absentMembers.length})
-          </p>
-          <div className="space-y-1">
-            {absentMembers.map(m => (
-              <div key={m.id} className="flex items-center gap-2 py-1">
+        <div className="card mb-5">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-bold text-error uppercase tracking-wide">Absent</p>
+            <p className="text-xs text-mist">
+              {showAllAbsent
+                ? `all ${absentMembers.length}`
+                : `showing ${Math.min(PREVIEW, absentMembers.length)} of ${absentMembers.length}`}
+            </p>
+          </div>
+          <div className="space-y-0">
+            {absentSlice.map(m => (
+              <div key={m.id} className="flex items-center gap-2.5 py-2 border-b border-forest/6 last:border-0">
                 <div className="w-2 h-2 rounded-full bg-error shrink-0" />
                 <span className="text-sm text-forest">{m.name}</span>
               </div>
             ))}
           </div>
+          {absentMembers.length > PREVIEW && (
+            <button
+              onClick={() => setShowAllAbsent(v => !v)}
+              className="w-full mt-3 py-2.5 rounded-xl text-sm font-semibold text-error transition-colors"
+              style={{ background: 'rgba(220,38,38,0.06)' }}
+            >
+              {showAllAbsent ? 'Show less' : `Show all ${absentMembers.length} absent →`}
+            </button>
+          )}
         </div>
       )}
 
-      {/* Actions */}
-      <div className="flex gap-3 mt-6">
-        <button onClick={onEdit} className="btn btn-outline flex-1">
-          Edit attendance
+      {/* ── Action buttons ── */}
+      <div className="space-y-2.5">
+        <button
+          onClick={() => router.push('/report')}
+          className="btn btn-primary w-full"
+          style={{ height: 52, fontSize: 15 }}
+        >
+          Generate Report
         </button>
-        <button onClick={onDone} className="btn btn-primary flex-1">
-          Done
+        {absentMembers.length > 0 && (
+          <button
+            onClick={() => router.push('/absentees')}
+            className="btn w-full"
+            style={{ height: 52, fontSize: 15, background: 'rgba(220,38,38,0.08)', color: '#dc2626', border: '1px solid rgba(220,38,38,0.2)' }}
+          >
+            Follow Up Absentees
+          </button>
+        )}
+        <button
+          onClick={() => onEdit()}
+          className="btn btn-outline w-full"
+          style={{ height: 48, fontSize: 14 }}
+        >
+          Edit Attendance
+        </button>
+        <button
+          onClick={() => router.push('/dashboard')}
+          className="btn w-full"
+          style={{ height: 48, fontSize: 14, background: 'transparent', color: '#8a9e90', border: '1px solid rgba(26,58,42,0.15)' }}
+        >
+          Back to Dashboard
         </button>
       </div>
     </div>
