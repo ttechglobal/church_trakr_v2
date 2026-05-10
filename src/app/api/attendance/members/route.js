@@ -1,12 +1,17 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createClient } from '@/lib/supabase/server'
-import { NextResponse } from 'next/server'
+import { createClient }      from '@/lib/supabase/server'
+import { NextResponse }      from 'next/server'
 
 /**
  * GET /api/attendance/members?groupId=xxx&churchId=xxx&date=yyyy-mm-dd
  *
- * Returns group members. If date is provided, also returns existing
- * attendance records so the UI can pre-fill an editing session.
+ * Returns group members for attendance marking.
+ *
+ * Inclusion rules (per spec):
+ *   - active   → include ✅
+ *   - inactive → include ✅
+ *   - null     → include ✅  (members imported without status set)
+ *   - away     → exclude ❌
  */
 export async function GET(request) {
   try {
@@ -25,7 +30,7 @@ export async function GET(request) {
 
     const admin = createAdminClient()
 
-    // Verify church ownership (user must own this church)
+    // Verify the user owns this church
     const { data: church } = await admin
       .from('churches')
       .select('id')
@@ -35,44 +40,62 @@ export async function GET(request) {
 
     if (!church) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    // Fetch active (non-away) members for this group.
-    // Strategy: members explicitly in this group OR members with no group assignment
-    // (ungrouped members belong to whatever group is taking attendance — this ensures
-    // imported members without groupIds still appear in attendance).
-    const { data: allActiveMembers } = await admin
-      .from('members')
-      .select('id, name, phone, groupIds')
-      .eq('church_id', churchId)
-      .eq('status', 'active')
-      .order('name', { ascending: true })
+    // ── Fetch members — exclude ONLY away, include active/inactive/null ────────
+    // Using .neq('status', 'away') instead of .eq('status', 'active') so that:
+    //   - members imported without a status (null) are included
+    //   - inactive members (still in the group, not removed) are included
+    //   - only members explicitly marked 'away' are excluded
+    const [membersRes, sessionRes] = await Promise.all([
+      admin
+        .from('members')
+        .select('id, name, phone, groupIds, status')
+        .eq('church_id', churchId)
+        .neq('status', 'away')
+        .order('name', { ascending: true }),
 
-    // Include member if:
-    // 1. Their groupIds contains this groupId, OR
-    // 2. Their groupIds is empty/null (ungrouped — show in all groups)
-    const members = (allActiveMembers ?? []).filter(m => {
+      // Parallel: load existing session if date provided
+      date
+        ? admin
+            .from('attendance_sessions')
+            .select('id, attendance_records ( member_id, present )')
+            .eq('church_id', churchId)
+            .eq('group_id', groupId)
+            .eq('date', date)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ])
+
+    if (membersRes.error) {
+      console.error('[attendance/members] member fetch error:', {
+        code:    membersRes.error.code,
+        message: membersRes.error.message,
+        details: membersRes.error.details,
+        hint:    membersRes.error.hint,
+      })
+      return NextResponse.json({ error: 'Failed to load members', members: [], existingRecords: null })
+    }
+
+    const allMembers = membersRes.data ?? []
+    console.log(`[attendance/members] fetched ${allMembers.length} non-away members for church ${churchId}`)
+
+    // Filter to this group:
+    //   - members whose groupIds contains this groupId
+    //   - OR ungrouped members (groupIds null/empty) — appear in all groups
+    const members = allMembers.filter(m => {
       const ids = m.groupIds ?? []
       return ids.length === 0 || ids.includes(groupId)
     })
 
-    // If date provided, load existing session records for pre-filling the attendance UI
-    let existingRecords = null
-    if (date) {
-      const { data: session } = await admin
-        .from('attendance_sessions')
-        .select('id, attendance_records ( member_id, present )')
-        .eq('church_id', churchId)
-        .eq('group_id', groupId)
-        .eq('date', date)
-        .single()
+    console.log(`[attendance/members] ${members.length} members in group ${groupId}`)
 
-      if (session?.attendance_records?.length > 0) {
-        existingRecords = session.attendance_records
-      }
-    }
+    const existingSession  = sessionRes.data
+    const existingRecords  = existingSession?.attendance_records?.length > 0
+      ? existingSession.attendance_records
+      : null
 
     return NextResponse.json({
-      members:         members ?? [],
-      existingRecords,   // null if no session exists, array if editing
+      members,
+      existingRecords,
     })
 
   } catch (err) {
