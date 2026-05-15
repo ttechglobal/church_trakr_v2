@@ -4,6 +4,7 @@ import AppShell from '@/components/layout/AppShell'
 import PWAInit from '@/components/PWAInit'
 import FollowUpBanner from '@/components/FollowUpBanner'
 import PWAPromptLoader from '@/components/PWAPromptLoader'
+import SupportButton from '@/components/ui/SupportButton'
 
 export default async function AppLayout({ children }) {
   const user = await getUser()
@@ -24,15 +25,11 @@ export default async function AppLayout({ children }) {
   const church = await getChurch(user.id, user.user_metadata)
 
   if (!church) {
-    // Profile doesn't exist — user's auth account was created but setup failed.
-    // Redirect to login where the CompleteSetupScreen will handle recovery.
     const { redirect } = await import('next/navigation')
     redirect('/login')
   }
 
-  // Count pending follow-ups — only from the most recent attendance session
-  // Using the same logic as the dashboard to prevent count mismatches.
-  // We count absent members from the last session who haven't been marked reached.
+  // Count pending follow-ups from most recent real attendance session
   let pendingFollowUps = 0
   try {
     const admin = createAdminClient()
@@ -43,7 +40,6 @@ export default async function AppLayout({ children }) {
       .order('date', { ascending: false })
       .limit(10)
 
-    // Find most recent non-FT session with real members
     const realSession = (latestSession ?? []).find(s =>
       (s.attendance_records ?? []).some(r => r.member_id !== null)
     )
@@ -65,6 +61,8 @@ export default async function AppLayout({ children }) {
       <FollowUpBanner pendingCount={pendingFollowUps} />
       <PWAPromptLoader />
       {children}
+      {/* Support button — visible on every page */}
+      <SupportButton />
     </AppShell>
   )
 }

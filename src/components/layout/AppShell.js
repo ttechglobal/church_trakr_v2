@@ -9,7 +9,7 @@ import { getAv } from '@/lib/utils'
 import {
   LayoutDashboard, CheckSquare, UserX, UserCheck, Star,
   User, MessageSquare, BarChart2, FileText,
-  Settings, LogOut, Menu, X, Zap,
+  Settings, LogOut, Menu, X, Zap, Cake,
   // Bottom nav icons
   Home, UserMinus, FileBarChart,
 } from 'lucide-react'
@@ -23,6 +23,7 @@ const NAV = [
   { href: '/attendees',   label: 'Attendees',    Icon: UserCheck },
   { href: '/firsttimers', label: 'First Timers', Icon: Star },
   { href: '/members',     label: 'Members',      Icon: User },
+  { href: '/birthdays',   label: 'Birthdays',    Icon: Cake },
   { href: '/messaging',   label: 'Messaging',    Icon: MessageSquare },
   { href: '/analytics',   label: 'Analytics',    Icon: BarChart2 },
   { href: '/report',      label: 'Reports',      Icon: FileText },

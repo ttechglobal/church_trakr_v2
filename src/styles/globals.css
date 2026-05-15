@@ -265,3 +265,49 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+
+/*
+  ============================================================
+  ADD THESE RULES TO src/app/globals.css
+  ============================================================
+
+  1. Z-index scale — single source of truth
+  2. ModalShell fix — ensures modals always appear above the bottom navbar
+  ============================================================
+*/
+
+/* ── Z-index scale ── */
+:root {
+  --z-base:      1;
+  --z-dropdown:  10;
+  --z-sticky:    20;
+  --z-sidebar:   30;
+  --z-navbar:    50;    /* AppShell bottom nav and sidebar */
+  --z-fab:       60;    /* Support / help FAB */
+  --z-topbar:    100;   /* Mobile topbar */
+  --z-backdrop:  200;
+  --z-modal:     201;
+  --z-toast:     300;
+  --z-tooltip:   400;
+}
+
+/*
+  ── ModalShell override ──
+  The existing ModalShell uses z-index 50 which is below the bottom
+  navbar (z-index 100). This rule forces all modals above it.
+
+  The `fixed inset-0` wrapper in ModalShell matches on the selector below.
+  If your ModalShell uses a different class, add it here too.
+*/
+.fixed.inset-0.z-50 {
+  z-index: var(--z-backdrop) !important;
+}
+
+/*
+  Also ensure the white modal card itself is above the backdrop.
+  Target: any direct child of the backdrop overlay that is the white card.
+*/
+.fixed.inset-0.z-50 > div {
+  z-index: var(--z-modal) !important;
+}

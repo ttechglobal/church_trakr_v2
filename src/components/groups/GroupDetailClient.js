@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { fmtDate, fmtBday, getAv, attendanceRate, normBirthday, toWhatsAppNumber } from '@/lib/utils'
+import FixedModal from '@/components/ui/FixedModal'
 
 export default function GroupDetailClient({ church, group, members: initMembers, allMembers, sessions }) {
   const router = useRouter()
@@ -385,8 +386,7 @@ function AddNewMemberModal({ churchId, groupId, onClose, onAdded }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  async function handleSubmit(e) {
-    e.preventDefault()
+  async function handleSave() {
     if (!form.name.trim()) { setError('Name is required'); return }
     setSaving(true)
     try {
@@ -394,12 +394,12 @@ function AddNewMemberModal({ churchId, groupId, onClose, onAdded }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: form.name.trim(),
-          phone: form.phone.trim() || null,
-          address: form.address.trim() || null,
-          birthday: form.birthday || null,
+          name:     form.name.trim(),
+          phone:    form.phone.trim()    || null,
+          address:  form.address.trim()  || null,
+          birthday: form.birthday        || null,
           groupIds: [groupId],
-          status: 'active',
+          status:   'active',
         }),
       })
       const data = await res.json()
@@ -411,38 +411,44 @@ function AddNewMemberModal({ churchId, groupId, onClose, onAdded }) {
     }
   }
 
+  const footer = (
+    <div className="flex gap-3">
+      <button onClick={onClose} className="btn btn-outline flex-1" style={{ minHeight: 48 }}>Cancel</button>
+      <button
+        onClick={handleSave}
+        disabled={saving || !form.name.trim()}
+        className="btn btn-primary flex-1"
+        style={{ minHeight: 48, opacity: (saving || !form.name.trim()) ? 0.5 : 1 }}
+      >
+        {saving ? 'Saving…' : 'Add member'}
+      </button>
+    </div>
+  )
+
   return (
-    <Modal title="Add new member" onClose={onClose}>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <div>
-          <label className="input-label">Name *</label>
-          <input className="input" placeholder="Full name" value={form.name}
-            onChange={e => setForm(p => ({ ...p, name: e.target.value }))} autoFocus />
-        </div>
-        <div>
-          <label className="input-label">Phone</label>
-          <input className="input" type="tel" placeholder="+234..." value={form.phone}
-            onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
-        </div>
-        <div>
-          <label className="input-label">Address</label>
-          <input className="input" placeholder="Optional" value={form.address}
-            onChange={e => setForm(p => ({ ...p, address: e.target.value }))} />
-        </div>
-        <div>
-          <label className="input-label">Birthday</label>
-          <input className="input" type="date" value={form.birthday}
-            onChange={e => setForm(p => ({ ...p, birthday: e.target.value }))} />
-        </div>
-        {error && <p className="text-sm text-error">{error}</p>}
-        <div className="flex gap-3 pt-1">
-          <button type="button" onClick={onClose} className="btn btn-outline flex-1">Cancel</button>
-          <button type="submit" disabled={saving} className="btn btn-primary flex-1">
-            {saving ? 'Adding…' : 'Add member'}
-          </button>
-        </div>
-      </form>
-    </Modal>
+    <FixedModal title="Add new member" onClose={onClose} footer={footer}>
+      <div>
+        <label className="input-label">Name *</label>
+        <input className="input" autoFocus placeholder="Full name"
+          value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+      </div>
+      <div>
+        <label className="input-label">Phone</label>
+        <input className="input" type="tel" placeholder="+234…"
+          value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
+      </div>
+      <div>
+        <label className="input-label">Address</label>
+        <input className="input" placeholder="Optional"
+          value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} />
+      </div>
+      <div>
+        <label className="input-label">Birthday</label>
+        <input className="input" type="date"
+          value={form.birthday} onChange={e => setForm(p => ({ ...p, birthday: e.target.value }))} />
+      </div>
+      {error && <p className="text-sm text-error">{error}</p>}
+    </FixedModal>
   )
 }
 

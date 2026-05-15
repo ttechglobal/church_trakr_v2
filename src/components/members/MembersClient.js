@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import BackButton from '@/components/ui/BackButton'
 import { getAv, fmtBday, normBirthday } from '@/lib/utils'
 import { Search, Plus, Upload, ChevronRight, X, Pencil, Users, Check, AlertTriangle } from 'lucide-react'
+import FixedModal from '@/components/ui/FixedModal'
+
 
 export default function MembersClient({ churchId, members: initMembers, groups }) {
   const router = useRouter()
@@ -285,56 +287,104 @@ export default function MembersClient({ churchId, members: initMembers, groups }
   )
 }
 
+// ─── REPLACE the existing MemberFormModal export in MembersClient.js ──────────
+
 export function MemberFormModal({ initial, groups, isNew, saving, error, onSave, onClose }) {
   const [form, setForm] = useState({
-    name: initial.name ?? '', phone: initial.phone ?? '', address: initial.address ?? '',
-    birthday: initial.birthday ?? '', groupIds: initial.groupIds ?? [], status: initial.status ?? 'active',
+    name:     initial.name     ?? '',
+    phone:    initial.phone    ?? '',
+    address:  initial.address  ?? '',
+    birthday: initial.birthday ?? '',
+    groupIds: initial.groupIds ?? [],
+    status:   initial.status   ?? 'active',
   })
+
   function toggleGroup(gid) {
-    setForm(p => ({ ...p, groupIds: p.groupIds.includes(gid) ? p.groupIds.filter(id => id !== gid) : [...p.groupIds, gid] }))
+    setForm(p => ({
+      ...p,
+      groupIds: p.groupIds.includes(gid)
+        ? p.groupIds.filter(id => id !== gid)
+        : [...p.groupIds, gid],
+    }))
   }
+
+  const footer = (
+    <div className="flex gap-3">
+      <button onClick={onClose} className="btn btn-outline flex-1" style={{ minHeight: 48 }}>
+        Cancel
+      </button>
+      <button
+        onClick={() => onSave({
+          name:     form.name.trim(),
+          phone:    form.phone.trim()   || null,
+          address:  form.address.trim() || null,
+          birthday: form.birthday       || null,
+          groupIds: form.groupIds,
+          status:   form.status,
+        }, isNew)}
+        disabled={saving || !form.name.trim()}
+        className="btn btn-primary flex-1"
+        style={{ minHeight: 48 }}
+      >
+        {saving ? 'Saving…' : isNew ? 'Add member' : 'Save changes'}
+      </button>
+    </div>
+  )
+
   return (
-    <ModalShell title={isNew ? 'Add member' : 'Edit member'} onClose={onClose}>
+    <ModalShell title={isNew ? 'Add member' : 'Edit member'} onClose={onClose} footer={footer}>
       <div className="space-y-3">
-        <div><label className="input-label">Full name *</label>
-          <input className="input" placeholder="Full name" autoFocus value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} /></div>
-        <div><label className="input-label">Phone</label>
-          <input className="input" type="tel" placeholder="+234…" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} /></div>
-        <div><label className="input-label">Address</label>
-          <input className="input" placeholder="Optional" value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} /></div>
-        <div><label className="input-label">Birthday</label>
-          <input className="input" type="date" value={form.birthday} onChange={e => setForm(p => ({ ...p, birthday: e.target.value }))} /></div>
+        <div>
+          <label className="input-label">Full name *</label>
+          <input className="input" autoFocus placeholder="Full name"
+            value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+        </div>
+        <div>
+          <label className="input-label">Phone</label>
+          <input className="input" type="tel" placeholder="+234…"
+            value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
+        </div>
+        <div>
+          <label className="input-label">Address</label>
+          <input className="input" placeholder="Optional"
+            value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} />
+        </div>
+        <div>
+          <label className="input-label">Birthday</label>
+          <input className="input" type="date"
+            value={form.birthday} onChange={e => setForm(p => ({ ...p, birthday: e.target.value }))} />
+        </div>
         {groups.length > 0 && (
-          <div><label className="input-label">Groups</label>
+          <div>
+            <label className="input-label">Groups</label>
             <div className="flex flex-wrap gap-2">
               {groups.map(g => (
                 <button key={g.id} type="button" onClick={() => toggleGroup(g.id)}
                   className={'text-xs px-3 py-1.5 rounded-full border transition-colors ' +
-                    (form.groupIds.includes(g.id) ? 'bg-forest text-ivory border-forest' : 'border-forest/20 text-mist hover:border-forest/40')}>
+                    (form.groupIds.includes(g.id)
+                      ? 'bg-forest text-ivory border-forest'
+                      : 'border-forest/20 text-mist hover:border-forest/40')}>
                   {g.name}
                 </button>
               ))}
             </div>
           </div>
         )}
-        <div><label className="input-label">Status</label>
-          <select className="input" value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>
+        <div>
+          <label className="input-label">Status</label>
+          <select className="input" value={form.status}
+            onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
             <option value="away">Away (travelling / on leave)</option>
-          </select></div>
-        {error && <p className="text-sm text-error">{error}</p>}
-        <div className="flex gap-3 pt-1">
-          <button onClick={onClose} className="btn btn-outline flex-1">Cancel</button>
-          <button onClick={() => onSave({ name: form.name.trim(), phone: form.phone.trim() || null, address: form.address.trim() || null, birthday: form.birthday || null, groupIds: form.groupIds, status: form.status }, isNew)}
-            disabled={saving || !form.name.trim()} className="btn btn-primary flex-1">
-            {saving ? 'Saving…' : (isNew ? 'Add member' : 'Save changes')}
-          </button>
+          </select>
         </div>
+        {error && <p className="text-sm text-error">{error}</p>}
       </div>
     </ModalShell>
   )
 }
+
 
 function MemberImportModal({ onClose, onImported, defaultGroupId }) {
   const [stage, setStage]     = useState('upload')
@@ -526,16 +576,58 @@ function MemberImportModal({ onClose, onImported, defaultGroupId }) {
   )
 }
 
-function ModalShell({ title, onClose, children }) {
+
+function ModalShell({ title, onClose, children, footer }) {
+  // Lock body scroll while open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [])
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink/40 backdrop-blur-sm p-4"
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-modal animate-slide-up safe-bottom max-h-[90dvh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-5">
+    <div
+      className="fixed inset-0 flex items-end sm:items-center justify-center"
+      style={{ zIndex: 201, background: 'rgba(15,26,19,0.55)', backdropFilter: 'blur(4px)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        className="bg-white w-full max-w-md shadow-modal animate-slide-up"
+        style={{
+          borderRadius: '24px 24px 0 0',
+          maxHeight: '92dvh',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden', // children manage their own scroll
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header — never moves */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 shrink-0"
+          style={{ borderBottom: '1px solid rgba(26,58,42,0.08)' }}>
           <h3 className="font-display text-lg font-semibold text-forest">{title}</h3>
-          <button onClick={onClose} className="btn btn-ghost btn-sm p-1.5"><X size={18} /></button>
+          <button onClick={onClose} className="btn btn-ghost btn-sm p-1.5">
+            <X size={18} />
+          </button>
         </div>
-        {children}
+
+        {/* Body — scrolls independently */}
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {children}
+        </div>
+
+        {/* Footer — locked at bottom, always visible */}
+        {footer && (
+          <div
+            className="shrink-0 px-5 pt-3"
+            style={{
+              paddingBottom: 'calc(max(16px, env(safe-area-inset-bottom, 0px)))',
+              borderTop: '1px solid rgba(26,58,42,0.08)',
+              background: '#fff',
+            }}
+          >
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   )

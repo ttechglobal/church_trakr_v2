@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { toWhatsAppNumber, getAv, toISODate, fmtDate } from '@/lib/utils'
 import BackButton from '@/components/ui/BackButton'
+import FixedModal from '@/components/ui/FixedModal'
 
 const WELCOME = name =>
   `Hi ${name}, welcome to our service! We're so glad you joined us today. Hope to see you again soon! 🙏`
@@ -388,34 +389,51 @@ export default function FirstTimersClient({ churchId, firstTimers: init, groups,
 
 function FTModal({ initial, isNew, saving, error, onSave, onClose }) {
   const [form, setForm] = useState({
-    name: initial.name ?? '', phone: initial.phone ?? '',
-    address: initial.address ?? '', date: initial.date ?? toISODate(new Date()),
+    name:    initial.name    ?? '',
+    phone:   initial.phone   ?? '',
+    address: initial.address ?? '',
+    date:    initial.date    ?? toISODate(new Date()),
   })
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
+
+  const footer = (
+    <div className="flex gap-3">
+      <button onClick={onClose} className="btn btn-outline flex-1" style={{ minHeight: 48 }}>Cancel</button>
+      <button
+        onClick={() => onSave(form, isNew)}
+        disabled={saving || !form.name.trim()}
+        className="btn btn-primary flex-1"
+        style={{ minHeight: 48, opacity: (saving || !form.name.trim()) ? 0.5 : 1 }}
+      >
+        {saving ? 'Saving…' : isNew ? 'Add visitor' : 'Save'}
+      </button>
+    </div>
+  )
+
   return (
-    <Modal title={isNew ? 'Add visitor' : 'Edit visitor'} onClose={onClose}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <Field label="Name *">
-          <input style={inputStyle} autoFocus placeholder="Full name" value={form.name} onChange={e => set('name', e.target.value)} />
-        </Field>
-        <Field label="Phone">
-          <input style={inputStyle} type="tel" placeholder="+234…" value={form.phone} onChange={e => set('phone', e.target.value)} />
-        </Field>
-        <Field label="Address">
-          <input style={inputStyle} placeholder="Optional" value={form.address} onChange={e => set('address', e.target.value)} />
-        </Field>
-        <Field label="Date of visit">
-          <input style={inputStyle} type="date" value={form.date} onChange={e => set('date', e.target.value)} />
-        </Field>
-        {error && <p style={{ fontSize: 14, color: '#dc2626' }}>{error}</p>}
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} style={{ ...outBtn, flex: 1 }}>Cancel</button>
-          <button onClick={() => onSave(form, isNew)} disabled={saving || !form.name.trim()} style={{ ...primBtn, flex: 1 }}>
-            {saving ? 'Saving…' : isNew ? 'Add visitor' : 'Save'}
-          </button>
-        </div>
+    <FixedModal title={isNew ? 'Add visitor' : 'Edit visitor'} onClose={onClose} footer={footer}>
+      <div>
+        <label className="input-label">Name *</label>
+        <input className="input" autoFocus placeholder="Full name"
+          value={form.name} onChange={e => set('name', e.target.value)} />
       </div>
-    </Modal>
+      <div>
+        <label className="input-label">Phone</label>
+        <input className="input" type="tel" placeholder="+234…"
+          value={form.phone} onChange={e => set('phone', e.target.value)} />
+      </div>
+      <div>
+        <label className="input-label">Address</label>
+        <input className="input" placeholder="Optional"
+          value={form.address} onChange={e => set('address', e.target.value)} />
+      </div>
+      <div>
+        <label className="input-label">Date of visit</label>
+        <input className="input" type="date"
+          value={form.date} onChange={e => set('date', e.target.value)} />
+      </div>
+      {error && <p className="text-sm text-error">{error}</p>}
+    </FixedModal>
   )
 }
 
