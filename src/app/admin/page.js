@@ -171,21 +171,104 @@ function Overview({ nav }) {
 
 function AccountRow({ c, onClick }) {
   return (
-    <button onClick={onClick} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', borderRadius:14, border:'none', cursor:'pointer', background:'#fff', boxShadow:'0 1px 4px rgba(26,58,42,.07)', textAlign:'left', width:'100%' }}>
-      <div style={{ width:38, height:38, borderRadius:10, background:'rgba(26,58,42,.06)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-        {c.accountType === 'church' ? <Building2 size={15} color={C.forest}/> : <Users size={15} color={C.forest}/>}
-      </div>
-      <div style={{ flex:1, minWidth:0 }}>
-        <p style={{ fontSize:14, fontWeight:700, color:C.forest, margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.name}</p>
-        <p style={{ fontSize:12, color:C.muted, margin:'2px 0 0', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.adminName} · {c.totalMembers} members · {daysAgo(c.lastActive)}</p>
-      </div>
-      <div style={{ textAlign:'right', flexShrink:0 }}>
-        <p style={{ fontSize:12, fontWeight:700, color: c.smsCredits > 0 ? C.success : C.muted, margin:0 }}>{c.smsCredits} cr</p>
-        <StatusPill status={c.accountType} />
-      </div>
-      <ChevronRight size={14} color={C.muted} style={{ flexShrink:0 }} />
-    </button>
+    <div style={{ position:'relative', background:'#fff', borderRadius:14, boxShadow:'0 1px 4px rgba(26,58,42,.07)', overflow:'hidden' }}>
+      {/* Main clickable area */}
+      <button onClick={onClick} style={{ display:'flex', alignItems:'flex-start', gap:12, padding:'12px 14px 10px', border:'none', cursor:'pointer', background:'none', textAlign:'left', width:'100%', fontFamily:'inherit' }}>
+        <div style={{ width:40, height:40, borderRadius:10, background:'rgba(26,58,42,.06)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:2 }}>
+          {c.accountType === 'church' ? <Building2 size={16} color={C.forest}/> : <Users size={16} color={C.forest}/>}
+        </div>
+        <div style={{ flex:1, minWidth:0 }}>
+          {/* Name + badges */}
+          <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:2, flexWrap:'wrap' }}>
+            <p style={{ fontSize:14, fontWeight:700, color:C.forest, margin:0 }}>{c.name}</p>
+            <StatusPill status={c.accountType} />
+            {c.isActive30 && (
+              <span style={{ fontSize:10, fontWeight:700, color:C.success, background:'rgba(22,163,74,.1)', padding:'1px 7px', borderRadius:20 }}>
+                Active
+              </span>
+            )}
+          </div>
+          {/* Admin name */}
+          <p style={{ fontSize:12, fontWeight:600, color:C.forest, margin:'0 0 3px' }}>{c.adminName || '—'}</p>
+          {/* Phone — highlighted for quick follow-up */}
+          {c.phone ? (
+            <p style={{ fontSize:12, color:C.mid, margin:'0 0 2px', display:'flex', alignItems:'center', gap:4 }}>
+              <Phone size={10} color={C.mid} />
+              <a
+                href={`tel:${c.phone}`}
+                onClick={e => e.stopPropagation()}
+                style={{ color:C.mid, textDecoration:'none', fontWeight:600 }}
+              >
+                {c.phone}
+              </a>
+            </p>
+          ) : (
+            <p style={{ fontSize:12, color:'rgba(138,158,144,.45)', margin:'0 0 2px', fontStyle:'italic' }}>No phone on file</p>
+          )}
+          {/* Email */}
+          {c.email && (
+            <p style={{ fontSize:11, color:C.muted, margin:'0 0 2px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+              {c.email}
+            </p>
+          )}
+          {/* Location */}
+          {c.location && (
+            <p style={{ fontSize:11, color:C.muted, margin:0 }}>📍 {c.location}</p>
+          )}
+        </div>
+        {/* Right: stats */}
+        <div style={{ textAlign:'right', flexShrink:0, display:'flex', flexDirection:'column', alignItems:'flex-end', gap:3 }}>
+          <p style={{ fontSize:12, fontWeight:700, color: c.smsCredits > 0 ? C.success : C.muted, margin:0 }}>{c.smsCredits} cr</p>
+          <p style={{ fontSize:11, color:C.muted, margin:0 }}>{c.totalMembers} members</p>
+          <p style={{ fontSize:11, color:C.muted, margin:0 }}>{daysAgo(c.lastActive)}</p>
+          <ChevronRight size={13} color={C.muted} />
+        </div>
+      </button>
+
+      {/* Call + WhatsApp quick strip */}
+      {c.phone && (
+        <div style={{ borderTop:'1px solid rgba(26,58,42,.06)', display:'flex' }}>
+          <a
+            href={`tel:${c.phone}`}
+            onClick={e => e.stopPropagation()}
+            style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'8px 0', fontSize:12, fontWeight:700, color:C.mid, textDecoration:'none', background:'rgba(26,58,42,.025)' }}
+          >
+            <Phone size={11} color={C.mid} />
+            Call {(c.adminName || '').split(' ')[0] || 'admin'}
+          </a>
+          <a
+            href={`https://wa.me/${String(c.phone).replace(/\D/g,'').replace(/^0/,'234')}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'8px 0', fontSize:12, fontWeight:700, color:'#16a34a', textDecoration:'none', background:'rgba(22,163,74,.04)', borderLeft:'1px solid rgba(26,58,42,.06)' }}
+          >
+            💬 WhatsApp
+          </a>
+        </div>
+      )}
+    </div>
   )
+}
+
+
+function exportAccountsCSV(accounts) {
+  const header = ['Name', 'Admin', 'Phone', 'Email', 'Location', 'Type', 'Members', 'Credits', 'Last Active', 'Joined']
+  const rows = accounts.map(a => [
+    a.name, a.adminName ?? '', a.phone ?? '', a.email ?? '', a.location ?? '',
+    a.accountType, a.totalMembers, a.smsCredits,
+    a.lastActive ?? '', a.createdAt ? a.createdAt.slice(0, 10) : '',
+  ])
+  const csv = [header, ...rows]
+    .map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href     = url
+  a.download = `churchtrakr-accounts-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 // ── Accounts list ─────────────────────────────────────────────────────────────
@@ -196,7 +279,10 @@ function AccountsList({ nav }) {
   const [filter,   setFilter]   = useState('all')
 
   useEffect(() => {
-    fetch('/api/admin/accounts').then(r => r.json()).then(d => setAccounts(d.accounts ?? [])).finally(() => setLoading(false))
+    fetch('/api/admin/accounts')
+      .then(r => r.json())
+      .then(d => setAccounts(d.accounts ?? []))
+      .finally(() => setLoading(false))
   }, [])
 
   const filtered = accounts.filter(a => {
@@ -204,29 +290,68 @@ function AccountsList({ nav }) {
     if (filter === 'church' && a.accountType !== 'church') return false
     if (search) {
       const q = search.toLowerCase()
-      return a.name.toLowerCase().includes(q) || (a.adminName ?? '').toLowerCase().includes(q) || (a.email ?? '').toLowerCase().includes(q)
+      return (
+        a.name.toLowerCase().includes(q) ||
+        (a.adminName ?? '').toLowerCase().includes(q) ||
+        (a.email     ?? '').toLowerCase().includes(q) ||
+        (a.phone     ?? '').includes(q) ||
+        (a.location  ?? '').toLowerCase().includes(q)
+      )
     }
     return true
   })
 
   return (
     <div>
-      <PageHeader title={`All Accounts (${accounts.length})`} />
-      <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
+      <PageHeader
+        title={`All Accounts (${accounts.length})`}
+        action={
+          <button
+            onClick={() => exportAccountsCSV(filtered)}
+            style={{ display:'flex', alignItems:'center', gap:6, height:38, padding:'0 14px', borderRadius:10, border:'1.5px solid rgba(26,58,42,.18)', background:'none', cursor:'pointer', fontSize:13, color:C.forest, fontWeight:600, fontFamily:'inherit' }}
+          >
+            ↓ Export CSV
+          </button>
+        }
+      />
+
+      {/* Search + filter */}
+      <div style={{ display:'flex', gap:8, marginBottom:10, flexWrap:'wrap' }}>
         <div style={{ flex:1, minWidth:180, position:'relative' }}>
           <Search size={14} style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:C.muted }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" style={{ width:'100%', height:44, borderRadius:12, border:'1px solid rgba(26,58,42,.15)', padding:'0 12px 0 36px', fontSize:14, outline:'none', boxSizing:'border-box', background:'#fff' }} />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search name, phone, email, location…"
+            style={{ width:'100%', height:44, borderRadius:12, border:'1px solid rgba(26,58,42,.15)', padding:'0 12px 0 36px', fontSize:14, outline:'none', boxSizing:'border-box', background:'#fff' }}
+          />
         </div>
         <div style={{ display:'flex', gap:6 }}>
           {[['all','All'],['group','Groups'],['church','Churches']].map(([f,l]) => (
-            <button key={f} onClick={() => setFilter(f)} style={{ height:44, padding:'0 14px', borderRadius:12, border:'none', cursor:'pointer', fontSize:13, fontWeight:600, background: filter===f ? C.forest : C.ivoryDk, color: filter===f ? '#e8d5a0' : C.forest }}>{l}</button>
+            <button key={f} onClick={() => setFilter(f)} style={{ height:44, padding:'0 14px', borderRadius:12, border:'none', cursor:'pointer', fontSize:13, fontWeight:600, background: filter===f ? C.forest : C.ivoryDk, color: filter===f ? '#e8d5a0' : C.forest, fontFamily:'inherit' }}>
+              {l}
+            </button>
           ))}
         </div>
       </div>
-      {loading ? <Center><Spinner size={28}/></Center> : (
+
+      {/* Summary strip */}
+      <div style={{ display:'flex', gap:16, padding:'9px 14px', background:'rgba(26,58,42,.04)', borderRadius:10, marginBottom:14, flexWrap:'wrap' }}>
+        <p style={{ fontSize:12, color:C.forest, margin:0 }}><strong>{filtered.length}</strong> shown</p>
+        <p style={{ fontSize:12, color:C.forest, margin:0 }}><strong>{filtered.filter(a => a.phone).length}</strong> have phone</p>
+        <p style={{ fontSize:12, color:C.forest, margin:0 }}><strong>{filtered.filter(a => a.isActive30).length}</strong> active 30d</p>
+      </div>
+
+      {loading ? (
+        <Center><Spinner size={28}/></Center>
+      ) : (
         <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {filtered.length === 0 && <p style={{ textAlign:'center', color:C.muted, padding:'2rem', fontSize:14 }}>No accounts found</p>}
-          {filtered.map(a => <AccountRow key={a.id} c={a} onClick={() => nav('account', a.id)} />)}
+          {filtered.length === 0 && (
+            <p style={{ textAlign:'center', color:C.muted, padding:'2rem', fontSize:14 }}>No accounts found</p>
+          )}
+          {filtered.map(a => (
+            <AccountRow key={a.id} c={a} onClick={() => nav('account', a.id)} />
+          ))}
         </div>
       )}
     </div>
