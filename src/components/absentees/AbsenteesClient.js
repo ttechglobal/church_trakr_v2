@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Check, Phone, FileText, MessageSquare, Send, X, AlertCircle, CheckCircle } from 'lucide-react'
+import { Check, Phone, FileText, MessageSquare, Send, X, AlertCircle, CheckCircle, ClipboardList, Users } from 'lucide-react'
+import Link from 'next/link'
 import BackButton from '@/components/ui/BackButton'
 import { fmtDate, toWhatsAppNumber, getAv } from '@/lib/utils'
 
@@ -152,10 +153,15 @@ export default function AbsenteesClient({
             </p>
           </div>
           {absentees.length > 0 && (
-            <button onClick={() => { setShowSmsModal(true); setSmsResult(null) }}
-              className="btn btn-primary btn-sm gap-1.5 shrink-0" style={{ marginTop:4 }}>
-              <MessageSquare size={14} /> Send Bulk SMS
-            </button>
+            <div className="flex gap-2 shrink-0" style={{ marginTop:4 }}>
+              <Link href="/absentees/assign" className="btn btn-primary btn-sm gap-1.5">
+                <ClipboardList size={14} /> Assign Follow-Ups
+              </Link>
+              <button onClick={() => { setShowSmsModal(true); setSmsResult(null) }}
+                className="btn btn-outline btn-sm gap-1.5">
+                <MessageSquare size={14} /> Bulk SMS
+              </button>
+            </div>
           )}
         </div>
       </div>

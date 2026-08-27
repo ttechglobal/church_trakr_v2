@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { getAv } from '@/lib/utils'
 import {
   LayoutDashboard, CheckSquare, UserX, UserCheck, Star,
-  User, MessageSquare, BarChart2, FileText,
+  User, Users, MessageSquare, BarChart2, FileText,
   Settings, LogOut, Menu, X, Zap, Cake,
   // Bottom nav icons
   Home, UserMinus, FileBarChart,
@@ -16,19 +16,40 @@ import {
 
 const NotificationBell = dynamic(() => import('@/components/NotificationBell'), { ssr: false })
 
-const NAV = [
-  { href: '/dashboard',   label: 'Dashboard',    Icon: LayoutDashboard },
-  { href: '/attendance',  label: 'Attendance',   Icon: CheckSquare },
-  { href: '/absentees',   label: 'Absentees',    Icon: UserX },
-  { href: '/attendees',   label: 'Attendees',    Icon: UserCheck },
-  { href: '/firsttimers', label: 'First Timers', Icon: Star },
-  { href: '/members',     label: 'Members',      Icon: User },
-  { href: '/birthdays',   label: 'Birthdays',    Icon: Cake },
-  { href: '/messaging',   label: 'Messaging',    Icon: MessageSquare },
-  { href: '/analytics',   label: 'Analytics',    Icon: BarChart2 },
-  { href: '/report',      label: 'Reports',      Icon: FileText },
-  { href: '/profile',     label: 'Settings',     Icon: Settings },
+const NAV_GROUPS = [
+  {
+    label: null,
+    items: [
+      { href: '/dashboard',  label: 'Dashboard',  Icon: LayoutDashboard },
+      { href: '/attendance', label: 'Attendance', Icon: CheckSquare },
+    ],
+  },
+  {
+    label: 'People',
+    items: [
+      { href: '/absentees',     label: 'Absentees',      Icon: UserX },
+      { href: '/members',       label: 'Members',        Icon: User },
+      { href: '/firsttimers',   label: 'First Timers',   Icon: Star },
+      { href: '/birthdays',     label: 'Birthdays',      Icon: Cake },
+      { href: '/followup-team', label: 'Follow-Up Team', Icon: Users },
+    ],
+  },
+  {
+    label: 'Insights',
+    items: [
+      { href: '/analytics', label: 'Analytics', Icon: BarChart2 },
+      { href: '/report',    label: 'Reports',   Icon: FileText },
+    ],
+  },
+  {
+    label: 'Other',
+    items: [
+      { href: '/messaging', label: 'Messaging', Icon: MessageSquare },
+      { href: '/profile',   label: 'Settings',  Icon: Settings },
+    ],
+  },
 ]
+const NAV = NAV_GROUPS.flatMap(g => g.items)
 
 // Bottom nav — 4 most important pages, mobile only
 const BOTTOM_NAV = [
@@ -104,27 +125,36 @@ export default function AppShell({ church, user, children, pendingFollowUps = 0 
         </Link>
       </div>
 
-      {/* Nav links */}
+      {/* Nav links — grouped */}
       <nav style={{ flex:1, padding:'0.5rem 0.5rem', overflowY:'auto' }}>
-        {NAV.map(({ href, label, Icon }) => {
-          const isActive = href === '/dashboard'
-            ? pathname === '/dashboard'
-            : pathname === href || pathname.startsWith(href + '/')
-          return (
-            <Link key={href} href={href} style={{
-              display:'flex', alignItems:'center', gap:9,
-              padding:'0.5rem 0.75rem', borderRadius:9, marginBottom:1,
-              textDecoration:'none', fontSize:14, fontWeight: isActive ? 600 : 400,
-              color: isActive ? '#c9a84c' : 'rgba(255,255,255,0.6)',
-              background: isActive ? 'rgba(201,168,76,0.12)' : 'transparent',
-              borderLeft:'2px solid ' + (isActive ? '#c9a84c' : 'transparent'),
-              transition:'all 0.14s ease', letterSpacing:'-0.01em',
-            }}>
-              <Icon size={15} strokeWidth={isActive ? 2.5 : 1.75} style={{ flexShrink:0 }} />
-              {label}
-            </Link>
-          )
-        })}
+        {NAV_GROUPS.map(({ label: groupLabel, items }) => (
+          <div key={groupLabel ?? '__top'} style={{ marginBottom: groupLabel ? '0.25rem' : 0 }}>
+            {groupLabel && (
+              <p style={{ fontSize:10, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', color:'rgba(255,255,255,0.25)', padding:'0.625rem 0.75rem 0.25rem', margin:0 }}>
+                {groupLabel}
+              </p>
+            )}
+            {items.map(({ href, label, Icon }) => {
+              const isActive = href === '/dashboard'
+                ? pathname === '/dashboard'
+                : pathname === href || pathname.startsWith(href + '/')
+              return (
+                <Link key={href} href={href} style={{
+                  display:'flex', alignItems:'center', gap:9,
+                  padding:'0.45rem 0.75rem', borderRadius:9, marginBottom:1,
+                  textDecoration:'none', fontSize:13.5, fontWeight: isActive ? 600 : 400,
+                  color: isActive ? '#c9a84c' : 'rgba(255,255,255,0.58)',
+                  background: isActive ? 'rgba(201,168,76,0.12)' : 'transparent',
+                  borderLeft:'2px solid ' + (isActive ? '#c9a84c' : 'transparent'),
+                  transition:'all 0.14s ease', letterSpacing:'-0.01em',
+                }}>
+                  <Icon size={14} strokeWidth={isActive ? 2.5 : 1.75} style={{ flexShrink:0 }} />
+                  {label}
+                </Link>
+              )
+            })}
+          </div>
+        ))}
       </nav>
 
       {/* User footer */}

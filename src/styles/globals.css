@@ -238,6 +238,16 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   }
 }
 
+/* ── Mobile: ensure bottom nav never clips buttons or content ──
+   The bottom nav is 62px + safe area. All .page-content pages get
+   extra bottom padding on mobile so nothing is hidden behind the nav.
+*/
+@media (max-width: 1023px) {
+  .page-content {
+    padding-bottom: calc(62px + env(safe-area-inset-bottom, 16px) + 1.5rem);
+  }
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;

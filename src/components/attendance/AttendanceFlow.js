@@ -189,6 +189,23 @@ export default function AttendanceFlow({
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Save failed')
+
+      // Also save first-timer attendance if any FT exist
+      const ftEntries = Object.keys(ftAttendance)
+      if (firstTimers.length > 0 && ftEntries.length > 0) {
+        const ftRecords = firstTimers.map(ft => ({
+          memberId: ft.id,
+          name:     ft.name,
+          present:  ftAttendance[ft.id] ?? false,
+        }))
+        // Fire-and-forget — don't block main save on this
+        fetch('/api/attendance/firsttimers', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ date: selectedDate, records: ftRecords }),
+        }).catch(() => {})
+      }
+
       setSavedResult(data)
       setStep(STEP.SUMMARY)
 
@@ -307,6 +324,9 @@ export default function AttendanceFlow({
             onToggle={toggleMember}
             onSave={handleSave}
             onBack={() => setStep(STEP.DATE)}
+            firstTimers={firstTimers}
+            ftAttendance={ftAttendance}
+            onToggleFT={id => setFtAttendance(p => ({ ...p, [id]: !p[id] }))}
           />
         )
       )}
@@ -603,15 +623,20 @@ function StepDate({ group, church, onSelect, onBack, isFirstTimers }) {
 
 function StepMark({
   group, date, members, attendance, markMode,
-  loading, saving, onToggle, onSave, onBack
+  loading, saving, onToggle, onSave, onBack,
+  firstTimers = [], ftAttendance = {}, onToggleFT,
 }) {
   const [search,  setSearch]  = useState('')
   const searchRef = useRef(null)
 
-  const filtered     = members.filter(m => m.name.toLowerCase().includes(search.toLowerCase()))
-  const presentCount = Object.values(attendance).filter(Boolean).length
-  const absentCount  = members.length - presentCount
-  const progress     = members.length > 0 ? (presentCount / members.length) * 100 : 0
+  const filtered       = members.filter(m => m.name.toLowerCase().includes(search.toLowerCase()))
+  const filteredFT     = firstTimers.filter(ft => ft.name.toLowerCase().includes(search.toLowerCase()))
+  const ftPresentCount = Object.values(ftAttendance).filter(Boolean).length
+  const memberPresent  = Object.values(attendance).filter(Boolean).length
+  const presentCount   = memberPresent + ftPresentCount
+  const absentCount    = (members.length - memberPresent) + (firstTimers.length - ftPresentCount)
+  const totalCount     = members.length + firstTimers.length
+  const progress       = totalCount > 0 ? (presentCount / totalCount) * 100 : 0
 
   return (
     <div className="flex flex-col h-dvh bg-ivory">
@@ -705,6 +730,55 @@ function StepMark({
                 </button>
               )
             })}
+
+            {/* ── First Timers section — appended to main list ── */}
+            {firstTimers.length > 0 && (
+              <>
+                <div style={{ display:'flex', alignItems:'center', gap:8, padding:'12px 4px 6px' }}>
+                  <div style={{ flex:1, height:1, background:'rgba(201,168,76,0.25)' }} />
+                  <span style={{ fontSize:11, fontWeight:600, color:'#a8862e', letterSpacing:'0.06em', textTransform:'uppercase' }}>
+                    ⭐ First Timers ({filteredFT.length})
+                  </span>
+                  <div style={{ flex:1, height:1, background:'rgba(201,168,76,0.25)' }} />
+                </div>
+                {filteredFT.map(ft => {
+                  const isPresent = ftAttendance[ft.id] ?? false
+                  const av = getAv(ft.name)
+                  return (
+                    <button
+                      key={'ft_' + ft.id}
+                      onClick={() => onToggleFT && onToggleFT(ft.id)}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border
+                        transition-all duration-150 active:scale-[0.98] text-left
+                        ${isPresent
+                          ? 'bg-gold/8 border-gold/30 hover:bg-gold/12'
+                          : 'bg-white border-gold/20 hover:bg-ivory'
+                        }`}
+                      style={{ borderStyle: 'dashed' }}
+                    >
+                      <div className="avatar shrink-0" style={{ background: av.bg, color: av.color }}>
+                        {av.initials}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-forest text-[15px] truncate">{ft.name}</p>
+                        {ft.phone && <p className="text-xs text-mist mt-0.5">{ft.phone}</p>}
+                      </div>
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors
+                        ${isPresent
+                          ? 'bg-gold text-white'
+                          : 'bg-ivory-deeper text-mist border border-gold/20'
+                        }`}
+                      >
+                        {isPresent
+                          ? <CheckIcon className="w-4 h-4" />
+                          : <XIcon className="w-4 h-4" style={{ opacity: 0.5 }} />
+                        }
+                      </div>
+                    </button>
+                  )
+                })}
+              </>
+            )}
           </div>
         )}
       </div>
@@ -713,7 +787,7 @@ function StepMark({
       <div className="attendance-save-bar">
         <button
           onClick={onSave}
-          disabled={saving || loading || members.length === 0}
+          disabled={saving || loading || (members.length === 0 && firstTimers.length === 0)}
           className="btn-primary btn-lg w-full"
           style={{ background: 'linear-gradient(135deg,#1a3a2a,#2d5a42)', minHeight: 52 }}
         >
