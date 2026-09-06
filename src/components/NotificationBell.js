@@ -53,22 +53,23 @@ export function useInAppNotifications() {
 
 export default function NotificationBell({ pendingFollowUps = 0 }) {
   const { notifications, unreadCount, add, markRead, markAllRead } = useInAppNotifications()
-  const [open,   setOpen]   = useState(false)
-  const [seeded, setSeeded] = useState(false)
+  const [open,    setOpen]    = useState(false)
+  const [seeded,  setSeeded]  = useState(false)
+  const [mounted, setMounted] = useState(false)
 
-  // Seed follow-up notification
+  // All hooks must be declared before any early return
+  useEffect(() => { setMounted(true) }, [])
+
   useEffect(() => {
-    if (seeded || pendingFollowUps === 0) return
+    if (!mounted || seeded || pendingFollowUps === 0) return
     setSeeded(true)
     const existing = getStoredNotifications()
     const recent = existing.find(n => n.type === 'followup' && Date.now() - new Date(n.createdAt).getTime() < 86400000)
     if (!recent) {
       add('followup', `${pendingFollowUps} member${pendingFollowUps !== 1 ? 's' : ''} from last Sunday still need${pendingFollowUps === 1 ? 's' : ''} follow-up`, '/absentees')
     }
-  }, [pendingFollowUps, seeded, add])
+  }, [pendingFollowUps, seeded, add, mounted])
 
-  // Poll churches.notifications for admin-added credits
-  // Checks once on mount, then every 2 min, or on tab focus
   const checkAdminNotifications = useCallback(async () => {
     try {
       const supabase = createClient()
@@ -83,12 +84,9 @@ export default function NotificationBell({ pendingFollowUps = 0 }) {
 
       const stored = getStoredNotifications()
       const storedIds = new Set(stored.map(n => n.id))
-
-      // Find new notifications not yet in localStorage
       const newOnes = church.notifications.filter(n => n.id && !storedIds.has(String(n.id)))
       if (newOnes.length === 0) return
 
-      // Add each new one to localStorage
       let current = stored
       for (const n of newOnes) {
         const notif = {
@@ -105,11 +103,9 @@ export default function NotificationBell({ pendingFollowUps = 0 }) {
       setNotifications(current)
       window.dispatchEvent(new Event('ct_notification_added'))
 
-      // Also fire push notification if permission granted
       if (typeof window !== 'undefined' && Notification.permission === 'granted' && newOnes.length > 0) {
-        const latest = newOnes[0]
         new Notification('✅ Credits Added', {
-          body: latest.message,
+          body: newOnes[0].message,
           icon: '/icons/icon-192.png',
           tag:  'credits-added',
         })
@@ -119,11 +115,13 @@ export default function NotificationBell({ pendingFollowUps = 0 }) {
 
   useEffect(() => {
     checkAdminNotifications()
-    const interval = setInterval(checkAdminNotifications, 120000) // every 2 min
-    const onFocus  = () => checkAdminNotifications()
-    window.addEventListener('focus', onFocus)
-    return () => { clearInterval(interval); window.removeEventListener('focus', onFocus) }
+    const interval = setInterval(checkAdminNotifications, 120000)
+    window.addEventListener('focus', checkAdminNotifications)
+    return () => { clearInterval(interval); window.removeEventListener('focus', checkAdminNotifications) }
   }, [checkAdminNotifications])
+
+  // Early return AFTER all hooks
+  if (!mounted) return null
 
   function fmtTime(iso) {
     const diff = Date.now() - new Date(iso).getTime()
@@ -135,21 +133,23 @@ export default function NotificationBell({ pendingFollowUps = 0 }) {
   }
 
   const iconForType = {
-    followup:      <UserX  size={14} style={{ color: '#dc2626' }} />,
-    attendance:    <Calendar size={14} style={{ color: '#1a3a2a' }} />,
+    followup:      <UserX     size={14} style={{ color: '#dc2626' }} />,
+    attendance:    <Calendar  size={14} style={{ color: '#1a3a2a' }} />,
     member:        <CheckCircle size={14} style={{ color: '#16a34a' }} />,
-    credits_added: <Zap size={14} style={{ color: '#c9a84c' }} />,
+    credits_added: <Zap       size={14} style={{ color: '#c9a84c' }} />,
   }
 
   return (
     <>
       <div style={{ position: 'relative', flexShrink: 0 }}>
-        <button onClick={() => setOpen(o => !o)}
+        <button
+          onClick={() => setOpen(o => !o)}
           style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 8, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff', position: 'relative' }}
-          aria-label="Notifications">
+          aria-label="Notifications"
+        >
           <Bell size={16} />
           {unreadCount > 0 && (
-            <span style={{ position: 'absolute', top: -3, right: -3, background: '#dc2626', color: '#fff', fontSize: 9, fontWeight: 800, lineHeight: 1, minWidth: 16, height: 16, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px', border: '2px solid #0d1f15' }}>
+            <span style={{ position: 'absolute', top: -3, right: -3, background: '#dc2626', color: '#fff', fontSize: 9, fontWeight: 800, lineHeight: 1, minWidth: 16, height: 16, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px', border: '2px solid #1a3a2a' }}>
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}
@@ -158,8 +158,10 @@ export default function NotificationBell({ pendingFollowUps = 0 }) {
 
       {open && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 200 }} onClick={() => setOpen(false)}>
-          <div style={{ position: 'absolute', top: 58, right: 12, width: 320, maxWidth: 'calc(100vw - 24px)', background: '#fff', borderRadius: 16, boxShadow: '0 8px 40px rgba(0,0,0,0.18)', border: '1px solid rgba(26,58,42,0.1)', overflow: 'hidden', maxHeight: '70dvh', display: 'flex', flexDirection: 'column' }}
-            onClick={e => e.stopPropagation()}>
+          <div
+            style={{ position: 'absolute', top: 58, right: 12, width: 320, maxWidth: 'calc(100vw - 24px)', background: '#fff', borderRadius: 16, boxShadow: '0 8px 40px rgba(0,0,0,0.18)', border: '1px solid rgba(26,58,42,0.1)', overflow: 'hidden', maxHeight: '70dvh', display: 'flex', flexDirection: 'column' }}
+            onClick={e => e.stopPropagation()}
+          >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 12px', borderBottom: '1px solid rgba(26,58,42,0.08)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Bell size={15} style={{ color: '#1a3a2a' }} />

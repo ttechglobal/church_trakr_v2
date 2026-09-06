@@ -1,101 +1,131 @@
-// ChurchTrakr Service Worker v4
-// Must be at /public/sw.js so it's served at /sw.js
-// Commit this file to git — Vercel won't serve it otherwise.
+// ChurchTrakr Service Worker
+// Handles: push notifications, offline caching, background sync
+const CACHE_NAME  = 'churchtrakr-v2'
+const CACHE_URLS  = [
+  '/',
+  '/dashboard',
+  '/offline',
+]
 
-const CACHE = 'ct-v4'
-
-self.addEventListener('install', () => self.skipWaiting())
-
-self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
+// ── Install: cache shell ──────────────────────────────────────────────────────
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(CACHE_URLS).catch(() => {}))
+      .then(() => self.skipWaiting())
   )
 })
 
-self.addEventListener('fetch', e => {
-  const { request } = e
+// ── Activate: clean old caches ───────────────────────────────────────────────
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+    ).then(() => self.clients.claim())
+  )
+})
+
+// ── Fetch: network-first for API, cache-first for static ─────────────────────
+self.addEventListener('fetch', event => {
+  const { request } = event
   const url = new URL(request.url)
 
-  // Only handle same-origin GETs
-  if (request.method !== 'GET' || url.origin !== self.location.origin) return
-  // Never cache API calls
-  if (url.pathname.startsWith('/api/')) return
-  // Never cache Next.js HMR / dev
-  if (url.pathname.startsWith('/_next/webpack-hmr')) return
+  // Never cache API calls or Supabase
+  if (url.pathname.startsWith('/api/') || url.hostname.includes('supabase')) {
+    return // let it fall through to network
+  }
 
-  const isStatic =
-    url.pathname.startsWith('/_next/static/') ||
-    url.pathname.startsWith('/icons/') ||
-    url.pathname === '/manifest.json' ||
-    url.pathname.endsWith('.png') ||
-    url.pathname.endsWith('.ico') ||
-    url.pathname.endsWith('.svg')
-
-  if (isStatic) {
-    // Cache-first: serve from cache, update cache in background
-    e.respondWith(
-      caches.open(CACHE).then(cache =>
-        cache.match(request).then(cached => {
-          const fetchPromise = fetch(request).then(res => {
-            // Clone BEFORE returning so we can put a copy in cache
-            if (res.ok) cache.put(request, res.clone())
-            return res
-          }).catch(() => cached)
-          return cached || fetchPromise
+  // Network-first for navigation
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then(res => {
+          const clone = res.clone()
+          caches.open(CACHE_NAME).then(c => c.put(request, clone)).catch(() => {})
+          return res
         })
-      )
+        .catch(() => caches.match(request).then(r => r || caches.match('/')))
     )
     return
   }
 
-  // Navigation requests: network-first, cache fallback
-  if (request.mode === 'navigate') {
-    e.respondWith(
-      fetch(request)
-        .then(res => {
-          if (res.ok) {
-            // Clone BEFORE using the response, then cache the clone
-            const clone = res.clone()
-            caches.open(CACHE).then(c => c.put(request, clone))
-          }
+  // Cache-first for static assets (fonts, icons, CSS, JS chunks)
+  if (
+    url.pathname.match(/\.(ico|png|svg|webp|woff2?|css|js)$/) ||
+    url.hostname === 'fonts.googleapis.com' ||
+    url.hostname === 'fonts.gstatic.com'
+  ) {
+    event.respondWith(
+      caches.match(request).then(cached => {
+        if (cached) return cached
+        return fetch(request).then(res => {
+          const clone = res.clone()
+          caches.open(CACHE_NAME).then(c => c.put(request, clone)).catch(() => {})
           return res
         })
-        .catch(() =>
-          caches.match(request)
-            .then(cached => cached || caches.match('/dashboard'))
-        )
+      })
     )
+    return
   }
 })
 
-// Push notifications
-self.addEventListener('push', e => {
-  if (!e.data) return
-  let p = { title: 'ChurchTrakr', body: '', url: '/dashboard' }
-  try { p = { ...p, ...e.data.json() } } catch { p.body = e.data.text() }
-  e.waitUntil(
-    self.registration.showNotification(p.title, {
-      body: p.body, icon: '/icons/icon-192.png',
-      badge: '/icons/icon-192.png', tag: 'ct', data: { url: p.url },
+// ── Push: handle push notifications from server ───────────────────────────────
+self.addEventListener('push', event => {
+  let data = { title: 'ChurchTrakr', body: 'You have a new notification', url: '/dashboard' }
+
+  if (event.data) {
+    try { data = { ...data, ...event.data.json() } } catch {}
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body:    data.body,
+      icon:    '/icons/icon-192.png',
+      badge:   '/icons/icon-72.png',
+      tag:     data.tag || 'churchtrakr',
+      data:    { url: data.url || '/dashboard' },
+      actions: data.actions || [],
+      vibrate: [200, 100, 200],
+      requireInteraction: data.requireInteraction || false,
     })
   )
 })
 
-self.addEventListener('notificationclick', e => {
-  e.notification.close()
-  const url = e.notification.data?.url || '/dashboard'
-  e.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
-      for (const c of clients) {
-        if (c.url.includes(self.location.origin)) { c.navigate(url); c.focus(); return }
+// ── Notification click ────────────────────────────────────────────────────────
+self.addEventListener('notificationclick', event => {
+  event.notification.close()
+  const url = event.notification.data?.url || '/dashboard'
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+      // Focus existing window if open
+      for (const client of windowClients) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.focus()
+          client.navigate(url)
+          return
+        }
       }
-      return self.clients.openWindow(url)
+      // Otherwise open new window
+      if (clients.openWindow) return clients.openWindow(url)
     })
   )
 })
 
-self.addEventListener('message', e => {
-  if (e.data?.type === 'SKIP_WAITING') self.skipWaiting()
+// ── Background sync: flush offline attendance queue ──────────────────────────
+self.addEventListener('sync', event => {
+  if (event.tag === 'attendance-sync') {
+    event.waitUntil(flushOfflineQueue())
+  }
 })
+
+async function flushOfflineQueue() {
+  try {
+    // IndexedDB access via idb-keyval not available in SW without import,
+    // so we message the client to flush instead
+    const allClients = await clients.matchAll({ type: 'window' })
+    for (const client of allClients) {
+      client.postMessage({ type: 'FLUSH_OFFLINE_QUEUE' })
+    }
+  } catch {}
+}

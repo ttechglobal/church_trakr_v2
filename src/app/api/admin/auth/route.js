@@ -5,12 +5,7 @@
  * Reads env vars INSIDE the handler (not at module level) so they are
  * always current — no restart required after adding them.
  *
- * TEMPORARY DIAGNOSTIC MODE — added to find the 401 root cause on
- * churchtrakr.online. Safe to ship: never echoes actual secret values,
- * only booleans/lengths/first-char so we can compare without exposing
- * anything sensitive in the response or in logs.
- *
- * ⚠️ REMOVE the `debug` block below once the real bug is found and fixed.
+ * Auth handler — validates admin credentials and sets session cookie.
  */
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
@@ -43,7 +38,7 @@ export async function POST(request) {
       password.trim() === ADMIN_PASSWORD.trim(),
   }
 
-  console.log('[admin/auth] DIAGNOSTIC:', JSON.stringify(debug))
+  // Diagnostic logging removed — auth debug data never logged
 
   if (!ADMIN_PASSWORD) {
     return NextResponse.json({

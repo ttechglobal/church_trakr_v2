@@ -3,6 +3,7 @@ import { createAdminClient }  from '@/lib/supabase/admin'
 import AbsenteesClient        from '@/components/absentees/AbsenteesClient'
 
 export const metadata = { title: 'Follow-Up' }
+export const revalidate = 30
 
 export default async function AbsenteesPage() {
   const user = await getUser()
@@ -18,10 +19,10 @@ export default async function AbsenteesPage() {
     admin.from('groups').select('id,name')
       .eq('church_id', church.id).neq('name', 'First Timers'),
     admin.from('attendance_sessions')
-      .select('id,date,group_id,groups(name),attendance_records(member_id,name,present)')
+      .select('id,date,group_id,groups(name),attendance_records(member_id,present)')
       .eq('church_id', church.id)
       .order('date', { ascending: false })
-      .limit(120),
+      .limit(40),   // one latest session per group — 40 is enough for 10 groups × 4 weeks
   ])
 
   const groups   = groupsRes.data ?? []

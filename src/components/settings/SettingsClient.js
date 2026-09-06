@@ -84,10 +84,14 @@ export default function SettingsClient({ church: initialChurch, user }) {
   }
 
   async function handleDeleteAccount() {
-    if (deleteConfirm !== 'DELETE') return
+    if (deleteConfirm !== 'DELETE MY ACCOUNT') return
     setDeleting(true)
     try {
-      const res = await fetch('/api/settings/delete-account', { method: 'DELETE' })
+      const res = await fetch('/api/settings/delete-account', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmText: 'DELETE MY ACCOUNT' }),
+      })
       if (res.ok) {
         const supabase = createClient()
         await supabase.auth.signOut()
@@ -213,13 +217,31 @@ export default function SettingsClient({ church: initialChurch, user }) {
           </div>
 
           <div className="card space-y-3" style={{ borderColor: 'rgba(220,38,38,0.2)' }}>
+            {/* ── Data export ── */}
+            <div className="card space-y-3" style={{ borderColor: 'rgba(26,58,42,0.15)' }}>
+              <h3 className="font-semibold text-forest">Your data</h3>
+              <p className="text-sm text-mist">Download a copy of all your church data — members, attendance records, follow-up notes, and SMS history — as a JSON file.</p>
+              <a
+                href="/api/settings/export-data"
+                download
+                className="btn btn-outline w-full text-center"
+                style={{ display:'block', textAlign:'center', lineHeight:'2.5' }}
+              >
+                Download my data
+              </a>
+              <p className="text-xs text-mist">You can request a new export once every 10 minutes. Your privacy policy is available at{' '}
+                <a href="/privacy" className="text-forest font-medium underline" target="_blank">churchtrakr.com/privacy</a>.
+              </p>
+            </div>
+
             <h3 className="font-semibold text-error">Danger zone</h3>
             <p className="text-sm text-mist">Permanently delete your account and all data. This cannot be undone.</p>
-            <input className="input text-sm border-error/30" placeholder='Type "DELETE" to confirm'
+            <input className="input text-sm border-error/30" placeholder='Type "DELETE MY ACCOUNT" to confirm'
               value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} />
-            <button onClick={handleDeleteAccount} disabled={deleteConfirm !== 'DELETE' || deleting}
+            <p className="text-xs text-mist">This will permanently erase all members, attendance records, follow-up data, and SMS logs. There is no undo.</p>
+            <button onClick={handleDeleteAccount} disabled={deleteConfirm !== 'DELETE MY ACCOUNT' || deleting}
               className="btn btn-danger w-full">
-              {deleting ? 'Deleting…' : 'Delete account permanently'}
+              {deleting ? 'Deleting everything…' : 'Permanently delete my account and all data'}
             </button>
           </div>
         </div>

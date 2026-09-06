@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import MembersClient from '@/components/members/MembersClient'
 
 export const metadata = { title: 'Members' }
+export const revalidate = 60  // members list doesn't change that fast
 
 export default async function MembersPage() {
   const user = await getUser()
@@ -14,8 +15,10 @@ export default async function MembersPage() {
   const admin = createAdminClient()
 
   const { data: members } = await admin
-    .from('members').select('*')
-    .eq('church_id', church.id).order('name', { ascending: true })
+    .from('members')
+    .select('id, name, phone, status, birthday, groupIds, created_at, address, away_since')
+    .eq('church_id', church.id)
+    .order('name', { ascending: true })
 
   const { data: groups } = await admin
     .from('groups').select('id,name')

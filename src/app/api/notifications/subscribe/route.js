@@ -1,62 +1,69 @@
-import { NextResponse } from 'next/server'
-import { withAuth } from '@/lib/apiAuth'
-
 /**
  * POST /api/notifications/subscribe
- * Saves a push subscription to the church record.
- * Multiple devices per church are supported.
- */
-export const POST = withAuth(async (request, { church, admin }) => {
-  const { subscription } = await request.json()
-
-  if (!subscription?.endpoint) {
-    return NextResponse.json({ error: 'Invalid subscription' }, { status: 400 })
-  }
-
-  // Store subscription in church record under push_subscriptions JSONB array
-  // We keep up to 20 subscriptions (one per device)
-  const existing = church.push_subscriptions ?? []
-
-  // Remove any existing subscription with the same endpoint (re-subscribe)
-  const filtered = existing.filter(s => s.endpoint !== subscription.endpoint)
-
-  // Add new subscription with timestamp
-  const updated = [
-    ...filtered,
-    { ...subscription, subscribedAt: new Date().toISOString() },
-  ].slice(-20)   // keep latest 20
-
-  const { error } = await admin
-    .from('churches')
-    .update({ push_subscriptions: updated })
-    .eq('id', church.id)
-
-  if (error) {
-    console.error('[POST /api/notifications/subscribe]', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  return NextResponse.json({ success: true, count: updated.length })
-})
-
-/**
+ * Saves a Web Push subscription for the current user's church.
+ * Subscription is stored in churches.push_subscriptions (jsonb array).
+ *
  * DELETE /api/notifications/subscribe
- * Removes a push subscription (user unsubscribed on this device).
+ * Removes a push subscription (on permission revoke / logout).
  */
-export const DELETE = withAuth(async (request, { church, admin }) => {
-  const { endpoint } = await request.json()
+import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient }      from '@/lib/supabase/server'
+import { NextResponse }      from 'next/server'
 
-  if (!endpoint) {
-    return NextResponse.json({ error: 'endpoint required' }, { status: 400 })
+async function getChurchId(admin, userId) {
+  const { data } = await admin
+    .from('churches').select('id, push_subscriptions').eq('admin_user_id', userId).single()
+  return data
+}
+
+export async function POST(request) {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const subscription = await request.json()
+    if (!subscription?.endpoint) {
+      return NextResponse.json({ error: 'Invalid subscription' }, { status: 400 })
+    }
+
+    const admin  = createAdminClient()
+    const church = await getChurchId(admin, user.id)
+    if (!church) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    // Add to subscriptions array, deduplicating by endpoint
+    const existing = church.push_subscriptions ?? []
+    const filtered = existing.filter(s => s.endpoint !== subscription.endpoint)
+    const updated  = [...filtered, { ...subscription, userId: user.id, savedAt: new Date().toISOString() }]
+
+    await admin.from('churches')
+      .update({ push_subscriptions: updated })
+      .eq('id', church.id)
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error('[POST /api/notifications/subscribe]', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
+}
 
-  const existing = church.push_subscriptions ?? []
-  const updated  = existing.filter(s => s.endpoint !== endpoint)
+export async function DELETE(request) {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  await admin
-    .from('churches')
-    .update({ push_subscriptions: updated })
-    .eq('id', church.id)
+    const { endpoint } = await request.json().catch(() => ({}))
+    const admin  = createAdminClient()
+    const church = await getChurchId(admin, user.id)
+    if (!church) return NextResponse.json({ success: true })
 
-  return NextResponse.json({ success: true })
-})
+    const updated = (church.push_subscriptions ?? []).filter(s => s.endpoint !== endpoint)
+    await admin.from('churches').update({ push_subscriptions: updated }).eq('id', church.id)
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error('[DELETE /api/notifications/subscribe]', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}

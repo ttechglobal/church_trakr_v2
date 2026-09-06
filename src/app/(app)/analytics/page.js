@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import AnalyticsClient from '@/components/analytics/AnalyticsClient'
 
 export const metadata = { title: 'Analytics' }
+export const revalidate = 300  // analytics are fine with 5min cache
 
 export default async function AnalyticsPage() {
   const user = await getUser()
@@ -14,11 +15,11 @@ export default async function AnalyticsPage() {
   const [groupsRes, sessionsRes, membersRes, firstTimersRes, awayRes, followUpRes] = await Promise.allSettled([
     admin.from('groups').select('id,name').eq('church_id', church.id).neq('name', 'First Timers'),
     admin.from('attendance_sessions')
-      .select('id,date,group_id,groups(name),attendance_records(member_id,name,present)')
+      .select('id,date,group_id,groups(name),attendance_records(member_id,present)')
       .eq('church_id', church.id)
       .order('date', { ascending: false })
-      .limit(300),
-    admin.from('members').select('id,name,status,created_at,groupIds').eq('church_id', church.id),
+      .limit(52),   // 1 year of weekly sessions is plenty for analytics
+    admin.from('members').select('id,name,status,created_at,groupIds').eq('church_id', church.id).neq('status', 'inactive'),
     admin.from('first_timers').select('id,name,date,visits').eq('church_id', church.id).order('date', { ascending: false }),
     admin.from('members').select('id,name,away_since').eq('church_id', church.id).eq('status', 'away'),
     Promise.resolve({ data: church.follow_up_data ?? {} }),

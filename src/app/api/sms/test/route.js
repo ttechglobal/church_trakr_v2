@@ -28,8 +28,7 @@ export async function POST(request) {
     const apiKey   = process.env.TERMII_API_KEY
     const senderId = process.env.TERMII_SENDER_ID ?? 'ChurchTrakr'
 
-    console.log('=== SMS TEST ===')
-    console.log('To:', to, '| API Key present:', !!apiKey, '| Prefix:', apiKey?.slice(0, 8))
+    // SMS test started — phone and API key not logged
 
     if (!apiKey) {
       return NextResponse.json({
@@ -51,7 +50,7 @@ export async function POST(request) {
     })
 
     const data = await res.json()
-    console.log('Termii test response:', JSON.stringify(data, null, 2))
+    // Termii response received — details not logged
 
     const ok = res.ok && (data.message_id || data.code === 'ok' || (typeof data.message === 'string' && data.message.toLowerCase().includes('success')))
 
@@ -65,7 +64,7 @@ export async function POST(request) {
     })
 
   } catch (err) {
-    console.error('[POST /api/sms/test]', err)
+    console.error('[POST /api/sms/test] send failed')
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }

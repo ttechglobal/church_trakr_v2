@@ -4,6 +4,7 @@ import { redirect }           from 'next/navigation'
 import DashboardClient        from '@/components/dashboard/DashboardClient'
 
 export const metadata = { title: 'Dashboard' }
+export const revalidate = 30  // revalidate at most every 30s
 
 function attendanceRate(present, total) {
   if (!total) return 0
@@ -23,15 +24,15 @@ export default async function DashboardPage() {
   // ── Parallel data fetch ───────────────────────────────────────────────────
   const [membersRes, sessionsRes, ftRes] = await Promise.all([
     admin.from('members')
-      .select('id, name, phone, status')
+      .select('id, name, phone')
       .eq('church_id', church.id)
-      .neq('status', 'away'),
+      .eq('status', 'active'),  // skip inactive/away — not needed on dashboard
 
     admin.from('attendance_sessions')
-      .select('id, date, group_id, groups(name), attendance_records(member_id, name, present)')
+      .select('id, date, group_id, groups(name), attendance_records(member_id, present)')
       .eq('church_id', church.id)
       .order('date', { ascending: false })
-      .limit(20),
+      .limit(8),   // only need last 4-8 for streak detection
 
     admin.from('first_timers')
       .select('id, name, date')

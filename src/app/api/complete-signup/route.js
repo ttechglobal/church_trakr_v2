@@ -40,7 +40,7 @@ export async function POST(request) {
       connection_code:        isChurch ? makeCode() : null,
     }
 
-    console.log('[complete-signup] inserting for userId:', userId.slice(0, 8) + '…')
+    // New church profile being created
 
     const { data: church, error: insertErr } = await admin
       .from('churches')
@@ -63,7 +63,7 @@ export async function POST(request) {
       }, { status: 500 })
     }
 
-    console.log('[complete-signup] created church:', church.id)
+    // Church profile created successfully
 
     // Default group for subgroup accounts
     if (!isChurch) {

@@ -61,7 +61,7 @@ async function sendSingle({ to, message, senderId, apiKey }) {
     const text = await res.text()
     try { raw = JSON.parse(text) } catch { raw = { rawText: text } }
 
-    console.log(`[broadcast] to=${to} http=${res.status}`, JSON.stringify(raw).slice(0, 200))
+    // PII-safe: log status only, never phone numbers or message content
 
     // Termii success conditions — same set used in /api/sms/send
     const success = res.ok && (
@@ -72,14 +72,14 @@ async function sendSingle({ to, message, senderId, apiKey }) {
 
     return { success, raw }
   } catch (err) {
-    console.error(`[broadcast] fetch error to=${to}:`, err.message)
+    console.error(`[broadcast] SMS send error:`, err.message)
     return { success: false, raw: { error: err.message } }
   }
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
 export async function POST(request) {
-  console.log('=== BROADCAST SEND ATTEMPT ===')
+  // Broadcast send started
 
   try {
     // ── Auth ──────────────────────────────────────────────────────────────────
@@ -97,7 +97,7 @@ export async function POST(request) {
       .single()
 
     if (churchErr || !church) {
-      console.error('[broadcast] church fetch failed:', churchErr?.message)
+      console.error('[broadcast] church fetch failed')
       return NextResponse.json({ error: 'Church not found' }, { status: 404 })
     }
 
@@ -124,7 +124,7 @@ export async function POST(request) {
     const { data: memberRows, error: membersErr } = await query
 
     if (membersErr) {
-      console.error('[broadcast] members fetch failed:', membersErr.message)
+      console.error('[broadcast] members fetch failed')
       return NextResponse.json({ error: 'Failed to load members' }, { status: 500 })
     }
 
@@ -141,7 +141,7 @@ export async function POST(request) {
 
     const skippedBadPhone = memberRows.length - members.length
     if (skippedBadPhone > 0) {
-      console.warn(`[broadcast] ${skippedBadPhone} member(s) skipped — unrecognisable phone number`)
+      // Some members skipped — unrecognisable phone numbers (count only, no numbers logged)
     }
 
     if (!members.length) {
@@ -154,7 +154,7 @@ export async function POST(request) {
     const currentBalance = church.sms_credits ?? 0
     const maxCanSend     = Math.floor(currentBalance / CREDITS_PER_SMS)
 
-    console.log(`[broadcast] ${members.length} valid recipients | Balance: ${currentBalance} credits | Max can send: ${maxCanSend} | Cost per SMS: ${CREDITS_PER_SMS}`)
+    // PII-safe summary: recipients count and credit balance only (no phone numbers)
 
     if (maxCanSend === 0) {
       return NextResponse.json({
@@ -169,7 +169,7 @@ export async function POST(request) {
     const skippedCost = members.slice(maxCanSend)
 
     if (skippedCost.length > 0) {
-      console.warn(`[broadcast] ${skippedCost.length} recipient(s) skipped — insufficient credits`)
+      // Some recipients skipped — insufficient credits
     }
 
     // ── Sender ID ─────────────────────────────────────────────────────────────
@@ -178,11 +178,11 @@ export async function POST(request) {
       : (process.env.TERMII_SENDER_ID ?? 'ChurchTrakr')
 
     const apiKey = process.env.TERMII_API_KEY
-    console.log(`[broadcast] Sender ID: ${senderId} | API key present: ${!!apiKey}`)
+    // Sender ID and API key presence checked (not logged)
 
     // ── Simulate when no API key (dev / staging) ──────────────────────────────
     if (!apiKey) {
-      console.warn('[broadcast] TERMII_API_KEY not set — simulating send (no real SMS will be sent)')
+      console.warn('[broadcast] TERMII_API_KEY not set — simulating (no SMS sent)')
       const creditsUsed = toSend.length * CREDITS_PER_SMS
       const newBalance  = Math.max(0, currentBalance - creditsUsed)
 
@@ -257,7 +257,7 @@ export async function POST(request) {
     const creditsUsed = successCount * CREDITS_PER_SMS
     const newBalance  = Math.max(0, currentBalance - creditsUsed)
 
-    console.log(`[broadcast] Sent: ${successCount} | Failed: ${failCount} | Credits used: ${creditsUsed} | New balance: ${newBalance}`)
+    // Broadcast complete — counts tracked in DB, not in logs
 
     // Update balance + write log in parallel
     const [creditRes, logRes] = await Promise.allSettled([
@@ -278,10 +278,10 @@ export async function POST(request) {
     ])
 
     if (creditRes.status === 'rejected' || creditRes.value?.error) {
-      console.error('[broadcast] credit update failed:', creditRes.reason ?? creditRes.value?.error?.message)
+      console.error('[broadcast] credit update failed')
     }
     if (logRes.status === 'rejected' || logRes.value?.error) {
-      console.error('[broadcast] sms_logs write failed:', logRes.reason ?? logRes.value?.error?.message)
+      console.error('[broadcast] sms_logs write failed')
     }
 
     return NextResponse.json({
@@ -294,7 +294,7 @@ export async function POST(request) {
     })
 
   } catch (err) {
-    console.error('[POST /api/sms/broadcast] Unhandled error:', err)
+    console.error('[POST /api/sms/broadcast] Unhandled error')
     return NextResponse.json({ error: 'Internal server error', detail: err.message }, { status: 500 })
   }
 }

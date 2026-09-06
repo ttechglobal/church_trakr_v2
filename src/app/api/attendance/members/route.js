@@ -76,7 +76,7 @@ export async function GET(request) {
     }
 
     const allMembers = membersRes.data ?? []
-    console.log(`[attendance/members] fetched ${allMembers.length} non-away members for church ${churchId}`)
+    // Members loaded
 
     // Filter to this group:
     //   - members whose groupIds contains this groupId
@@ -86,7 +86,7 @@ export async function GET(request) {
       return ids.length === 0 || ids.includes(groupId)
     })
 
-    console.log(`[attendance/members] ${members.length} members in group ${groupId}`)
+    // Group members loaded
 
     const existingSession  = sessionRes.data
     const existingRecords  = existingSession?.attendance_records?.length > 0

@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import AttendanceFlow from '@/components/attendance/AttendanceFlow'
 
 export const metadata = { title: 'Attendance' }
+export const revalidate = 0  // always fresh — user is actively marking
 
 export default async function AttendancePage({ searchParams }) {
   const user = await getUser()
@@ -21,7 +22,7 @@ export default async function AttendancePage({ searchParams }) {
   if (groupIds.length > 0) {
     const { data: sessions } = await admin
       .from('attendance_sessions')
-      .select('id,date,group_id,attendance_records(present)')
+      .select('id,date,group_id,attendance_records(present)')  // minimal — just need date + count
       .eq('church_id', church.id).in('group_id', groupIds)
       .order('date', { ascending: false }).limit(groupIds.length * 3)
     for (const s of (sessions ?? [])) {

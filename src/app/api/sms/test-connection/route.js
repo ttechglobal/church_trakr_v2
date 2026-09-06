@@ -36,7 +36,7 @@ export async function GET() {
     let data
     try { data = JSON.parse(text) } catch { data = { raw: text } }
 
-    console.log('[test-connection] Termii balance response:', JSON.stringify(data))
+    // Termii balance checked — response not logged
 
     if (!res.ok) {
       return NextResponse.json({
@@ -68,7 +68,7 @@ export async function GET() {
     })
 
   } catch (err) {
-    console.error('[GET /api/sms/test-connection]', err)
+    console.error('[GET /api/sms/test-connection] failed')
     return NextResponse.json({ error: 'Internal server error', detail: err.message }, { status: 500 })
   }
 }

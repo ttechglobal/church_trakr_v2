@@ -48,12 +48,12 @@ async function termiiSingle({ to, message, senderId, apiKey }) {
   let data; try { data = JSON.parse(text) } catch { data = { raw: text } }
   const ok = res.ok && (data.message_id || data.code === 'ok' ||
     (typeof data.message === 'string' && data.message.toLowerCase().includes('success')))
-  console.log(`[termii] to=${to} ok=${ok}`, JSON.stringify(data).slice(0, 200))
+  // PII-safe: individual send result tracked in DB only
   return { success: ok, messageId: data.message_id ?? null, raw: data }
 }
 
 async function termiiBulk({ numbers, message, senderId, apiKey }) {
-  console.log(`[termii/bulk] → ${numbers.length} numbers`)
+  // Bulk send initiated — count only
   const res  = await fetch('https://api.ng.termii.com/api/sms/send/bulk', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ api_key: apiKey, to: numbers, from: senderId, sms: message, type: 'plain', channel: 'generic' }),
@@ -62,12 +62,12 @@ async function termiiBulk({ numbers, message, senderId, apiKey }) {
   let data; try { data = JSON.parse(text) } catch { data = { raw: text } }
   const ok = res.ok && (data.message_id || data.code === 'ok' ||
     (typeof data.message === 'string' && data.message.toLowerCase().includes('success')))
-  console.log(`[termii/bulk] status=${res.status} ok=${ok}`, JSON.stringify(data).slice(0, 300))
+  // Bulk send response — status tracked in DB
   return { success: ok, raw: data }
 }
 
 export async function POST(request) {
-  console.log('=== SMS SEND ATTEMPT ===')
+  // SMS send started
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -83,13 +83,13 @@ export async function POST(request) {
       .single()
 
     if (churchErr || !church) {
-      console.error('[sms/send] church fetch failed:', churchErr?.message)
+      console.error('[sms/send] church fetch failed')
       return NextResponse.json({ error: 'Church not found' }, { status: 404 })
     }
 
     const body = await request.json()
     const { recipients, message, type } = body
-    console.log(`Recipients: ${recipients?.length} | Message length: ${message?.length} | Type: ${type}`)
+    // Recipients count and message type checked
 
     if (!recipients?.length || !message?.trim()) {
       return NextResponse.json({ error: 'Recipients and message are required' }, { status: 400 })
@@ -99,7 +99,7 @@ export async function POST(request) {
     const currentBalance = church.sms_credits ?? 0
     const maxCanSend     = Math.floor(currentBalance / creditsPerSms)
 
-    console.log(`Pages: ${pages} | Credits/SMS: ${creditsPerSms} | Balance: ${currentBalance} | MaxCanSend: ${maxCanSend}`)
+    // Credit check passed
 
     if (maxCanSend === 0) {
       return NextResponse.json({
@@ -116,11 +116,11 @@ export async function POST(request) {
       : (process.env.TERMII_SENDER_ID ?? 'ChurchTrakr')
 
     const apiKey = process.env.TERMII_API_KEY
-    console.log(`Sender: ${senderId} | API key present: ${!!apiKey} | Prefix: ${apiKey?.slice(0, 8)}`)
+    // Sender ID and API key verified
 
     // ── Simulate if no API key ────────────────────────────────────────────────
     if (!apiKey) {
-      console.warn('[sms/send] No TERMII_API_KEY — simulating')
+      console.warn('[sms/send] No TERMII_API_KEY — simulating (no SMS sent)')
       const creditsUsed = toSend.length * creditsPerSms
       const newBalance  = Math.max(0, currentBalance - creditsUsed)
 

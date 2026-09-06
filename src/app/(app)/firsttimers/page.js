@@ -1,18 +1,15 @@
-import { createClient as createAdminClient } from '@supabase/supabase-js'
-import { createClient } from '@/lib/supabase/server'
+import { getUser }        from '@/lib/auth'
+import { createAdminClient } from '@/lib/supabase/admin'
 import FirstTimersClient from '@/components/firsttimers/FirstTimersClient'
 
 export const metadata = { title: 'First Timers' }
+export const revalidate = 60
 
 export default async function FirstTimersPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getUser()
   if (!user) return <div className="page-content"><a href="/login">Sign in</a></div>
 
-  const admin = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  )
+  const admin = createAdminClient()
 
   const { data: church } = await admin
     .from('churches').select('id,sms_credits').eq('admin_user_id', user.id).single()
