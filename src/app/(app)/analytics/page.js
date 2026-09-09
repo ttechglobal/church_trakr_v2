@@ -1,36 +1,46 @@
-import { getUser, getChurch } from '@/lib/auth'
-import { createAdminClient } from '@/lib/supabase/admin'
-import AnalyticsClient from '@/components/analytics/AnalyticsClient'
+import { getUser, getChurch }       from '@/lib/auth'
+import { getCachedGroups,
+         getCachedRecentSessions,
+         getCachedMembers,
+         getCachedFirstTimers }      from '@/lib/cached-queries'
+import { createAdminClient }         from '@/lib/supabase/admin'
+import { unstable_cache }            from 'next/cache'
+import AnalyticsClient               from '@/components/analytics/AnalyticsClient'
 
-export const metadata = { title: 'Analytics' }
+export const metadata  = { title: 'Analytics' }
 export const revalidate = 300  // analytics are fine with 5min cache
+
+function getCachedAwayMembers(churchId) {
+  const admin = createAdminClient()
+  return unstable_cache(
+    async () => {
+      const { data } = await admin
+        .from('members')
+        .select('id,name,away_since')
+        .eq('church_id', churchId)
+        .eq('status', 'away')
+      return data ?? []
+    },
+    [`members:away:${churchId}`],
+    { revalidate: 300, tags: [`members:${churchId}`] }
+  )()
+}
 
 export default async function AnalyticsPage() {
   const user = await getUser()
   if (!user) return <div style={{padding:'2rem'}}><a href="/login">Sign in</a></div>
+
+  // Analytics uses follow_up_data — full getChurch is correct
   const church = await getChurch(user.id, user.user_metadata)
   if (!church) return <div style={{padding:'2rem'}}><a href="/dashboard">Retry</a></div>
 
-  const admin = createAdminClient()
-  const [groupsRes, sessionsRes, membersRes, firstTimersRes, awayRes, followUpRes] = await Promise.allSettled([
-    admin.from('groups').select('id,name').eq('church_id', church.id).neq('name', 'First Timers'),
-    admin.from('attendance_sessions')
-      .select('id,date,group_id,groups(name),attendance_records(member_id,present)')
-      .eq('church_id', church.id)
-      .order('date', { ascending: false })
-      .limit(52),   // 1 year of weekly sessions is plenty for analytics
-    admin.from('members').select('id,name,status,created_at,groupIds').eq('church_id', church.id).neq('status', 'inactive'),
-    admin.from('first_timers').select('id,name,date,visits').eq('church_id', church.id).order('date', { ascending: false }),
-    admin.from('members').select('id,name,away_since').eq('church_id', church.id).eq('status', 'away'),
-    Promise.resolve({ data: church.follow_up_data ?? {} }),
+  const [groups, sessions, members, firstTimers, awayMembers] = await Promise.all([
+    getCachedGroups(church.id),
+    getCachedRecentSessions(church.id, 52),
+    getCachedMembers(church.id, 'id,name,status,created_at,groupIds'),
+    getCachedFirstTimers(church.id, 500),
+    getCachedAwayMembers(church.id),
   ])
-
-  const groups      = groupsRes.status      === 'fulfilled' ? (groupsRes.value.data      ?? []) : []
-  const sessions    = sessionsRes.status    === 'fulfilled' ? (sessionsRes.value.data    ?? []) : []
-  const members     = membersRes.status     === 'fulfilled' ? (membersRes.value.data     ?? []) : []
-  const firstTimers = firstTimersRes.status === 'fulfilled' ? (firstTimersRes.value.data ?? []) : []
-  const awayMembers = awayRes.status        === 'fulfilled' ? (awayRes.value.data        ?? []) : []
-  const followUpData = followUpRes.status   === 'fulfilled' ? (followUpRes.value.data    ?? {}) : {}
 
   return (
     <AnalyticsClient
@@ -40,7 +50,7 @@ export default async function AnalyticsPage() {
       members={members}
       firstTimers={firstTimers}
       awayMembers={awayMembers}
-      followUpData={followUpData}
+      followUpData={church.follow_up_data ?? {}}
     />
   )
 }

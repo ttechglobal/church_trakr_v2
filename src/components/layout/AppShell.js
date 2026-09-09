@@ -71,7 +71,16 @@ export default function AppShell({ church, user, children, pendingFollowUps = 0 
   }, [open])
 
   useEffect(() => {
+    // Throttle to once per 5 min — firing on every focus tab-switch was
+    // making two Supabase round-trips (auth + credits) every time the user
+    // switched back to the app from WhatsApp, another tab, etc.
+    let lastRefresh = 0
+    const THROTTLE_MS = 5 * 60 * 1000
+
     async function refresh() {
+      const now = Date.now()
+      if (now - lastRefresh < THROTTLE_MS) return
+      lastRefresh = now
       try {
         const supabase = createClient()
         const { data: { user: u } } = await supabase.auth.getUser()
@@ -271,16 +280,22 @@ export default function AppShell({ church, user, children, pendingFollowUps = 0 
                   className="shell-bottom-tab"
                   onClick={href === '/more' ? (e) => { e.preventDefault(); setOpen(true) } : undefined}
                 >
+                  {/* Badge */}
                   {label === 'Messages' && pendingFollowUps > 0 && (
-                    <span style={{ position: 'absolute', top: 8, right: 'calc(50% - 16px)', minWidth: 16, height: 16, background: '#dc2626', borderRadius: 99, fontSize: 9, fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', lineHeight: 1 }}>
+                    <span style={{ position: 'absolute', top: 7, right: 'calc(50% - 18px)', minWidth: 16, height: 16, background: '#dc2626', borderRadius: 99, fontSize: 9, fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', lineHeight: 1, zIndex: 1 }}>
                       {pendingFollowUps > 9 ? '9+' : pendingFollowUps}
                     </span>
                   )}
-                  <Icon size={22} strokeWidth={active ? 2.5 : 1.75} color={active ? '#1a3a2a' : '#8a9e90'} />
-                  <span style={{ color: active ? '#1a3a2a' : '#8a9e90' }}>{label}</span>
-                  {active && (
-                    <span style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: 20, height: 3, background: '#1a3a2a', borderRadius: '2px 2px 0 0' }} />
-                  )}
+                  {/* Icon with pill background when active */}
+                  <div style={{
+                    width: 48, height: 28, borderRadius: 14,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: active ? 'rgba(26,58,42,0.1)' : 'transparent',
+                    transition: 'background 0.15s',
+                  }}>
+                    <Icon size={20} strokeWidth={active ? 2.5 : 1.75} color={active ? '#1a3a2a' : '#8a9e90'} />
+                  </div>
+                  <span style={{ color: active ? '#1a3a2a' : '#8a9e90', fontSize: 10, fontWeight: active ? 700 : 500 }}>{label}</span>
                 </Link>
               )
             })}

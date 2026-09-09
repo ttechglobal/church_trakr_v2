@@ -1,73 +1,67 @@
-import { getUser, getChurch } from '@/lib/auth'
-import { createAdminClient } from '@/lib/supabase/admin'
-import AttendeesClient from '@/components/absentees/AttendeesClient'
+import { getUser, getChurch }         from '@/lib/auth'
+import { getCachedGroups,
+         getCachedAbsenteeSessions }   from '@/lib/cached-queries'   // reuse — same shape
+import { createAdminClient }           from '@/lib/supabase/admin'
+import AttendeesClient                 from '@/components/absentees/AttendeesClient'
 
-export const metadata = { title: 'Attendees' }
+export const metadata  = { title: 'Attendees' }
+export const revalidate = 30
 
 export default async function AttendeesPage() {
   const user = await getUser()
   if (!user) return <div style={{padding:'2rem'}}><a href="/login">Sign in</a></div>
 
+  // Needs attendee_followup_data — full getChurch is correct here
   const church = await getChurch(user.id, user.user_metadata)
   if (!church) return <div style={{padding:'2rem'}}><a href="/dashboard">Retry</a></div>
 
-  const admin = createAdminClient()
+  // Use cached queries — sessions limited to 60, groups cached 5 min
+  const [groups, allSessions] = await Promise.all([
+    getCachedGroups(church.id),
+    getCachedAbsenteeSessions(church.id),   // limit 60, tagged sessions:churchId
+  ])
 
-  const { data: groups } = await admin
-    .from('groups').select('id,name')
-    .eq('church_id', church.id).neq('name', 'First Timers')
+  const groupIds = new Set(groups.map(g => g.id))
 
-  const groupIds = (groups ?? []).map(g => g.id)
-  let attendeeData = []
+  // Latest session per group
+  const latestByGroup = {}
+  for (const s of allSessions) {
+    if (groupIds.has(s.group_id) && !latestByGroup[s.group_id]) latestByGroup[s.group_id] = s
+  }
 
-  if (groupIds.length > 0) {
-    const { data: sessions } = await admin
-      .from('attendance_sessions')
-      .select('id,date,group_id,groups(name),attendance_records(member_id,name,present)')
-      .eq('church_id', church.id)
-      .in('group_id', groupIds)
-      .order('date', { ascending: false })
-
-    // Latest session per group only
-    const latestByGroup = {}
-    for (const s of (sessions ?? [])) {
-      if (!latestByGroup[s.group_id]) latestByGroup[s.group_id] = s
+  // Collect present member IDs
+  const presentMemberIds = new Set()
+  for (const session of Object.values(latestByGroup)) {
+    for (const r of (session.attendance_records ?? [])) {
+      if (r.present && r.member_id) presentMemberIds.add(r.member_id)
     }
+  }
 
-    // Collect present members
-    const allMemberIds = new Set()
-    for (const session of Object.values(latestByGroup)) {
-      for (const r of (session.attendance_records ?? [])) {
-        if (r.present && r.member_id) allMemberIds.add(r.member_id)
-      }
-    }
+  // Targeted phone lookup — only for members who were present
+  let phoneMap = {}
+  if (presentMemberIds.size > 0) {
+    const admin = createAdminClient()
+    const { data: mems } = await admin
+      .from('members')
+      .select('id, name, phone')
+      .in('id', [...presentMemberIds])
+    for (const m of (mems ?? [])) phoneMap[m.id] = { phone: m.phone, name: m.name }
+  }
 
-    // Fetch phone numbers
-    let phoneMap = {}
-    if (allMemberIds.size > 0) {
-      const { data: memberRecords } = await admin
-        .from('members')
-        .select('id, name, phone')
-        .in('id', [...allMemberIds])
-      for (const m of (memberRecords ?? [])) {
-        phoneMap[m.id] = { phone: m.phone, name: m.name }
-      }
-    }
-
-    for (const session of Object.values(latestByGroup)) {
-      for (const r of (session.attendance_records ?? [])) {
-        if (!r.present) continue
-        const memberInfo = r.member_id ? phoneMap[r.member_id] : null
-        attendeeData.push({
-          memberId:  r.member_id,
-          name:      memberInfo?.name || r.name || 'Unknown',
-          phone:     memberInfo?.phone ?? null,
-          sessionId: session.id,
-          groupId:   session.group_id,
-          groupName: session.groups?.name ?? '',
-          date:      session.date,
-        })
-      }
+  const attendeeData = []
+  for (const session of Object.values(latestByGroup)) {
+    for (const r of (session.attendance_records ?? [])) {
+      if (!r.present) continue
+      const info = r.member_id ? phoneMap[r.member_id] : null
+      attendeeData.push({
+        memberId:  r.member_id,
+        name:      info?.name || r.name || 'Unknown',
+        phone:     info?.phone ?? null,
+        sessionId: session.id,
+        groupId:   session.group_id,
+        groupName: session.groups?.name ?? '',
+        date:      session.date,
+      })
     }
   }
 
@@ -75,7 +69,7 @@ export default async function AttendeesPage() {
     <AttendeesClient
       churchId={church.id}
       attendees={attendeeData}
-      groups={groups ?? []}
+      groups={groups}
       initialFollowUpData={church.attendee_followup_data ?? {}}
       currentUserName={church.admin_name || user.email || 'Team member'}
     />

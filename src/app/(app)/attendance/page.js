@@ -1,14 +1,36 @@
-import { getUser, getChurch } from '@/lib/auth'
-import { createAdminClient } from '@/lib/supabase/admin'
-import AttendanceFlow from '@/components/attendance/AttendanceFlow'
+import { getUser, getChurchLean }   from '@/lib/auth'
+import { createAdminClient }         from '@/lib/supabase/admin'
+import { unstable_cache }            from 'next/cache'
+import AttendanceFlow                from '@/components/attendance/AttendanceFlow'
 
-export const metadata = { title: 'Attendance' }
+export const metadata  = { title: 'Attendance' }
 export const revalidate = 0  // always fresh — user is actively marking
+
+// Cache first-timers list for 2 min on the attendance page
+// (we still need them available for the FT tab)
+function getCachedRecentFT(churchId) {
+  const admin = createAdminClient()
+  return unstable_cache(
+    async () => {
+      const { data } = await admin
+        .from('first_timers')
+        .select('id,name,phone,date')
+        .eq('church_id', churchId)
+        .order('date', { ascending: false })
+        .limit(50)
+      return data ?? []
+    },
+    [`ft:attendance:${churchId}`],
+    { revalidate: 120, tags: [`ft:${churchId}`] }
+  )()
+}
 
 export default async function AttendancePage({ searchParams }) {
   const user = await getUser()
   if (!user) return <div style={{padding:'2rem'}}><a href="/login">Sign in</a></div>
-  const church = await getChurch(user.id, user.user_metadata)
+
+  // Attendance only needs church.id and the object for AttendanceFlow — lean is enough
+  const church = await getChurchLean(user.id)
   if (!church) return <div style={{padding:'2rem'}}><a href="/dashboard">Retry</a></div>
 
   const admin = createAdminClient()
@@ -22,7 +44,7 @@ export default async function AttendancePage({ searchParams }) {
   if (groupIds.length > 0) {
     const { data: sessions } = await admin
       .from('attendance_sessions')
-      .select('id,date,group_id,attendance_records(present)')  // minimal — just need date + count
+      .select('id,date,group_id,attendance_records(present)')
       .eq('church_id', church.id).in('group_id', groupIds)
       .order('date', { ascending: false }).limit(groupIds.length * 3)
     for (const s of (sessions ?? [])) {
@@ -31,13 +53,9 @@ export default async function AttendancePage({ searchParams }) {
     }
   }
 
-  // Fetch first timers for the first-timers attendance option
-  const { data: firstTimers } = await admin
-    .from('first_timers')
-    .select('id,name,phone,date')
-    .eq('church_id', church.id)
-    .order('date', { ascending: false })
-    .limit(50)
+  const [firstTimers] = await Promise.all([
+    getCachedRecentFT(church.id),
+  ])
 
   const params = await searchParams
   return (
@@ -46,7 +64,7 @@ export default async function AttendancePage({ searchParams }) {
       groups={groups ?? []}
       sessionsByGroup={sessionsByGroup}
       preselectedGroupId={params?.group ?? null}
-      firstTimers={firstTimers ?? []}
+      firstTimers={firstTimers}
     />
   )
 }

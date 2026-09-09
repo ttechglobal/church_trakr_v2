@@ -1,10 +1,43 @@
-import { getUser, getChurch } from '@/lib/auth'
-import { createAdminClient } from '@/lib/supabase/admin'
-import AppShell from '@/components/layout/AppShell'
-import PWAInit from '@/components/PWAInit'
-import FollowUpBanner from '@/components/FollowUpBanner'
-import PWAPromptLoader from '@/components/PWAPromptLoader'
-import SupportButton from '@/components/ui/SupportButton'
+import { getUser, getChurch }  from '@/lib/auth'
+import { createAdminClient }    from '@/lib/supabase/admin'
+import { unstable_cache }       from 'next/cache'
+import AppShell                 from '@/components/layout/AppShell'
+import PWAInit                  from '@/components/PWAInit'
+import FollowUpBanner           from '@/components/FollowUpBanner'
+import PWAPromptLoader          from '@/components/PWAPromptLoader'
+import SupportButton            from '@/components/ui/SupportButton'
+
+// ── Cached follow-up badge count ─────────────────────────────────────────────
+// Revalidates every 60s. Tagged so attendance saves can bust it immediately.
+// This replaces the raw admin query that was firing on every single navigation.
+function getCachedPendingCount(churchId, followUpData) {
+  return unstable_cache(
+    async () => {
+      const admin = createAdminClient()
+      const { data: sessions } = await admin
+        .from('attendance_sessions')
+        .select('id, attendance_records(member_id, present)')
+        .eq('church_id', churchId)
+        .order('date', { ascending: false })
+        .limit(10)
+
+      const realSession = (sessions ?? []).find(s =>
+        (s.attendance_records ?? []).some(r => r.member_id !== null)
+      )
+
+      if (!realSession) return 0
+
+      const absentUnreached = (realSession.attendance_records ?? []).filter(r => {
+        if (!r.member_id || r.present) return false
+        const key = `${realSession.id}_${r.member_id}`
+        return !(followUpData[key]?.reached)
+      })
+      return absentUnreached.length
+    },
+    [`followup-badge:${churchId}`],
+    { revalidate: 60, tags: [`sessions:${churchId}`, `followup-badge:${churchId}`] }
+  )()
+}
 
 export default async function AppLayout({ children }) {
   const user = await getUser()
@@ -29,30 +62,13 @@ export default async function AppLayout({ children }) {
     redirect('/login')
   }
 
-  // Count pending follow-ups from most recent real attendance session
+  // Use cached query — no raw DB hit on every navigation
   let pendingFollowUps = 0
   try {
-    const admin = createAdminClient()
-    const { data: latestSession } = await admin
-      .from('attendance_sessions')
-      .select('id, attendance_records(member_id, present)')
-      .eq('church_id', church.id)
-      .order('date', { ascending: false })
-      .limit(10)
-
-    const realSession = (latestSession ?? []).find(s =>
-      (s.attendance_records ?? []).some(r => r.member_id !== null)
+    pendingFollowUps = await getCachedPendingCount(
+      church.id,
+      church.follow_up_data ?? {}
     )
-
-    if (realSession) {
-      const followUpData = church.follow_up_data ?? {}
-      const absentUnreached = (realSession.attendance_records ?? []).filter(r => {
-        if (!r.member_id || r.present) return false
-        const key = `${realSession.id}_${r.member_id}`
-        return !(followUpData[key]?.reached)
-      })
-      pendingFollowUps = absentUnreached.length
-    }
   } catch {}
 
   return (
@@ -61,7 +77,6 @@ export default async function AppLayout({ children }) {
       <FollowUpBanner pendingCount={pendingFollowUps} />
       <PWAPromptLoader />
       {children}
-      {/* Support button — visible on every page */}
       <SupportButton />
     </AppShell>
   )

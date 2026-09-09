@@ -1,92 +1,97 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   fmtDate, attendanceRate, rateColor, getTrend,
   getLastSunday, getPrevSunday, toISODate, getAv
 } from '@/lib/utils'
-import { notifyAttendanceSubmitted, showLocalNotification } from '@/hooks/useNotifications'
+import { notifyAttendanceSubmitted } from '@/hooks/useNotifications'
 
-// ─── Step constants ────────────────────────────────────────────────────────────
 const STEP = { GROUP: 1, DATE: 2, MARK: 3, SUMMARY: 4 }
-
-// Sentinel ID used to identify the first-timers pseudo-group
 const FIRST_TIMERS_ID = '__first_timers__'
+const BOTTOM_NAV_H = 62
+const SIDEBAR_W = 248
 
-// ─── Bottom nav height — must match AppShell.js BOTTOM_H ─────────────────────
-// The save bar is lifted above the bottom nav by this amount on mobile.
-const BOTTOM_NAV_H = 62 // px
-
-// ─── Icons ────────────────────────────────────────────────────────────────────
-function CheckIcon({ className }) {
+// ─── Inline icons ─────────────────────────────────────────────────────────────
+function Ico({ d, size = 16, stroke = 'currentColor', sw = 2, fill = 'none' }) {
   return (
-    <svg className={className} viewBox="0 0 20 20" fill="currentColor">
-      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={stroke} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+      <path d={d} />
     </svg>
   )
 }
-function XIcon({ className, style }) {
+function CheckSvg({ size = 14, color = '#fff' }) {
+  return <svg width={size} height={size} viewBox="0 0 20 20" fill={color}><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
+}
+function ChevL({ size = 18, color = '#1a3a2a' }) {
+  return <svg width={size} height={size} viewBox="0 0 20 20" fill={color}><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
+}
+function ChevR() {
+  return <svg width={16} height={16} viewBox="0 0 20 20" fill="#c5cec8"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"/></svg>
+}
+function SearchIco() {
+  return <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+}
+function Spin() {
   return (
-    <svg className={className} style={style} viewBox="0 0 20 20" fill="currentColor">
-      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+    <svg width={15} height={15} viewBox="0 0 24 24" fill="none" style={{ animation: 'att-spin 0.7s linear infinite', display: 'inline-block', verticalAlign: 'middle' }}>
+      <style>{`@keyframes att-spin{to{transform:rotate(360deg);}}`}</style>
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.2"/>
+      <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
     </svg>
   )
 }
-function ChevronLeft({ className }) {
+function DonutRing({ rate = 0, size = 110 }) {
+  const r = 36, cx = 50, cy = 50, circ = 2 * Math.PI * r
+  const dash = (Math.max(0, Math.min(100, rate)) / 100) * circ
+  const color = rate >= 70 ? '#16a34a' : rate >= 50 ? '#d97706' : '#dc2626'
   return (
-    <svg className={className ?? 'w-5 h-5'} viewBox="0 0 20 20" fill="currentColor">
-      <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-    </svg>
-  )
-}
-function SearchIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-    </svg>
-  )
-}
-function BarChart2({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
-    </svg>
-  )
-}
-function Spinner() {
-  return (
-    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-    </svg>
+    <div style={{ position: 'relative', width: size, height: size }}>
+      <svg width={size} height={size} viewBox="0 0 100 100">
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f0ede7" strokeWidth="10"/>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth="10"
+          strokeDasharray={`${dash} ${circ - dash}`} strokeDashoffset={circ / 4} strokeLinecap="round"/>
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: size * 0.22, fontWeight: 700, color, lineHeight: 1 }}>{rate}%</span>
+      </div>
+    </div>
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Main component
-// ─────────────────────────────────────────────────────────────────────────────
+// Skeleton row used while members load
+function SkeletonRow() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', borderBottom: '1px solid rgba(26,58,42,0.06)' }}>
+      <div className="skeleton" style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0 }} />
+      <div style={{ flex: 1 }}>
+        <div className="skeleton" style={{ height: 14, width: '55%', marginBottom: 6, borderRadius: 6 }} />
+        <div className="skeleton" style={{ height: 11, width: '35%', borderRadius: 6 }} />
+      </div>
+      <div className="skeleton" style={{ width: 60, height: 26, borderRadius: 8 }} />
+      <div className="skeleton" style={{ width: 28, height: 28, borderRadius: '50%' }} />
+    </div>
+  )
+}
 
-export default function AttendanceFlow({
-  church, groups, sessionsByGroup, preselectedGroupId, firstTimers = []
-}) {
+// ─── Root controller (logic only, no render) ──────────────────────────────────
+export default function AttendanceFlow({ church, groups, sessionsByGroup, preselectedGroupId, firstTimers = [] }) {
   const router = useRouter()
   const [step, setStep] = useState(preselectedGroupId ? STEP.DATE : STEP.GROUP)
   const [selectedGroup, setSelectedGroup] = useState(
     preselectedGroupId ? groups.find(g => g.id === preselectedGroupId) ?? null : null
   )
-  const [selectedDate,    setSelectedDate]    = useState('')
+  const [selectedDate,      setSelectedDate]      = useState('')
   const [existingSessionId, setExistingSessionId] = useState(null)
-  const [members,         setMembers]         = useState([])
-  const [attendance,      setAttendance]      = useState({})
-  const [loadingMembers,  setLoadingMembers]  = useState(false)
-  const [saving,          setSaving]          = useState(false)
-  const [savingFT,        setSavingFT]        = useState(false)
-  const [savedResult,     setSavedResult]     = useState(null)
-  const [markMode,        setMarkMode]        = useState('all') // 'all' | 'absent'
-  const [ftAttendance,    setFtAttendance]    = useState({})
+  const [members,           setMembers]           = useState([])
+  const [attendance,        setAttendance]        = useState({})
+  const [loadingMembers,    setLoadingMembers]    = useState(false)
+  const [saving,            setSaving]            = useState(false)
+  const [savingFT,          setSavingFT]          = useState(false)
+  const [savedResult,       setSavedResult]       = useState(null)
+  const [ftAttendance,      setFtAttendance]      = useState({})
 
-  // Pre-select first group if only one and no preselectedGroupId
   useEffect(() => {
     if (!preselectedGroupId && groups.length === 1) {
       setSelectedGroup(groups[0])
@@ -94,346 +99,181 @@ export default function AttendanceFlow({
     }
   }, []) // eslint-disable-line
 
-  // ── Step 1 → 2: Group selected ──
-  function handleGroupSelect(group) {
-    setSelectedGroup(group)
-    setStep(STEP.DATE)
-  }
+  function handleGroupSelect(group) { setSelectedGroup(group); setStep(STEP.DATE) }
 
-  // ── Step 2 → 3: Date selected ──
   async function handleDateSelect(date, existingId) {
     setSelectedDate(date)
     setExistingSessionId(existingId)
-
     if (selectedGroup?.id === FIRST_TIMERS_ID) {
-      // For first timers, pre-load their existing attendance if any
       const initFt = {}
       for (const ft of firstTimers) initFt[ft.id] = false
       if (existingId) {
         try {
           const res = await fetch(`/api/attendance/firsttimers?date=${date}`)
-          const data = await res.json()
-          for (const r of (data.records ?? [])) {
-            initFt[r.member_id] = r.present
-          }
+          for (const r of ((await res.json()).records ?? [])) initFt[r.member_id] = r.present
         } catch {}
       }
       setFtAttendance(initFt)
       setStep(STEP.MARK)
       return
     }
-
     setLoadingMembers(true)
     setStep(STEP.MARK)
     try {
-      const res = await fetch(
-        `/api/attendance/members?groupId=${selectedGroup.id}&churchId=${church.id}&date=${date}`
-      )
+      // NOTE: we pass includeAway=1 so away members come through for the "Away" tab
+      const res = await fetch(`/api/attendance/members?groupId=${selectedGroup.id}&churchId=${church.id}&date=${date}&includeAway=1`)
       const data = await res.json()
       const memberList = data.members ?? []
       setMembers(memberList)
-
-      let initial = {}
-      if (data.existingRecords && data.existingRecords.length > 0) {
+      const initial = {}
+      if (data.existingRecords?.length > 0) {
         for (const m of memberList) initial[m.id] = false
         for (const r of data.existingRecords) initial[r.member_id] = r.present
       } else {
         for (const m of memberList) initial[m.id] = false
       }
       setAttendance(initial)
-    } catch (err) {
-      console.error('Failed to load members', err)
-    } finally {
-      setLoadingMembers(false)
-    }
+    } catch (err) { console.error('Failed to load members', err) }
+    finally { setLoadingMembers(false) }
   }
 
-  // ── Step 3: Toggle member ──
-  function toggleMember(memberId) {
-    setAttendance(prev => ({ ...prev, [memberId]: !prev[memberId] }))
-  }
+  function toggleMember(memberId) { setAttendance(prev => ({ ...prev, [memberId]: !prev[memberId] })) }
 
-  // ── Step 3: Save attendance ──
   async function handleSave() {
     setSaving(true)
-
-    const records = members.map(m => ({
-      memberId: m.id,
-      name: m.name,
-      present: attendance[m.id] ?? false,
-    }))
-
-    const payload = {
-      groupId: selectedGroup.id,
-      date: selectedDate,
-      records,
-      existingSessionId: existingSessionId ?? undefined,
-    }
-
-    // Offline support: queue if no network
+    // Only save non-away members in attendance records
+    const records = members
+      .filter(m => m.status !== 'away')
+      .map(m => ({ memberId: m.id, name: m.name, present: attendance[m.id] ?? false }))
+    const payload = { groupId: selectedGroup.id, date: selectedDate, records, existingSessionId: existingSessionId ?? undefined }
     if (!navigator.onLine) {
-      const queue = JSON.parse(localStorage.getItem('ct_offline_queue') ?? '[]')
-      queue.push({ ...payload, queuedAt: new Date().toISOString() })
-      localStorage.setItem('ct_offline_queue', JSON.stringify(queue))
-      setSaving(false)
-      setSavedResult({ ...payload, sessionId: 'offline', offline: true })
-      setStep(STEP.SUMMARY)
+      const q = JSON.parse(localStorage.getItem('ct_offline_queue') ?? '[]')
+      q.push({ ...payload, queuedAt: new Date().toISOString() })
+      localStorage.setItem('ct_offline_queue', JSON.stringify(q))
+      setSaving(false); setSavedResult({ ...payload, sessionId: 'offline', offline: true }); setStep(STEP.SUMMARY)
       return
     }
-
     try {
-      const res = await fetch('/api/attendance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
+      const res = await fetch('/api/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Save failed')
-
-      // Also save first-timer attendance if any FT exist
-      const ftEntries = Object.keys(ftAttendance)
-      if (firstTimers.length > 0 && ftEntries.length > 0) {
-        const ftRecords = firstTimers.map(ft => ({
-          memberId: ft.id,
-          name:     ft.name,
-          present:  ftAttendance[ft.id] ?? false,
-        }))
-        // Fire-and-forget — don't block main save on this
-        fetch('/api/attendance/firsttimers', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ date: selectedDate, records: ftRecords }),
-        }).catch(() => {})
+      if (firstTimers.length > 0 && Object.keys(ftAttendance).length > 0) {
+        fetch('/api/attendance/firsttimers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: selectedDate, records: firstTimers.map(ft => ({ memberId: ft.id, name: ft.name, present: ftAttendance[ft.id] ?? false })) }) }).catch(() => {})
       }
-
-      setSavedResult(data)
-      setStep(STEP.SUMMARY)
-
+      setSavedResult(data); setStep(STEP.SUMMARY)
       localStorage.setItem('ct_last_attendance_date', selectedDate)
-
-      try {
-        const displayName = localStorage.getItem('ct_display_name') || 'A team member'
-        const presentCount = records.filter(r => r.present).length
-        const absentCount  = records.length - presentCount
-        notifyAttendanceSubmitted(displayName, presentCount, absentCount)
-      } catch {}
-    } catch (err) {
-      alert('Failed to save: ' + err.message)
-    } finally {
-      setSaving(false)
-    }
+      try { notifyAttendanceSubmitted(localStorage.getItem('ct_display_name') || 'A team member', records.filter(r => r.present).length, records.length - records.filter(r => r.present).length) } catch {}
+    } catch (err) { alert('Failed to save: ' + err.message) }
+    finally { setSaving(false) }
   }
 
-  // ── First-timers save ──
   async function handleSaveFirstTimers() {
     setSavingFT(true)
-    const records = firstTimers.map(ft => ({
-      memberId: ft.id,
-      name:     ft.name,
-      present:  ftAttendance[ft.id] ?? false,
-    }))
-
+    const records = firstTimers.map(ft => ({ memberId: ft.id, name: ft.name, present: ftAttendance[ft.id] ?? false }))
     try {
-      const res = await fetch('/api/attendance/firsttimers', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ date: selectedDate, records }),
-      })
+      const res = await fetch('/api/attendance/firsttimers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: selectedDate, records }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Save failed')
-      setSavedResult({
-        ...data,
-        isFirstTimers: true,
-        ftMembers:    firstTimers,
-        ftAttendance: { ...ftAttendance },
-      })
+      setSavedResult({ ...data, isFirstTimers: true, ftMembers: firstTimers, ftAttendance: { ...ftAttendance } })
       setStep(STEP.SUMMARY)
       localStorage.setItem('ct_last_attendance_date', selectedDate)
-    } catch (err) {
-      alert('Failed to save: ' + err.message)
-    } finally {
-      setSavingFT(false)
-    }
+    } catch (err) { alert('Failed to save: ' + err.message) }
+    finally { setSavingFT(false) }
   }
 
-  // ── Flush offline queue when back online ──
+  // Flush offline queue
   useEffect(() => {
-    async function flushQueue() {
-      const queue = JSON.parse(localStorage.getItem('ct_offline_queue') ?? '[]')
-      if (!queue.length) return
-      const remaining = []
-      for (const item of queue) {
-        try {
-          const res = await fetch('/api/attendance', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(item),
-          })
-          if (!res.ok) remaining.push(item)
-        } catch {
-          remaining.push(item)
-        }
+    async function flush() {
+      const q = JSON.parse(localStorage.getItem('ct_offline_queue') ?? '[]')
+      if (!q.length) return
+      const rem = []
+      for (const item of q) {
+        try { if (!(await fetch('/api/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) })).ok) rem.push(item) }
+        catch { rem.push(item) }
       }
-      localStorage.setItem('ct_offline_queue', JSON.stringify(remaining))
+      localStorage.setItem('ct_offline_queue', JSON.stringify(rem))
     }
-    window.addEventListener('online', flushQueue)
-    flushQueue()
-    return () => window.removeEventListener('online', flushQueue)
+    window.addEventListener('online', flush); flush()
+    return () => window.removeEventListener('online', flush)
   }, [])
 
   return (
-    <div className="min-h-dvh bg-ivory">
-      {step === STEP.GROUP && (
-        <StepGroup
-          groups={groups}
-          sessionsByGroup={sessionsByGroup}
-          firstTimers={firstTimers}
-          onSelect={handleGroupSelect}
-          onBack={() => router.push('/dashboard')}
-        />
+    <div style={{ minHeight: '100dvh', background: '#f7f5f0' }}>
+      {step === STEP.GROUP  && <StepGroup groups={groups} sessionsByGroup={sessionsByGroup} firstTimers={firstTimers} onSelect={handleGroupSelect} onBack={() => router.push('/dashboard')} />}
+      {step === STEP.DATE   && selectedGroup && <StepDate group={selectedGroup} church={church} onSelect={handleDateSelect} onBack={() => setStep(STEP.GROUP)} isFirstTimers={selectedGroup?.id === FIRST_TIMERS_ID} />}
+      {step === STEP.MARK   && selectedGroup && selectedDate && (
+        selectedGroup.id === FIRST_TIMERS_ID
+          ? <StepMarkFirstTimers firstTimers={firstTimers} attendance={ftAttendance} date={selectedDate} saving={savingFT} onToggle={id => setFtAttendance(p => ({ ...p, [id]: !p[id] }))} onSave={handleSaveFirstTimers} onBack={() => setStep(STEP.GROUP)} />
+          : <StepMark group={selectedGroup} date={selectedDate} members={members} attendance={attendance} loading={loadingMembers} saving={saving} onToggle={toggleMember} onSave={handleSave} onBack={() => setStep(STEP.DATE)} firstTimers={firstTimers} ftAttendance={ftAttendance} onToggleFT={id => setFtAttendance(p => ({ ...p, [id]: !p[id] }))} />
       )}
-      {step === STEP.DATE && selectedGroup && (
-        <StepDate
-          group={selectedGroup}
-          church={church}
-          onSelect={handleDateSelect}
-          onBack={() => setStep(STEP.GROUP)}
-          isFirstTimers={selectedGroup?.id === FIRST_TIMERS_ID}
-        />
-      )}
-      {step === STEP.MARK && selectedGroup && selectedDate && (
-        selectedGroup.id === FIRST_TIMERS_ID ? (
-          <StepMarkFirstTimers
-            firstTimers={firstTimers}
-            attendance={ftAttendance}
-            date={selectedDate}
-            saving={savingFT}
-            onToggle={id => setFtAttendance(p => ({ ...p, [id]: !p[id] }))}
-            onSave={handleSaveFirstTimers}
-            onBack={() => setStep(STEP.GROUP)}
-          />
-        ) : (
-          <StepMark
-            group={selectedGroup}
-            date={selectedDate}
-            members={members}
-            attendance={attendance}
-            markMode={markMode}
-            loading={loadingMembers}
-            saving={saving}
-            onToggle={toggleMember}
-            onSave={handleSave}
-            onBack={() => setStep(STEP.DATE)}
-            firstTimers={firstTimers}
-            ftAttendance={ftAttendance}
-            onToggleFT={id => setFtAttendance(p => ({ ...p, [id]: !p[id] }))}
-          />
-        )
-      )}
-      {step === STEP.SUMMARY && savedResult && (
-        <StepSummary
-          group={selectedGroup}
-          date={selectedDate}
-          members={members}
-          attendance={attendance}
-          result={savedResult}
-          onDone={() => router.push('/dashboard')}
-          onEdit={() => setStep(STEP.MARK)}
-        />
-      )}
+      {step === STEP.SUMMARY && savedResult && <StepSummary group={selectedGroup} date={selectedDate} members={members} attendance={attendance} result={savedResult} onDone={() => router.push('/dashboard')} onEdit={() => setStep(STEP.MARK)} onViewAbsentees={() => router.push('/absentees')} />}
     </div>
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STEP 1 — Group Selection
-// ─────────────────────────────────────────────────────────────────────────────
-
+// ─── STEP 1 — Group Selection ─────────────────────────────────────────────────
 function StepGroup({ groups, sessionsByGroup, onSelect, onBack, firstTimers = [] }) {
+  const btn = { width: 38, height: 38, borderRadius: 11, background: '#fff', border: '1px solid rgba(26,58,42,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }
   return (
     <div className="page-content">
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="btn-ghost btn-sm px-2">
-          <ChevronLeft />
-        </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.625rem' }}>
+        <button onClick={onBack} style={btn}><ChevL /></button>
         <div>
-          <h1 className="font-display text-2xl font-semibold text-forest">Take Attendance</h1>
-          <p className="text-sm text-mist mt-0.5">Select a group</p>
+          <h1 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 22, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>Take Attendance</h1>
+          <p style={{ fontSize: 13, color: '#8a9e90', margin: '2px 0 0' }}>Select a group to begin</p>
         </div>
       </div>
 
       {groups.length === 0 ? (
-        <div className="card text-center py-12">
-          <p className="text-3xl mb-3">👥</p>
-          <p className="font-medium text-forest">No groups yet</p>
-          <p className="text-sm text-mist mt-1">Create a group first to take attendance.</p>
-          <a href="/groups" className="btn-primary btn-sm mt-4 inline-flex">Go to Groups</a>
+        <div style={{ background: '#fff', borderRadius: 20, padding: '3rem 1.5rem', textAlign: 'center', border: '1px solid rgba(26,58,42,0.07)' }}>
+          <p style={{ fontSize: 36, marginBottom: 12 }}>👥</p>
+          <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 17, fontWeight: 700, color: '#1a3a2a', margin: '0 0 6px' }}>No groups yet</p>
+          <p style={{ fontSize: 13, color: '#8a9e90', marginBottom: 20, margin: '0 0 20px' }}>Create a group first to take attendance.</p>
+          <a href="/groups" className="btn btn-primary">Go to Groups</a>
         </div>
       ) : (
-        <div className="space-y-3">
-          {groups.map((group) => {
-            const sessions   = sessionsByGroup[group.id] ?? []
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {groups.map(group => {
+            const sessions = sessionsByGroup[group.id] ?? []
             const [latest, prev] = sessions
-            const latestRate = latest
-              ? attendanceRate(
-                  latest.attendance_records?.filter(r => r.present).length ?? 0,
-                  latest.attendance_records?.length ?? 0
-                )
-              : null
-            const prevRate = prev
-              ? attendanceRate(
-                  prev.attendance_records?.filter(r => r.present).length ?? 0,
-                  prev.attendance_records?.length ?? 0
-                )
-              : null
-            const trend = latestRate !== null && prevRate !== null
-              ? getTrend(latestRate, prevRate)
-              : null
-
+            const lR = latest ? attendanceRate(latest.attendance_records?.filter(r => r.present).length ?? 0, latest.attendance_records?.length ?? 0) : null
+            const pR = prev   ? attendanceRate(prev.attendance_records?.filter(r => r.present).length   ?? 0, prev.attendance_records?.length   ?? 0) : null
+            const trend = lR !== null && pR !== null ? getTrend(lR, pR) : null
             return (
-              <button
-                key={group.id}
-                onClick={() => onSelect(group)}
-                className="card w-full text-left flex items-center gap-3 hover:shadow-md transition-shadow active:scale-[0.99]"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-forest text-[15px]">{group.name}</p>
-                  {group.leader && (
-                    <p className="text-xs text-mist mt-0.5">{group.leader}</p>
-                  )}
+              <button key={group.id} onClick={() => onSelect(group)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, padding: '1rem 1.125rem', background: '#fff', borderRadius: 18, border: '1px solid rgba(26,58,42,0.08)', cursor: 'pointer', boxShadow: '0 1px 4px rgba(26,58,42,0.06)', textAlign: 'left', transition: 'box-shadow 0.15s, transform 0.1s' }}
+                onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(26,58,42,0.12)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+                onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 4px rgba(26,58,42,0.06)'; e.currentTarget.style.transform = '' }}>
+                <div style={{ width: 44, height: 44, borderRadius: 13, background: 'rgba(26,58,42,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a3a2a" strokeWidth="1.75"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 </div>
-                {latestRate !== null && (
-                  <div className="text-right shrink-0">
-                    <p
-                      className="font-display text-xl font-bold"
-                      style={{ color: rateColor(latestRate) }}
-                    >
-                      {latestRate}%
-                    </p>
-                    {trend && (
-                      <p className="text-xs" style={{ color: trend.color }}>
-                        {trend.symbol} {Math.abs(trend.delta)}%
-                      </p>
-                    )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 15, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>{group.name}</p>
+                  {group.leader && <p style={{ fontSize: 12, color: '#8a9e90', margin: '2px 0 0' }}>{group.leader}</p>}
+                </div>
+                {lR !== null && (
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 22, fontWeight: 700, color: rateColor(lR), margin: 0, lineHeight: 1 }}>{lR}%</p>
+                    {trend && <p style={{ fontSize: 11, color: trend.color, margin: '2px 0 0', fontWeight: 600 }}>{trend.symbol} {Math.abs(trend.delta)}%</p>}
                   </div>
                 )}
-                <ChevronLeft className="w-4 h-4 text-mist rotate-180 shrink-0" />
+                <ChevR />
               </button>
             )
           })}
 
-          {/* First Timers pseudo-group */}
           {firstTimers.length > 0 && (
-            <button
-              onClick={() => onSelect({ id: FIRST_TIMERS_ID, name: 'First Timers' })}
-              className="card w-full text-left flex items-center gap-3 hover:shadow-md transition-shadow active:scale-[0.99]"
-            >
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-forest text-[15px]">First Timers</p>
-                <p className="text-xs text-mist mt-0.5">{firstTimers.length} visitors registered</p>
+            <button onClick={() => onSelect({ id: FIRST_TIMERS_ID, name: 'First Timers' })} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, padding: '1rem 1.125rem', background: '#fff', borderRadius: 18, border: '1.5px dashed rgba(201,168,76,0.5)', cursor: 'pointer', textAlign: 'left' }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(201,168,76,0.8)'}
+              onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(201,168,76,0.5)'}>
+              <div style={{ width: 44, height: 44, borderRadius: 13, background: 'rgba(201,168,76,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.75"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
               </div>
-              <span className="badge-gold text-[11px] shrink-0">{firstTimers.length}</span>
-              <ChevronLeft className="w-4 h-4 text-mist rotate-180 shrink-0" />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 15, fontWeight: 700, color: '#a8862e', margin: 0 }}>First Timers</p>
+                <p style={{ fontSize: 12, color: '#8a9e90', margin: '2px 0 0' }}>{firstTimers.length} visitor{firstTimers.length !== 1 ? 's' : ''} registered</p>
+              </div>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#a8862e', background: 'rgba(201,168,76,0.15)', padding: '4px 10px', borderRadius: 8 }}>{firstTimers.length}</span>
+              <ChevR />
             </button>
           )}
         </div>
@@ -442,679 +282,477 @@ function StepGroup({ groups, sessionsByGroup, onSelect, onBack, firstTimers = []
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STEP 2 — Date Selection
-// ─────────────────────────────────────────────────────────────────────────────
-
+// ─── STEP 2 — Date Selection ──────────────────────────────────────────────────
 function StepDate({ group, church, onSelect, onBack, isFirstTimers }) {
-  const [selectedDate, setSelectedDate] = useState('')
-  const [customDate,   setCustomDate]   = useState('')
-  const [checking,     setChecking]     = useState(false)
-  const [existingMap,  setExistingMap]  = useState({})
+  const [selDate,     setSelDate]     = useState('')
+  const [customDate,  setCustomDate]  = useState('')
+  const [checking,    setChecking]    = useState(false)
+  const [existingMap, setExistingMap] = useState({})
 
   const thisSunday = toISODate(getLastSunday())
   const lastSunday = toISODate(getPrevSunday())
 
-  // Auto-select this Sunday on mount
-  useEffect(() => {
-    setSelectedDate(thisSunday)
-    checkDate(thisSunday)
-  }, []) // eslint-disable-line
+  useEffect(() => { setSelDate(thisSunday); checkDate(thisSunday) }, []) // eslint-disable-line
 
   async function checkDate(date) {
     if (existingMap[date] !== undefined) return existingMap[date]
     try {
-      let sessionId = false
-      if (isFirstTimers) {
-        const res  = await fetch(`/api/attendance/firsttimers?date=${date}`)
-        const data = await res.json()
-        sessionId = data.sessionId ?? false
-      } else {
-        const res  = await fetch(`/api/attendance/check?groupId=${group.id}&date=${date}`)
-        const data = await res.json()
-        sessionId = data.sessionId ?? false
-      }
-      setExistingMap(prev => ({ ...prev, [date]: sessionId }))
-      return sessionId
+      const url = isFirstTimers
+        ? `/api/attendance/firsttimers?date=${date}`
+        : `/api/attendance/check?groupId=${group.id}&date=${date}`
+      const sid = (await (await fetch(url)).json()).sessionId ?? false
+      setExistingMap(prev => ({ ...prev, [date]: sid }))
+      return sid
     } catch { return false }
   }
 
-  async function handleQuickTap(date) {
-    setSelectedDate(date)
-    setCustomDate('')
-    checkDate(date)
-  }
-
-  async function handleGo() {
-    const date = selectedDate || customDate
+  const handleQuickTap = (date) => { setSelDate(date); setCustomDate(''); checkDate(date) }
+  const handleGo = async () => {
+    const date = selDate || customDate
     if (!date) return
     setChecking(true)
-    try {
-      const sessionId = await checkDate(date)
-      onSelect(date, sessionId || null)
-    } finally {
-      setChecking(false)
-    }
+    try { onSelect(date, (await checkDate(date)) || null) } finally { setChecking(false) }
   }
 
-  async function handleCustomChange(date) {
-    setCustomDate(date)
-    setSelectedDate('')
-    if (date) checkDate(date)
-  }
+  const activeDate = selDate || customDate
+  const hasExisting = !!(existingMap[activeDate])
 
-  const activeDate  = selectedDate || customDate
-  const existingId  = existingMap[activeDate]
-  const hasExisting = !!(existingId)
+  const cardS = (active) => ({
+    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '1rem 1.25rem', borderRadius: 18, border: 'none', cursor: 'pointer',
+    textAlign: 'left', transition: 'all 0.18s', fontFamily: 'inherit',
+    background: active ? '#1a3a2a' : '#fff',
+    boxShadow: active ? '0 6px 24px rgba(26,58,42,0.28)' : '0 1px 4px rgba(26,58,42,0.07)',
+    outline: active ? 'none' : '1px solid rgba(26,58,42,0.08)',
+  })
 
   return (
     <div className="page-content">
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="btn-ghost btn-sm px-2">
-          <ChevronLeft />
-        </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.625rem' }}>
+        <button onClick={onBack} style={{ width: 38, height: 38, borderRadius: 11, background: '#fff', border: '1px solid rgba(26,58,42,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevL /></button>
         <div>
-          <h1 className="font-display text-xl font-semibold text-forest">{group.name}</h1>
-          <p className="text-sm text-mist mt-0.5">Select a date</p>
+          <h1 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 20, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>{group.name}</h1>
+          <p style={{ fontSize: 13, color: '#8a9e90', margin: '2px 0 0' }}>Choose a date</p>
         </div>
       </div>
 
-      <div className="space-y-3 mb-6">
-        {/* This Sunday */}
-        <button
-          onClick={() => handleQuickTap(thisSunday)}
-          className="card w-full text-left flex items-center justify-between transition-all"
-          style={selectedDate === thisSunday ? {
-            background: '#1a3a2a', borderColor: '#1a3a2a',
-            boxShadow: '0 4px 20px rgba(26,58,42,0.35)',
-          } : {}}
-        >
-          <div>
-            <p className="font-semibold" style={{ color: selectedDate === thisSunday ? '#e8d5a0' : undefined }}>
-              This Sunday
-            </p>
-            <p className="text-xs mt-0.5" style={{ color: selectedDate === thisSunday ? 'rgba(232,213,160,0.6)' : undefined }}>
-              {fmtDate(thisSunday)}
-            </p>
-          </div>
-          {existingMap[thisSunday]
-            ? <span className="badge-gold text-[11px]">Edit existing</span>
-            : selectedDate === thisSunday && <span style={{ fontSize: 11, color: '#c9a84c', fontWeight: 700 }}>Selected ✓</span>
-          }
-        </button>
-
-        {/* Last Sunday */}
-        <button
-          onClick={() => handleQuickTap(lastSunday)}
-          className="card w-full text-left flex items-center justify-between transition-all"
-          style={selectedDate === lastSunday ? {
-            background: '#1a3a2a', borderColor: '#1a3a2a',
-            boxShadow: '0 4px 20px rgba(26,58,42,0.35)',
-          } : {}}
-        >
-          <div>
-            <p className="font-semibold" style={{ color: selectedDate === lastSunday ? '#e8d5a0' : undefined }}>
-              Last Sunday
-            </p>
-            <p className="text-xs mt-0.5" style={{ color: selectedDate === lastSunday ? 'rgba(232,213,160,0.6)' : undefined }}>
-              {fmtDate(lastSunday)}
-            </p>
-          </div>
-          {existingMap[lastSunday]
-            ? <span className="badge-gold text-[11px]">Edit existing</span>
-            : selectedDate === lastSunday && <span style={{ fontSize: 11, color: '#c9a84c', fontWeight: 700 }}>Selected ✓</span>
-          }
-        </button>
-
-        {/* Custom date */}
-        <div className="card">
-          <p className="text-sm font-medium text-forest mb-2">Custom date</p>
-          <input
-            type="date"
-            className="input"
-            value={customDate}
-            onChange={e => handleCustomChange(e.target.value)}
-            max={toISODate(new Date())}
-          />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: '1.375rem' }}>
+        {[{ date: thisSunday, label: 'This Sunday' }, { date: lastSunday, label: 'Last Sunday' }].map(({ date, label }) => {
+          const active = selDate === date
+          return (
+            <button key={date} onClick={() => handleQuickTap(date)} style={cardS(active)}>
+              <div>
+                <p style={{ fontSize: 15, fontWeight: 700, color: active ? '#e8d5a0' : '#1a3a2a', margin: 0 }}>{label}</p>
+                <p style={{ fontSize: 12, color: active ? 'rgba(232,213,160,0.55)' : '#8a9e90', margin: '3px 0 0' }}>{fmtDate(date)}</p>
+              </div>
+              {existingMap[date]
+                ? <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(201,168,76,0.2)', color: '#a8862e', padding: '4px 10px', borderRadius: 7 }}>Edit existing</span>
+                : active && <span style={{ fontSize: 12, color: '#c9a84c', fontWeight: 700 }}>Selected ✓</span>}
+            </button>
+          )
+        })}
+        <div style={{ background: '#fff', borderRadius: 18, padding: '1rem 1.25rem', border: '1px solid rgba(26,58,42,0.08)', boxShadow: '0 1px 4px rgba(26,58,42,0.06)' }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: '#1a3a2a', margin: '0 0 10px' }}>Custom date</p>
+          <input type="date" className="input" value={customDate} onChange={e => { setCustomDate(e.target.value); setSelDate(''); if (e.target.value) checkDate(e.target.value) }} max={toISODate(new Date())} />
         </div>
       </div>
 
       {hasExisting && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-2xl mb-4"
-          style={{ background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.3)' }}>
-          <span className="text-lg">✏️</span>
-          <p className="text-sm text-forest font-medium">
-            Attendance already recorded for this date. Tap below to edit it.
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderRadius: 14, marginBottom: '1.125rem', background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.3)' }}>
+          <span style={{ fontSize: 18 }}>✏️</span>
+          <p style={{ fontSize: 13, color: '#1a3a2a', fontWeight: 500, margin: 0 }}>Attendance already recorded for this date. You can edit it.</p>
         </div>
       )}
 
-      <button
-        onClick={handleGo}
-        disabled={!activeDate || checking}
-        className="btn btn-primary btn-lg w-full"
-        style={{
-          background: hasExisting
-            ? 'linear-gradient(135deg,#a8862e,#c9a84c)'
-            : 'linear-gradient(135deg,#1a3a2a,#2d5a42)',
-          opacity: !activeDate ? 0.5 : 1,
-        }}
-      >
-        {checking
-          ? '…'
-          : !activeDate
-            ? 'Select a date first'
-            : isFirstTimers
-              ? hasExisting
-                ? `Edit First Timers — ${fmtDate(activeDate)}`
-                : `Mark First Timers — ${fmtDate(activeDate)}`
-              : hasExisting
-                ? `Edit Attendance — ${fmtDate(activeDate)}`
-                : `Take Attendance — ${fmtDate(activeDate)}`
+      <button onClick={handleGo} disabled={!activeDate || checking} className="btn btn-primary btn-lg" style={{ width: '100%', height: 54, fontSize: 15, borderRadius: 16, background: hasExisting ? 'linear-gradient(135deg,#a8862e,#c9a84c)' : 'linear-gradient(135deg,#1a3a2a,#2d5a42)', opacity: !activeDate ? 0.5 : 1 }}>
+        {checking ? <Spin />
+          : !activeDate ? 'Select a date first'
+          : isFirstTimers ? (hasExisting ? `Edit First Timers — ${fmtDate(activeDate)}` : `Mark First Timers — ${fmtDate(activeDate)}`)
+          : (hasExisting ? `Edit Attendance — ${fmtDate(activeDate)}` : `Take Attendance — ${fmtDate(activeDate)}`)
         }
       </button>
     </div>
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STEP 3 — Mark Attendance
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── STEP 3 — Mark Attendance ─────────────────────────────────────────────────
+function StepMark({ group, date, members, attendance, loading, saving, onToggle, onSave, onBack, firstTimers = [], ftAttendance = {}, onToggleFT }) {
+  const [search,     setSearch]     = useState('')
+  const [viewFilter, setViewFilter] = useState('all') // 'all' | 'absent' | 'away'
 
-function StepMark({
-  group, date, members, attendance, markMode,
-  loading, saving, onToggle, onSave, onBack,
-  firstTimers = [], ftAttendance = {}, onToggleFT,
-}) {
-  const [search,  setSearch]  = useState('')
-  const searchRef = useRef(null)
+  // Split members: away vs regular
+  const awayMembers   = useMemo(() => members.filter(m => m.status === 'away'), [members])
+  const activeMembers = useMemo(() => members.filter(m => m.status !== 'away'), [members])
 
-  const filtered       = members.filter(m => m.name.toLowerCase().includes(search.toLowerCase()))
-  const filteredFT     = firstTimers.filter(ft => ft.name.toLowerCase().includes(search.toLowerCase()))
-  const ftPresentCount = Object.values(ftAttendance).filter(Boolean).length
-  const memberPresent  = Object.values(attendance).filter(Boolean).length
-  const presentCount   = memberPresent + ftPresentCount
-  const absentCount    = (members.length - memberPresent) + (firstTimers.length - ftPresentCount)
-  const totalCount     = members.length + firstTimers.length
-  const progress       = totalCount > 0 ? (presentCount / totalCount) * 100 : 0
+  const memberPresent = useMemo(() => activeMembers.filter(m => attendance[m.id]).length, [activeMembers, attendance])
+  const absentCount   = activeMembers.length - memberPresent
+  const rate          = activeMembers.length > 0 ? Math.round((memberPresent / activeMembers.length) * 100) : 0
+  const progress      = activeMembers.length > 0 ? (memberPresent / activeMembers.length) * 100 : 0
+  const rateCol       = rate >= 70 ? '#16a34a' : rate >= 50 ? '#d97706' : '#dc2626'
 
-  return (
-    <div className="flex flex-col h-dvh bg-ivory">
-      {/* ── Sticky header ── */}
-      <div className="sticky top-0 z-20 bg-white" style={{ borderBottom: '1px solid var(--border)' }}>
-        <div className="flex items-center gap-3 px-4 pt-3 pb-2">
-          <button onClick={onBack} className="btn-ghost btn-sm px-2 shrink-0">
-            <ChevronLeft />
-          </button>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-forest text-[15px] truncate">{group.name}</p>
-            <p className="text-xs text-mist">{fmtDate(date)}</p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="badge-green text-[11px]">{presentCount} present</span>
-            <span className="badge-red text-[11px]">{absentCount} absent</span>
-          </div>
-        </div>
+  const q = search.toLowerCase()
+  const filteredFT   = useMemo(() => firstTimers.filter(ft => ft.name.toLowerCase().includes(q)), [firstTimers, q])
+  const filteredMain = useMemo(() => {
+    let base
+    if (viewFilter === 'away')   base = awayMembers
+    else if (viewFilter === 'absent') base = activeMembers.filter(m => !(attendance[m.id]))
+    else                          base = activeMembers
+    return base.filter(m => m.name.toLowerCase().includes(q))
+  }, [viewFilter, awayMembers, activeMembers, attendance, q])
 
-        {/* Progress bar */}
-        <div className="h-1 bg-ivory-deeper mx-4 rounded-full overflow-hidden mb-2">
-          <div
-            className="h-full bg-success rounded-full transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-
-        {/* Search */}
-        <div className="px-4 pb-3">
-          <div className="relative">
-            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-mist w-4 h-4 pointer-events-none" />
-            <input
-              ref={searchRef}
-              type="search"
-              placeholder="Search members…"
-              className="input pl-9 py-2.5 text-sm"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ minHeight: 40 }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* ── Member list ── */}
-      {/* Scroll area — save bar is sticky so no large bottom padding needed */}
-      <div className="flex-1 overflow-y-auto px-4 py-2">
-        {loading ? (
-          <div className="space-y-2 pt-2">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="skeleton h-16 w-full" />
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-12 text-mist">
-            {search ? `No members matching "${search}"` : 'No members in this group'}
-          </div>
-        ) : (
-          <div className="space-y-1.5" style={{ paddingBottom: `calc(${BOTTOM_NAV_H}px + 64px + env(safe-area-inset-bottom, 0px))` }}>
-            {filtered.map(member => {
-              const isPresent = attendance[member.id] ?? false
-              const av = getAv(member.name)
-              return (
-                <button
-                  key={member.id}
-                  onClick={() => onToggle(member.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border
-                    transition-all duration-150 active:scale-[0.98] text-left
-                    ${isPresent
-                      ? 'bg-success/8 border-success/25 hover:bg-success/12'
-                      : 'bg-white border-forest/10 hover:bg-ivory'
-                    }`}
-                >
-                  <div className="avatar shrink-0" style={{ background: av.bg, color: av.color }}>
-                    {av.initials}
-                  </div>
-                  <span className="flex-1 font-medium text-forest text-[15px] truncate text-left">
-                    {member.name}
-                  </span>
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors
-                    ${isPresent
-                      ? 'bg-success text-white'
-                      : 'bg-ivory-deeper text-mist border border-forest/15'
-                    }`}
-                  >
-                    {isPresent
-                      ? <CheckIcon className="w-4 h-4" />
-                      : <XIcon className="w-4 h-4" style={{ opacity: 0.5 }} />
-                    }
-                  </div>
-                </button>
-              )
-            })}
-
-            {/* ── First Timers section — appended to main list ── */}
-            {firstTimers.length > 0 && (
-              <>
-                <div style={{ display:'flex', alignItems:'center', gap:8, padding:'12px 4px 6px' }}>
-                  <div style={{ flex:1, height:1, background:'rgba(201,168,76,0.25)' }} />
-                  <span style={{ fontSize:11, fontWeight:600, color:'#a8862e', letterSpacing:'0.06em', textTransform:'uppercase' }}>
-                    ⭐ First Timers ({filteredFT.length})
-                  </span>
-                  <div style={{ flex:1, height:1, background:'rgba(201,168,76,0.25)' }} />
-                </div>
-                {filteredFT.map(ft => {
-                  const isPresent = ftAttendance[ft.id] ?? false
-                  const av = getAv(ft.name)
-                  return (
-                    <button
-                      key={'ft_' + ft.id}
-                      onClick={() => onToggleFT && onToggleFT(ft.id)}
-                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border
-                        transition-all duration-150 active:scale-[0.98] text-left
-                        ${isPresent
-                          ? 'bg-gold/8 border-gold/30 hover:bg-gold/12'
-                          : 'bg-white border-gold/20 hover:bg-ivory'
-                        }`}
-                      style={{ borderStyle: 'dashed' }}
-                    >
-                      <div className="avatar shrink-0" style={{ background: av.bg, color: av.color }}>
-                        {av.initials}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-forest text-[15px] truncate">{ft.name}</p>
-                        {ft.phone && <p className="text-xs text-mist mt-0.5">{ft.phone}</p>}
-                      </div>
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors
-                        ${isPresent
-                          ? 'bg-gold text-white'
-                          : 'bg-ivory-deeper text-mist border border-gold/20'
-                        }`}
-                      >
-                        {isPresent
-                          ? <CheckIcon className="w-4 h-4" />
-                          : <XIcon className="w-4 h-4" style={{ opacity: 0.5 }} />
-                        }
-                      </div>
-                    </button>
-                  )
-                })}
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ── Fixed save bar — above bottom navbar, offset by sidebar on desktop ── */}
-      <div className="attendance-save-bar">
-        <button
-          onClick={onSave}
-          disabled={saving || loading || (members.length === 0 && firstTimers.length === 0)}
-          className="btn-primary btn-lg w-full"
-          style={{ background: 'linear-gradient(135deg,#1a3a2a,#2d5a42)', minHeight: 52 }}
-        >
-          {saving ? (
-            <span className="flex items-center gap-2"><Spinner /> Saving…</span>
-          ) : (
-            `Save Attendance — ${presentCount} Present · ${absentCount} Absent`
-          )}
-        </button>
-      </div>
-      <style>{`
-        .attendance-save-bar {
-          position: fixed;
-          bottom: calc(${BOTTOM_NAV_H}px + env(safe-area-inset-bottom, 0px));
-          left: 248px;
-          right: 0;
-          padding: 10px 16px 12px;
-          background: #fff;
-          border-top: 1px solid rgba(26,58,42,0.1);
-          box-shadow: 0 -4px 20px rgba(26,58,42,0.08);
-          z-index: 110;
-        }
-        @media (max-width: 1023px) {
-          .attendance-save-bar {
-            left: 0;
-          }
-        }
-      `}</style>
-    </div>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STEP 3b — Mark First Timers Attendance
-// ─────────────────────────────────────────────────────────────────────────────
-
-function StepMarkFirstTimers({ firstTimers, attendance, date, saving, onToggle, onSave, onBack }) {
-  const [search,  setSearch]  = useState('')
-  const searchRef = useRef(null)
-
-  const filtered     = firstTimers.filter(ft => ft.name.toLowerCase().includes(search.toLowerCase()))
-  const presentCount = Object.values(attendance).filter(Boolean).length
-
-  if (firstTimers.length === 0) {
-    return (
-      <div className="page-content">
-        <div className="flex items-center gap-3 mb-4">
-          <button onClick={onBack} className="btn-ghost btn-sm px-2 shrink-0">
-            <ChevronLeft />
-          </button>
-          <h1 className="font-display text-xl font-semibold text-forest">First Timers</h1>
-        </div>
-        <div className="card text-center py-12">
-          <p className="text-3xl mb-3">👋</p>
-          <p className="font-medium text-forest mb-1">No first timers yet</p>
-          <p className="text-sm text-mist">Add first timers on the First Timers page first.</p>
-        </div>
-      </div>
-    )
-  }
+  const showFT = viewFilter === 'all' // First Timers only shown in 'all' view
 
   return (
-    <div className="flex flex-col h-dvh bg-ivory">
-      {/* Sticky header */}
-      <div className="sticky top-0 z-20 bg-white" style={{ borderBottom: '1px solid var(--border)' }}>
-        <div className="flex items-center gap-3 px-4 pt-3 pb-2">
-          <button onClick={onBack} className="btn-ghost btn-sm px-2 shrink-0">
-            <ChevronLeft />
-          </button>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-forest text-[15px]">First Timers</p>
-            <p className="text-xs text-mist">{fmtDate(date)}</p>
-          </div>
-          <span className="badge-green text-[11px] shrink-0">{presentCount} present</span>
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: '#f7f5f0' }}>
 
+      {/* ── Sticky header ─────────────────────────────────────────────────── */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 30, background: '#fff', borderBottom: '1px solid rgba(26,58,42,0.08)' }}>
+        {/* Row 1 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px 6px' }}>
+          <button onClick={onBack} style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(26,58,42,0.06)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}><ChevL /></button>
+          <p style={{ flex: 1, fontSize: 17, fontWeight: 700, color: '#1a3a2a', margin: 0, fontFamily: 'var(--font-playfair),Georgia,serif' }}>Attendance</p>
+          <span style={{ fontSize: 12, color: '#8a9e90', flexShrink: 0 }}>
+            {new Date(date + 'T00:00:00').toLocaleDateString('en-NG', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+          </span>
+        </div>
+        {/* Group + service */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px 10px' }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>{group.name}</p>
+          <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(22,163,74,0.1)', color: '#16a34a', padding: '3px 10px', borderRadius: 7 }}>Service 1 · 9:00 AM</span>
+        </div>
+        {/* Stats */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px 12px' }}>
+          <div style={{ minWidth: 52 }}>
+            <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 28, fontWeight: 700, color: '#1a3a2a', margin: 0, lineHeight: 1 }}>{memberPresent}</p>
+            <p style={{ fontSize: 10, color: '#8a9e90', margin: '3px 0 0', fontWeight: 600 }}>Present</p>
+          </div>
+          <div style={{ width: 1, height: 34, background: 'rgba(26,58,42,0.1)', flexShrink: 0 }} />
+          <div style={{ minWidth: 52 }}>
+            <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 28, fontWeight: 700, color: '#dc2626', margin: 0, lineHeight: 1 }}>{absentCount}</p>
+            <p style={{ fontSize: 10, color: '#8a9e90', margin: '3px 0 0', fontWeight: 600 }}>Absent</p>
+          </div>
+          <div style={{ width: 1, height: 34, background: 'rgba(26,58,42,0.1)', flexShrink: 0 }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <svg width="34" height="34" viewBox="0 0 36 36">
+              <circle cx="18" cy="18" r="14" fill="none" stroke="#f0ede7" strokeWidth="6"/>
+              {activeMembers.length > 0 && <circle cx="18" cy="18" r="14" fill="none" stroke={rateCol} strokeWidth="6" strokeDasharray={`${(rate / 100) * 87.96} 87.96`} strokeDashoffset="21.99" strokeLinecap="round"/>}
+            </svg>
+            <div>
+              <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 18, fontWeight: 700, color: rateCol, margin: 0, lineHeight: 1 }}>{rate}%</p>
+              <p style={{ fontSize: 10, color: '#8a9e90', margin: '2px 0 0', fontWeight: 600 }}>Attendance rate</p>
+            </div>
+          </div>
+        </div>
         {/* Progress bar */}
-        <div className="h-1 bg-ivory-deeper mx-4 rounded-full overflow-hidden mb-2">
-          <div
-            className="h-full bg-gold rounded-full transition-all duration-300"
-            style={{ width: firstTimers.length > 0 ? `${(presentCount / firstTimers.length) * 100}%` : '0%' }}
-          />
+        <div style={{ height: 4, background: '#f0ede7', margin: '0 16px', borderRadius: 2, overflow: 'hidden', marginBottom: 12 }}>
+          <div style={{ height: '100%', background: '#16a34a', borderRadius: 2, width: `${progress}%`, transition: 'width 0.25s ease' }} />
         </div>
-
         {/* Search */}
-        <div className="px-4 pb-3">
-          <div className="relative">
-            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-mist w-4 h-4 pointer-events-none" />
-            <input
-              ref={searchRef}
-              type="search"
-              placeholder="Search first timers…"
-              className="input pl-9 py-2.5 text-sm"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ minHeight: 40 }}
-            />
+        <div style={{ padding: '0 16px 10px', display: 'flex', gap: 8 }}>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#8a9e90', display: 'flex', pointerEvents: 'none' }}><SearchIco /></span>
+            <input type="search" placeholder="Search members…" value={search} onChange={e => setSearch(e.target.value)}
+              style={{ width: '100%', height: 40, borderRadius: 12, border: '1px solid rgba(26,58,42,0.14)', background: '#f7f5f0', paddingLeft: 34, paddingRight: 12, fontSize: 13.5, outline: 'none', fontFamily: 'inherit', color: '#1a3a2a', boxSizing: 'border-box' }} />
           </div>
         </div>
-      </div>
-
-      {/* First timer list */}
-      <div className="flex-1 overflow-y-auto px-4 py-2">
-        <div className="space-y-1.5" style={{ paddingBottom: `calc(${BOTTOM_NAV_H}px + 64px + env(safe-area-inset-bottom, 0px))` }}>
-          {filtered.map(ft => {
-            const isPresent = attendance[ft.id] ?? false
-            const av = getAv(ft.name)
+        {/* Tabs: All | Absent | Away */}
+        <div style={{ display: 'flex', margin: '0 16px 12px', borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(26,58,42,0.1)' }}>
+          {[
+            { key: 'all',    label: `All (${activeMembers.length})` },
+            { key: 'absent', label: `Absent (${absentCount})` },
+            { key: 'away',   label: `Away (${awayMembers.length})` },
+          ].map(({ key, label }, i) => {
+            const active = viewFilter === key
             return (
-              <button
-                key={ft.id}
-                onClick={() => onToggle(ft.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border
-                  transition-all duration-150 active:scale-[0.98] text-left
-                  ${isPresent
-                    ? 'bg-success/8 border-success/25'
-                    : 'bg-white border-forest/10 hover:bg-ivory'
-                  }`}
-              >
-                <div className="avatar shrink-0" style={{ background: av.bg, color: av.color }}>
-                  {av.initials}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-forest text-[15px] truncate">{ft.name}</p>
-                  {ft.phone && <p className="text-xs text-mist mt-0.5">{ft.phone}</p>}
-                </div>
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0
-                  ${isPresent ? 'bg-success text-white' : 'bg-ivory-deeper text-mist border border-forest/15'}`}
-                  style={isPresent ? {} : {}}
-                >
-                  {isPresent
-                    ? <CheckIcon className="w-4 h-4" />
-                    : <XIcon className="w-4 h-4" style={{ opacity: 0.5 }} />
-                  }
-                </div>
+              <button key={key} onClick={() => setViewFilter(key)} style={{ flex: 1, height: 36, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5, fontWeight: 600, transition: 'all 0.15s', background: active ? '#1a3a2a' : 'transparent', color: active ? '#fff' : '#8a9e90', borderRight: i < 2 ? '1px solid rgba(26,58,42,0.1)' : 'none' }}>
+                {label}
               </button>
             )
           })}
         </div>
       </div>
 
-      {/* ── Fixed save bar ── */}
-      <div className="attendance-save-bar">
-        <button
-          onClick={onSave}
-          disabled={saving || firstTimers.length === 0}
-          className="btn-primary btn-lg w-full"
-          style={{ background: 'linear-gradient(135deg,#a8862e,#c9a84c)', minHeight: 52 }}
-        >
-          {saving ? (
-            <span className="flex items-center gap-2"><Spinner /> Saving…</span>
-          ) : (
-            `Save Attendance — ${presentCount} Present · ${firstTimers.length - presentCount} Absent`
-          )}
-        </button>
+      {/* ── Member list ─────────────────────────────────────────────────────── */}
+      <div style={{ flex: 1, overflowY: 'auto', background: '#fff' }}>
+        {loading ? (
+          <div>{[...Array(7)].map((_, i) => <SkeletonRow key={i} />)}</div>
+        ) : filteredMain.length === 0 && (!showFT || filteredFT.length === 0) ? (
+          <div style={{ textAlign: 'center', padding: '3rem 1.5rem', color: '#8a9e90' }}>
+            {viewFilter === 'away' && awayMembers.length === 0
+              ? 'No members are currently marked away'
+              : search ? `No members matching "${search}"` : 'No members in this view'
+            }
+          </div>
+        ) : (
+          <div style={{ paddingBottom: `calc(${BOTTOM_NAV_H}px + 80px + env(safe-area-inset-bottom,0px))` }}>
+
+            {/* ── First Timers at TOP when in 'all' view ── */}
+            {showFT && filteredFT.length > 0 && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px 8px', background: 'rgba(201,168,76,0.05)' }}>
+                  <div style={{ flex: 1, height: 1, background: 'rgba(201,168,76,0.3)' }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#a8862e', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>⭐ FIRST TIMERS ({filteredFT.length})</span>
+                  <div style={{ flex: 1, height: 1, background: 'rgba(201,168,76,0.3)' }} />
+                </div>
+                {filteredFT.map((ft, i) => {
+                  const isPresent = ftAttendance[ft.id] ?? false
+                  const av = getAv(ft.name)
+                  return (
+                    <button key={'ft_' + ft.id} onClick={() => onToggleFT?.(ft.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: isPresent ? 'rgba(201,168,76,0.04)' : '#fff', borderBottom: '1px solid rgba(26,58,42,0.06)', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'background 0.1s' }}>
+                      <div style={{ width: 40, height: 40, borderRadius: '50%', background: av.bg, color: av.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{av.initials}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 14.5, fontWeight: 600, color: '#a8862e', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ft.name}</p>
+                        {ft.phone && <p style={{ fontSize: 11.5, color: '#8a9e90', margin: '2px 0 0' }}>{ft.phone}</p>}
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 8, background: isPresent ? 'rgba(201,168,76,0.15)' : 'rgba(26,58,42,0.06)', color: isPresent ? '#a8862e' : '#8a9e90', flexShrink: 0 }}>{isPresent ? 'Present' : 'Absent'}</span>
+                      <div style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isPresent ? '#c9a84c' : 'rgba(26,58,42,0.07)', flexShrink: 0 }}>
+                        {isPresent ? <CheckSvg size={13} color="#fff" /> : <span style={{ fontSize: 12, color: '#8a9e90' }}>—</span>}
+                      </div>
+                    </button>
+                  )
+                })}
+                {/* Separator before regular members */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px 8px', background: '#fafaf9' }}>
+                  <div style={{ flex: 1, height: 1, background: 'rgba(26,58,42,0.08)' }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#8a9e90', letterSpacing: '0.06em' }}>MEMBERS ({activeMembers.length})</span>
+                  <div style={{ flex: 1, height: 1, background: 'rgba(26,58,42,0.08)' }} />
+                </div>
+              </>
+            )}
+
+            {/* ── Away members header (only in away tab) ── */}
+            {viewFilter === 'away' && awayMembers.length > 0 && (
+              <div style={{ padding: '10px 16px 8px', background: 'rgba(217,119,6,0.04)', borderBottom: '1px solid rgba(217,119,6,0.12)' }}>
+                <p style={{ fontSize: 12, color: '#d97706', fontWeight: 600, margin: 0 }}>
+                  These members are marked as Away and won't be included in attendance records.
+                </p>
+              </div>
+            )}
+
+            {/* ── Main member rows ── */}
+            {filteredMain.map((member, i) => {
+              const isPresent = attendance[member.id] ?? false
+              const isAway    = member.status === 'away'
+              const av = getAv(member.name)
+              return (
+                <button key={member.id} onClick={() => !isAway && onToggle(member.id)} style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
+                  background: isPresent ? 'rgba(22,163,74,0.03)' : '#fff',
+                  borderBottom: i < filteredMain.length - 1 ? '1px solid rgba(26,58,42,0.06)' : 'none',
+                  border: 'none', cursor: isAway ? 'default' : 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'background 0.1s',
+                }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '50%', background: isAway ? '#f0ede7' : av.bg, color: isAway ? '#8a9e90' : av.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+                    {av.initials}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 14.5, fontWeight: 600, color: isAway ? '#8a9e90' : '#1a3a2a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.name}</p>
+                    <p style={{ fontSize: 11.5, color: '#b0bab5', margin: '2px 0 0' }}>
+                      {isAway ? 'Away' : group.name}
+                    </p>
+                  </div>
+                  {isAway ? (
+                    <span style={{ fontSize: 11.5, fontWeight: 600, color: '#d97706', background: 'rgba(217,119,6,0.1)', padding: '4px 10px', borderRadius: 8, flexShrink: 0 }}>Away</span>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 8, background: isPresent ? 'rgba(22,163,74,0.1)' : 'rgba(220,38,38,0.07)', color: isPresent ? '#16a34a' : '#dc2626', flexShrink: 0 }}>
+                        {isPresent ? 'Present' : 'Absent'}
+                      </span>
+                      <div style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isPresent ? '#16a34a' : 'rgba(220,38,38,0.12)', transition: 'background 0.15s', flexShrink: 0 }}>
+                        {isPresent
+                          ? <CheckSvg size={13} color="#fff" />
+                          : <svg width="11" height="11" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="#dc2626" strokeWidth="2" opacity="0.5"/></svg>
+                        }
+                      </div>
+                    </>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
-      <style>{`
-        .attendance-save-bar {
-          position: fixed;
-          bottom: calc(${BOTTOM_NAV_H}px + env(safe-area-inset-bottom, 0px));
-          left: 248px;
-          right: 0;
-          padding: 10px 16px 12px;
-          background: #fff;
-          border-top: 1px solid rgba(26,58,42,0.1);
-          box-shadow: 0 -4px 20px rgba(26,58,42,0.08);
-          z-index: 110;
-        }
-        @media (max-width: 1023px) {
-          .attendance-save-bar { left: 0; }
-        }
-      `}</style>
+
+      {/* ── Fixed save bar ─────────────────────────────────────────────────── */}
+      <style>{`@media(min-width:1024px){.att-bar{left:${SIDEBAR_W}px!important}}`}</style>
+      <div className="att-bar" style={{ position: 'fixed', bottom: `calc(${BOTTOM_NAV_H}px + env(safe-area-inset-bottom,0px))`, left: 0, right: 0, background: '#fff', borderTop: '1px solid rgba(26,58,42,0.1)', padding: '10px 16px 12px', zIndex: 110 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <p style={{ fontSize: 13, color: '#8a9e90', fontWeight: 500, margin: 0, flexShrink: 0 }}>
+            <span style={{ color: '#1a3a2a', fontWeight: 700 }}>{memberPresent} present</span> · {absentCount} absent
+          </p>
+          <button onClick={onSave} disabled={saving || loading || activeMembers.length === 0} className="btn btn-primary"
+            style={{ height: 44, paddingLeft: 20, paddingRight: 20, fontSize: 14, borderRadius: 13, background: 'linear-gradient(135deg,#1a3a2a,#2d5a42)', flexShrink: 0, gap: 6 }}>
+            {saving ? <><Spin /> Saving…</> : 'Save Attendance →'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STEP 4 — Summary
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── STEP 3b — Mark First Timers ─────────────────────────────────────────────
+function StepMarkFirstTimers({ firstTimers, attendance, date, saving, onToggle, onSave, onBack }) {
+  const [search, setSearch] = useState('')
+  const filtered     = firstTimers.filter(ft => ft.name.toLowerCase().includes(search.toLowerCase()))
+  const presentCount = Object.values(attendance).filter(Boolean).length
 
-function StepSummary({ group, date, members, attendance, result, onDone, onEdit }) {
-  const router = useRouter()
-  const [showAllPresent, setShowAllPresent] = useState(false)
-  const [showAllAbsent,  setShowAllAbsent]  = useState(false)
+  if (firstTimers.length === 0) {
+    return (
+      <div className="page-content">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
+          <button onClick={onBack} style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(26,58,42,0.06)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevL /></button>
+          <h1 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 20, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>First Timers</h1>
+        </div>
+        <div style={{ background: '#fff', borderRadius: 20, padding: '3rem 1.5rem', textAlign: 'center' }}>
+          <p style={{ fontSize: 36, marginBottom: 12 }}>👋</p>
+          <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 17, fontWeight: 700, color: '#1a3a2a', margin: '0 0 6px' }}>No first timers yet</p>
+          <p style={{ fontSize: 13, color: '#8a9e90', margin: 0 }}>Add them on the First Timers page first.</p>
+        </div>
+      </div>
+    )
+  }
 
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: '#f7f5f0' }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 30, background: '#fff', borderBottom: '1px solid rgba(26,58,42,0.08)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px 8px' }}>
+          <button onClick={onBack} style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(26,58,42,0.06)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevL /></button>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: 17, fontWeight: 700, color: '#a8862e', margin: 0, fontFamily: 'var(--font-playfair),Georgia,serif' }}>First Timers</p>
+            <p style={{ fontSize: 12, color: '#8a9e90', margin: '2px 0 0' }}>{fmtDate(date)}</p>
+          </div>
+          <span style={{ fontSize: 12, fontWeight: 700, background: 'rgba(22,163,74,0.1)', color: '#16a34a', padding: '4px 10px', borderRadius: 8 }}>{presentCount} present</span>
+        </div>
+        <div style={{ height: 4, background: '#f0ede7', margin: '0 16px', borderRadius: 2, overflow: 'hidden', marginBottom: 10 }}>
+          <div style={{ height: '100%', background: '#c9a84c', borderRadius: 2, width: firstTimers.length > 0 ? `${(presentCount / firstTimers.length) * 100}%` : '0%', transition: 'width 0.25s ease' }} />
+        </div>
+        <div style={{ padding: '0 16px 12px', position: 'relative' }}>
+          <span style={{ position: 'absolute', left: 27, top: '50%', transform: 'translateY(-50%)', color: '#8a9e90', pointerEvents: 'none', display: 'flex', marginTop: -6 }}><SearchIco /></span>
+          <input type="search" placeholder="Search first timers…" value={search} onChange={e => setSearch(e.target.value)}
+            style={{ width: '100%', height: 40, borderRadius: 12, border: '1px solid rgba(26,58,42,0.14)', background: '#f7f5f0', paddingLeft: 34, fontSize: 13.5, outline: 'none', fontFamily: 'inherit', color: '#1a3a2a', boxSizing: 'border-box' }} />
+        </div>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', background: '#fff' }}>
+        <div style={{ paddingBottom: `calc(${BOTTOM_NAV_H}px + 80px + env(safe-area-inset-bottom,0px))` }}>
+          {filtered.map((ft, i) => {
+            const isPresent = attendance[ft.id] ?? false
+            const av = getAv(ft.name)
+            return (
+              <button key={ft.id} onClick={() => onToggle(ft.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: isPresent ? 'rgba(201,168,76,0.04)' : '#fff', borderBottom: i < filtered.length - 1 ? '1px solid rgba(26,58,42,0.06)' : 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', background: av.bg, color: av.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>{av.initials}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 14.5, fontWeight: 600, color: '#a8862e', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ft.name}</p>
+                  {ft.phone && <p style={{ fontSize: 11.5, color: '#8a9e90', margin: '2px 0 0' }}>{ft.phone}</p>}
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 8, background: isPresent ? 'rgba(201,168,76,0.15)' : 'rgba(26,58,42,0.06)', color: isPresent ? '#a8862e' : '#8a9e90', flexShrink: 0 }}>{isPresent ? 'Present' : 'Absent'}</span>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isPresent ? '#c9a84c' : 'rgba(26,58,42,0.07)', flexShrink: 0 }}>
+                  {isPresent ? <CheckSvg size={13} color="#fff" /> : <span style={{ fontSize: 12, color: '#8a9e90' }}>—</span>}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+      <style>{`@media(min-width:1024px){.att-bar-ft{left:${SIDEBAR_W}px!important}}`}</style>
+      <div className="att-bar-ft" style={{ position: 'fixed', bottom: `calc(${BOTTOM_NAV_H}px + env(safe-area-inset-bottom,0px))`, left: 0, right: 0, background: '#fff', borderTop: '1px solid rgba(26,58,42,0.1)', padding: '10px 16px 12px', zIndex: 110 }}>
+        <button onClick={onSave} disabled={saving} className="btn btn-primary" style={{ width: '100%', height: 50, fontSize: 14, borderRadius: 14, background: 'linear-gradient(135deg,#a8862e,#c9a84c)' }}>
+          {saving ? <><Spin /> Saving…</> : `Save — ${presentCount} Present · ${firstTimers.length - presentCount} Absent`}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── STEP 4 — Summary ─────────────────────────────────────────────────────────
+function StepSummary({ group, date, members, attendance, result, onDone, onEdit, onViewAbsentees }) {
+  const [showAllPresent, setShowAllP] = useState(false)
+  const [showAllAbsent,  setShowAllA] = useState(false)
   const PREVIEW = 5
 
-  const allMembers    = result.isFirstTimers ? (result.ftMembers    ?? []) : members
+  const allMembers    = result.isFirstTimers ? (result.ftMembers    ?? []) : members.filter(m => m.status !== 'away')
   const allAttendance = result.isFirstTimers ? (result.ftAttendance ?? {}) : attendance
 
   const presentMembers = allMembers.filter(m =>  allAttendance[m.id])
   const absentMembers  = allMembers.filter(m => !allAttendance[m.id])
   const rate = attendanceRate(presentMembers.length, allMembers.length)
-
-  const presentSlice = showAllPresent ? presentMembers : presentMembers.slice(0, PREVIEW)
-  const absentSlice  = showAllAbsent  ? absentMembers  : absentMembers.slice(0, PREVIEW)
+  const dateStr = new Date(date + 'T00:00:00').toLocaleDateString('en-NG', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
 
   return (
-    <div className="page-content pb-10">
-
-      {/* ── Header ── */}
-      <div className="text-center py-6">
-        <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
-        <h2 className="font-display text-2xl font-bold text-forest">Attendance Saved</h2>
-        <p className="text-sm text-mist mt-1">{group?.name ?? 'First Timers'} · {fmtDate(date)}</p>
-        {result.offline && (
-          <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium"
-            style={{ background: 'rgba(217,119,6,0.1)', color: '#d97706' }}>
-            Saved offline — will sync when back online
-          </div>
-        )}
-      </div>
-
-      {/* ── Stats ── */}
-      <div className="flex gap-3 mb-2">
-        <div className="flex-1 rounded-2xl py-4 text-center"
-          style={{ background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.2)' }}>
-          <p className="font-display text-4xl font-bold text-success">{presentMembers.length}</p>
-          <p className="text-xs text-mist mt-1 uppercase tracking-wide font-semibold">Present</p>
+    <div className="page-content" style={{ paddingBottom: '3rem' }}>
+      {/* Hero card */}
+      <div style={{ background: '#fff', borderRadius: 24, padding: '2.5rem 1.5rem 2rem', textAlign: 'center', border: '1px solid rgba(26,58,42,0.07)', boxShadow: '0 2px 12px rgba(26,58,42,0.07)', marginBottom: '1.125rem', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }} aria-hidden>
+          {[...Array(12)].map((_, i) => <div key={i} style={{ position: 'absolute', top: '30%', left: '50%', width: 2, height: 36, borderRadius: 2, transformOrigin: '0 0', transform: `rotate(${i * 30}deg) translateY(-80px)`, background: i % 3 === 0 ? 'rgba(201,168,76,0.3)' : i % 3 === 1 ? 'rgba(22,163,74,0.2)' : 'rgba(26,58,42,0.1)' }} />)}
         </div>
-        <div className="flex-1 rounded-2xl py-4 text-center"
-          style={{ background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.2)' }}>
-          <p className="font-display text-4xl font-bold text-error">{absentMembers.length}</p>
-          <p className="text-xs text-mist mt-1 uppercase tracking-wide font-semibold">Absent</p>
+        <div style={{ width: 80, height: 80, borderRadius: '50%', background: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem', boxShadow: '0 8px 28px rgba(22,163,74,0.35)' }}>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
         </div>
-        <div className="flex-1 rounded-2xl py-4 text-center"
-          style={{ background: 'rgba(26,58,42,0.05)', border: '1px solid rgba(26,58,42,0.1)' }}>
-          <p className="font-display text-4xl font-bold" style={{ color: rateColor(rate) }}>{rate}%</p>
-          <p className="text-xs text-mist mt-1 uppercase tracking-wide font-semibold">Rate</p>
-        </div>
-      </div>
-      <p className="text-xs text-mist text-center mb-5">out of {allMembers.length} members</p>
-
-      {/* ── Present list ── */}
-      {presentMembers.length > 0 && (
-        <div className="card mb-3">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-bold text-success uppercase tracking-wide">Present</p>
-            <p className="text-xs text-mist">
-              {showAllPresent
-                ? `all ${presentMembers.length}`
-                : `showing ${Math.min(PREVIEW, presentMembers.length)} of ${presentMembers.length}`}
-            </p>
-          </div>
-          <div className="space-y-0">
-            {presentSlice.map(m => (
-              <div key={m.id} className="flex items-center gap-2.5 py-2 border-b border-forest/6 last:border-0">
-                <div className="w-2 h-2 rounded-full bg-success shrink-0" />
-                <span className="text-sm text-forest">{m.name}</span>
+        <h2 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 28, fontWeight: 700, color: '#1a3a2a', margin: '0 0 6px' }}>Attendance Saved!</h2>
+        <p style={{ fontSize: 13.5, color: '#8a9e90', margin: '0 0 1.5rem', fontWeight: 500 }}>{group?.name ?? 'First Timers'} · {dateStr}</p>
+        {result.offline && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 10, background: 'rgba(217,119,6,0.1)', color: '#d97706', fontSize: 12.5, fontWeight: 600, marginBottom: '1rem' }}>Saved offline — syncing when back online</div>}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: '1.375rem' }}>
+          {[
+            { label: 'Present', value: presentMembers.length, color: '#1a3a2a', bg: 'rgba(26,58,42,0.07)' },
+            { label: 'Absent',  value: absentMembers.length,  color: '#dc2626', bg: 'rgba(220,38,38,0.07)' },
+          ].map(({ label, value, color, bg }) => (
+            <div key={label} style={{ background: '#f7f5f0', borderRadius: 16, padding: '16px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 11, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.75"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
               </div>
-            ))}
-          </div>
-          {presentMembers.length > PREVIEW && (
-            <button
-              onClick={() => setShowAllPresent(v => !v)}
-              className="w-full mt-3 py-2.5 rounded-xl text-sm font-semibold text-success transition-colors"
-              style={{ background: 'rgba(22,163,74,0.07)' }}
-            >
-              {showAllPresent ? 'Show less' : `Show all ${presentMembers.length} present →`}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* ── Absent list ── */}
-      {absentMembers.length > 0 && (
-        <div className="card mb-5">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-bold text-error uppercase tracking-wide">Absent</p>
-            <p className="text-xs text-mist">
-              {showAllAbsent
-                ? `all ${absentMembers.length}`
-                : `showing ${Math.min(PREVIEW, absentMembers.length)} of ${absentMembers.length}`}
-            </p>
-          </div>
-          <div className="space-y-0">
-            {absentSlice.map(m => (
-              <div key={m.id} className="flex items-center gap-2.5 py-2 border-b border-forest/6 last:border-0">
-                <div className="w-2 h-2 rounded-full bg-error shrink-0" />
-                <span className="text-sm text-forest">{m.name}</span>
+              <div style={{ textAlign: 'left' }}>
+                <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 30, fontWeight: 700, color, margin: 0, lineHeight: 1 }}>{value}</p>
+                <p style={{ fontSize: 11, color: '#8a9e90', margin: '3px 0 0', fontWeight: 600 }}>{label}</p>
               </div>
-            ))}
-          </div>
-          {absentMembers.length > PREVIEW && (
-            <button
-              onClick={() => setShowAllAbsent(v => !v)}
-              className="w-full mt-3 py-2.5 rounded-xl text-sm font-semibold text-error transition-colors"
-              style={{ background: 'rgba(220,38,38,0.06)' }}
-            >
-              {showAllAbsent ? 'Show less' : `Show all ${absentMembers.length} absent →`}
-            </button>
-          )}
+            </div>
+          ))}
         </div>
-      )}
-
-      {/* ── Action buttons ── */}
-      <div className="space-y-2.5">
-        <button
-          onClick={() => router.push('/report')}
-          className="btn btn-primary w-full"
-          style={{ height: 52, fontSize: 15 }}
-        >
-          Generate Report
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, marginBottom: absentMembers.length > 0 ? '1.25rem' : 0 }}>
+          <DonutRing rate={rate} size={110} />
+          <p style={{ fontSize: 13, fontWeight: 600, color: '#1a3a2a', margin: '4px 0 0' }}>Attendance Rate</p>
+        </div>
         {absentMembers.length > 0 && (
-          <button
-            onClick={() => router.push('/absentees')}
-            className="btn w-full"
-            style={{ height: 52, fontSize: 15, background: 'rgba(220,38,38,0.08)', color: '#dc2626', border: '1px solid rgba(220,38,38,0.2)' }}
-          >
-            Follow Up Absentees
-          </button>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: '#fff8f0', borderRadius: 14, padding: '12px 14px', textAlign: 'left', border: '1px solid rgba(217,119,6,0.15)' }}>
+            <span style={{ fontSize: 18, flexShrink: 0 }}>🙏</span>
+            <p style={{ fontSize: 13, color: '#1a3a2a', margin: 0, lineHeight: 1.5 }}><strong>{absentMembers.length} {absentMembers.length === 1 ? 'person' : 'people'}</strong> weren't in church today. Follow up with them to keep them connected.</p>
+          </div>
         )}
-        <button
-          onClick={() => onEdit()}
-          className="btn btn-outline w-full"
-          style={{ height: 48, fontSize: 14 }}
-        >
-          Edit Attendance
-        </button>
-        <button
-          onClick={() => router.push('/dashboard')}
-          className="btn w-full"
-          style={{ height: 48, fontSize: 14, background: 'transparent', color: '#8a9e90', border: '1px solid rgba(26,58,42,0.15)' }}
-        >
-          Back to Dashboard
-        </button>
       </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: '1.25rem' }}>
+        {absentMembers.length > 0 && <button onClick={onViewAbsentees} className="btn btn-primary" style={{ height: 52, fontSize: 15, borderRadius: 16 }}>View Absentees →</button>}
+        <button onClick={onDone} className="btn btn-outline" style={{ height: 50, fontSize: 14, borderRadius: 16 }}>Back to Dashboard</button>
+      </div>
+      {/* Present list */}
+      {presentMembers.length > 0 && (
+        <div style={{ background: '#fff', borderRadius: 20, border: '1px solid rgba(26,58,42,0.07)', overflow: 'hidden', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', borderBottom: '1px solid rgba(26,58,42,0.06)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: '#16a34a' }} /><p style={{ fontSize: 13, fontWeight: 700, color: '#16a34a', margin: 0 }}>Present</p></div>
+            <span style={{ fontSize: 12, color: '#8a9e90' }}>{presentMembers.length}</span>
+          </div>
+          {(showAllPresent ? presentMembers : presentMembers.slice(0, PREVIEW)).map((m, i, arr) => (
+            <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderBottom: i < arr.length - 1 ? '1px solid rgba(26,58,42,0.05)' : 'none' }}>
+              <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#16a34a', flexShrink: 0 }} />
+              <span style={{ fontSize: 13.5, color: '#1a3a2a' }}>{m.name}</span>
+            </div>
+          ))}
+          {presentMembers.length > PREVIEW && <button onClick={() => setShowAllP(v => !v)} style={{ width: '100%', padding: '10px', background: '#f7f5f0', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#16a34a', fontFamily: 'inherit' }}>{showAllPresent ? 'Show less' : `Show all ${presentMembers.length} →`}</button>}
+        </div>
+      )}
+      {/* Absent list */}
+      {absentMembers.length > 0 && (
+        <div style={{ background: '#fff', borderRadius: 20, border: '1px solid rgba(26,58,42,0.07)', overflow: 'hidden', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', borderBottom: '1px solid rgba(26,58,42,0.06)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: '#dc2626' }} /><p style={{ fontSize: 13, fontWeight: 700, color: '#dc2626', margin: 0 }}>Absent</p></div>
+            <span style={{ fontSize: 12, color: '#8a9e90' }}>{absentMembers.length}</span>
+          </div>
+          {(showAllAbsent ? absentMembers : absentMembers.slice(0, PREVIEW)).map((m, i, arr) => (
+            <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderBottom: i < arr.length - 1 ? '1px solid rgba(26,58,42,0.05)' : 'none' }}>
+              <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#dc2626', flexShrink: 0 }} />
+              <span style={{ fontSize: 13.5, color: '#1a3a2a' }}>{m.name}</span>
+            </div>
+          ))}
+          {absentMembers.length > PREVIEW && <button onClick={() => setShowAllA(v => !v)} style={{ width: '100%', padding: '10px', background: '#f7f5f0', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#dc2626', fontFamily: 'inherit' }}>{showAllAbsent ? 'Show less' : `Show all ${absentMembers.length} →`}</button>}
+        </div>
+      )}
+      <button onClick={onEdit} style={{ width: '100%', marginTop: 10, padding: '12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#8a9e90', fontFamily: 'inherit' }}>Edit Attendance</button>
     </div>
   )
 }

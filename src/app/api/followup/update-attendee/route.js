@@ -1,9 +1,8 @@
-import { NextResponse } from 'next/server'
-import { withAuth } from '@/lib/apiAuth'
+import { NextResponse }  from 'next/server'
+import { withAuthFull }  from '@/lib/apiAuth'
 
-export const PATCH = withAuth(async (request, { church, admin }) => {
+export const PATCH = withAuthFull(async (request, { church, admin }) => {
   const { key, reached, markedBy, markedAt } = await request.json()
-
   if (!key) return NextResponse.json({ error: 'key required' }, { status: 400 })
 
   const existing = church.attendee_followup_data ?? {}
@@ -18,11 +17,7 @@ export const PATCH = withAuth(async (request, { church, admin }) => {
     },
   }
 
-  const { error } = await admin
-    .from('churches')
-    .update({ attendee_followup_data: updated })
-    .eq('id', church.id)
-
+  const { error } = await admin.from('churches').update({ attendee_followup_data: updated }).eq('id', church.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ success: true, entry: updated[key] })
 })

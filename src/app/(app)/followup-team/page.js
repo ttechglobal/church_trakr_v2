@@ -1,33 +1,28 @@
-import { getUser, getChurch }  from '@/lib/auth'
-import { createAdminClient }   from '@/lib/supabase/admin'
-import FollowUpTeamClient      from '@/components/followup/FollowUpTeamClient'
+import { getUser, getChurch }   from '@/lib/auth'
+import { getCachedActiveMembers } from '@/lib/cached-queries'
+import FollowUpTeamClient         from '@/components/followup/FollowUpTeamClient'
 
-export const metadata = { title: 'Follow-Up Team' }
+export const metadata  = { title: 'Follow-Up Team' }
+export const revalidate = 60
 
 export default async function FollowUpTeamPage() {
   const user = await getUser()
   if (!user) return <div className="page-content"><a href="/login">Sign in</a></div>
 
+  // Needs follow_up_data for __team__ array — full getChurch is correct here
   const church = await getChurch(user.id, user.user_metadata)
   if (!church) return <div className="page-content"><a href="/dashboard">Retry</a></div>
 
-  const admin = createAdminClient()
+  // Member picker list — use cached active members
+  const members = await getCachedActiveMembers(church.id)
 
-  // Load active members for the "add from members" picker
-  const { data: members } = await admin
-    .from('members')
-    .select('id, name, phone')
-    .eq('church_id', church.id)
-    .eq('status', 'active')
-    .order('name')
-
-  // Current team lives in follow_up_data.__team__
+  // Team lives in follow_up_data.__team__
   const team = (church.follow_up_data ?? {}).__team__ ?? []
 
   return (
     <FollowUpTeamClient
       initialTeam={team}
-      membersList={members ?? []}
+      membersList={members}
     />
   )
 }

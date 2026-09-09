@@ -1,59 +1,80 @@
 import { createAdminClient } from './supabase/admin'
-import { createClient } from './supabase/server'
+import { createClient }      from './supabase/server'
 
-/**
- * Get the authenticated user + their church in any API route.
- * Tries cookie-based auth first, falls back to Authorization header.
- * Returns { user, church } or throws with a clear message.
- */
-export async function getAuthContext() {
-  let user = null
-
-  // 1. Try cookie-based auth (works in Server Components + most API routes)
-  try {
-    const supabase = await createClient()
-    const { data, error } = await supabase.auth.getUser()
-    if (!error && data?.user) user = data.user
-  } catch {}
-
-  // 2. If cookies failed, something is misconfigured — but we still need the user
-  if (!user) {
-    throw new AuthError('Not authenticated', 401)
+export class AuthError extends Error {
+  constructor(message, status = 401) {
+    super(message)
+    this.status = status
+    this.isAuth = true
   }
+}
 
+// ── Internal: authenticate the request ──────────────────────────────────────
+async function resolveUser() {
+  const supabase = await createClient()
+  const { data, error } = await supabase.auth.getUser()
+  if (error || !data?.user) throw new AuthError('Not authenticated', 401)
+  return data.user
+}
+
+// ── getAuthContext (lean) ────────────────────────────────────────────────────
+// Used by most API routes that only need church.id for scoping queries.
+// Selects the minimum columns — does NOT fetch follow_up_data JSONB.
+export async function getAuthContext() {
+  const user  = await resolveUser()
   const admin = createAdminClient()
 
-  // 3. Look up the church using admin client (bypasses RLS, verified by user.id from JWT)
-  const { data: church, error: churchError } = await admin
+  const { data: church, error } = await admin
+    .from('churches')
+    .select('id, name, admin_name, sms_credits, sms_sender_id, sms_sender_id_status')
+    .eq('admin_user_id', user.id)
+    .single()
+
+  if (error || !church) throw new AuthError('Church not found', 404)
+  return { user, church, admin }
+}
+
+// ── getAuthContextFull ───────────────────────────────────────────────────────
+// Used ONLY by the two follow-up update routes that need to read + write back
+// the entire follow_up_data / attendee_followup_data JSONB blobs.
+export async function getAuthContextFull() {
+  const user  = await resolveUser()
+  const admin = createAdminClient()
+
+  const { data: church, error } = await admin
     .from('churches')
     .select('id, name, admin_name, sms_credits, follow_up_data, attendee_followup_data')
     .eq('admin_user_id', user.id)
     .single()
 
-  if (churchError || !church) {
-    throw new AuthError('Church not found for this account', 404)
-  }
-
+  if (error || !church) throw new AuthError('Church not found', 404)
   return { user, church, admin }
 }
 
-export class AuthError extends Error {
-  constructor(message, status = 401) {
-    super(message)
-    this.status  = status
-    this.isAuth  = true
-  }
-}
-
-/**
- * Wrap an API route handler with automatic auth + error handling.
- * Usage:
- *   export const POST = withAuth(async (req, { user, church, admin }) => { ... })
- */
+// ── withAuth ─────────────────────────────────────────────────────────────────
+// Wraps a handler with lean auth (no follow_up_data). Use for 95% of routes.
 export function withAuth(handler) {
   return async function(request, context) {
     try {
       const authCtx = await getAuthContext()
+      return await handler(request, { ...context, ...authCtx })
+    } catch (err) {
+      if (err.isAuth) {
+        return Response.json({ error: err.message }, { status: err.status })
+      }
+      console.error('[API Error]', err)
+      return Response.json({ error: 'Internal server error', detail: err.message }, { status: 500 })
+    }
+  }
+}
+
+// ── withAuthFull ─────────────────────────────────────────────────────────────
+// Wraps a handler with full church select (includes follow_up_data JSONB).
+// Only use for routes that read and write back follow_up_data.
+export function withAuthFull(handler) {
+  return async function(request, context) {
+    try {
+      const authCtx = await getAuthContextFull()
       return await handler(request, { ...context, ...authCtx })
     } catch (err) {
       if (err.isAuth) {

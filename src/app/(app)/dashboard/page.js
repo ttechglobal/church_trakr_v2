@@ -1,9 +1,11 @@
-import { getUser, getChurch } from '@/lib/auth'
-import { createAdminClient }  from '@/lib/supabase/admin'
-import { redirect }           from 'next/navigation'
-import DashboardClient        from '@/components/dashboard/DashboardClient'
+import { getUser, getChurch }       from '@/lib/auth'
+import { getCachedActiveMembers,
+         getCachedRecentSessions,
+         getCachedFirstTimers }      from '@/lib/cached-queries'
+import { redirect }                  from 'next/navigation'
+import DashboardClient               from '@/components/dashboard/DashboardClient'
 
-export const metadata = { title: 'Dashboard' }
+export const metadata  = { title: 'Dashboard' }
 export const revalidate = 30  // revalidate at most every 30s
 
 function attendanceRate(present, total) {
@@ -19,34 +21,17 @@ export default async function DashboardPage() {
   if (!church) redirect('/login')
   if (church.account_type === 'church') redirect('/church-dashboard')
 
-  const admin = createAdminClient()
-
-  // ── Parallel data fetch ───────────────────────────────────────────────────
-  const [membersRes, sessionsRes, ftRes] = await Promise.all([
-    admin.from('members')
-      .select('id, name, phone')
-      .eq('church_id', church.id)
-      .eq('status', 'active'),  // skip inactive/away — not needed on dashboard
-
-    admin.from('attendance_sessions')
-      .select('id, date, group_id, groups(name), attendance_records(member_id, present)')
-      .eq('church_id', church.id)
-      .order('date', { ascending: false })
-      .limit(8),   // only need last 4-8 for streak detection
-
-    admin.from('first_timers')
-      .select('id, name, date')
-      .eq('church_id', church.id)
-      .order('date', { ascending: false })
-      .limit(50),
+  // ── Parallel data fetch — all three use unstable_cache ───────────────────
+  const [members, allSessions, firstTimers] = await Promise.all([
+    getCachedActiveMembers(church.id),
+    getCachedRecentSessions(church.id, 8),
+    getCachedFirstTimers(church.id, 50),
   ])
 
-  const members     = membersRes.data  ?? []
-  const sessions    = (sessionsRes.data ?? []).filter(s =>
+  const sessions = allSessions.filter(s =>
     s.groups?.name !== 'First Timers' &&
     (s.attendance_records ?? []).some(r => r.member_id !== null)
   )
-  const firstTimers = ftRes.data ?? []
 
   // ── Last Sunday rate ──────────────────────────────────────────────────────
   const lastSession = sessions[0] ?? null
@@ -80,9 +65,6 @@ export default async function DashboardPage() {
   const consecutiveAbsent = []
 
   if (recentSessions.length >= 2) {
-    const phoneMap = {}
-    for (const m of members) if (m.phone) phoneMap[m.id] = m.phone
-
     for (const member of members) {
       let streak = 0
       for (const s of recentSessions) {
@@ -98,9 +80,9 @@ export default async function DashboardPage() {
   }
 
   // ── Needs Attention: below 50% this month ────────────────────────────────
-  const now          = new Date()
-  const thisMonth    = now.getMonth()
-  const thisYear     = now.getFullYear()
+  const now       = new Date()
+  const thisMonth = now.getMonth()
+  const thisYear  = now.getFullYear()
 
   const monthSessions = sessions.filter(s => {
     const d = new Date(s.date)

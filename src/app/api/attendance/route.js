@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { revalidateTag } from 'next/cache'
 import { NextResponse } from 'next/server'
 
 export async function POST(request) {
@@ -99,6 +100,10 @@ export async function POST(request) {
         detail: recErr.message,
       }, { status: 500 })
     }
+
+    // Bust the sessions cache and follow-up badge so the UI reflects the save immediately
+    revalidateTag(`sessions:${church.id}`)
+    revalidateTag(`followup-badge:${church.id}`)
 
     const presentCount = records.filter(r => r.present).length
     return NextResponse.json({

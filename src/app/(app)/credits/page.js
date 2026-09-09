@@ -1,26 +1,31 @@
-import { getUser, getChurch } from '@/lib/auth'
-import { createAdminClient }  from '@/lib/supabase/admin'
-import { redirect }           from 'next/navigation'
-import CreditsClient          from '@/components/credits/CreditsClient'
+import { getUser, getChurchLean }  from '@/lib/auth'
+import { createAdminClient }        from '@/lib/supabase/admin'
+import { redirect }                 from 'next/navigation'
+import CreditsClient                from '@/components/credits/CreditsClient'
 
-export const metadata = { title: 'SMS Credits' }
+export const metadata  = { title: 'SMS Credits' }
+export const revalidate = 60   // credit balance refreshes often enough via client actions
 
 export default async function CreditsPage() {
   const user = await getUser()
   if (!user) redirect('/login')
-  const church = await getChurch(user.id, user.user_metadata)
+
+  // Credits only needs sms_credits + id — lean query
+  const church = await getChurchLean(user.id)
   if (!church) redirect('/login')
 
   const admin = createAdminClient()
 
   const [txRes, mtrRes] = await Promise.all([
-    admin.from('credit_transactions')
-      .select('id,credits,amount_kobo,reference,status,gateway,created_at,completed_at')
+    admin
+      .from('credit_transactions')
+      .select('id, credits, amount_kobo, reference, status, gateway, created_at, completed_at')
       .eq('church_id', church.id)
       .order('created_at', { ascending: false })
       .limit(50),
-    admin.from('manual_transfer_requests')
-      .select('id,credits_requested,amount_paid,reference,status,created_at,package_name')
+    admin
+      .from('manual_transfer_requests')
+      .select('id, credits_requested, amount_paid, reference, status, created_at, package_name')
       .eq('church_id', church.id)
       .order('created_at', { ascending: false })
       .limit(20),

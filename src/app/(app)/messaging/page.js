@@ -1,34 +1,37 @@
-import { createAdminClient } from '@/lib/supabase/admin'
-import { createClient }      from '@/lib/supabase/server'
-import MessagingHub          from '@/components/messaging/MessagingHub'
+import { getUser, getChurchLean }  from '@/lib/auth'
+import { createAdminClient }        from '@/lib/supabase/admin'
+import { unstable_cache }           from 'next/cache'
+import MessagingHub                 from '@/components/messaging/MessagingHub'
 
-export const metadata = { title: 'Messaging' }
+export const metadata  = { title: 'Messaging' }
+export const revalidate = 60
+
+function getCachedRecentLogs(churchId) {
+  const admin = createAdminClient()
+  return unstable_cache(
+    async () => {
+      const { data } = await admin
+        .from('sms_logs')
+        .select('id, type, recipient_count, success_count, credits_used, sent_at')
+        .eq('church_id', churchId)
+        .order('sent_at', { ascending: false })
+        .limit(3)
+      return data ?? []
+    },
+    [`sms-logs:${churchId}`],
+    { revalidate: 60, tags: [`sms-logs:${churchId}`] }
+  )()
+}
 
 export default async function MessagingPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getUser()
   if (!user) return <div className="page-content"><a href="/login">Sign in</a></div>
 
-  const admin = createAdminClient()
-
-  const [churchRes, logsRes] = await Promise.all([
-    admin.from('churches')
-      .select('id,name,sms_credits,sms_sender_id,sms_sender_id_status')
-      .eq('admin_user_id', user.id)
-      .single(),
-    // will be loaded after we have churchId
-    Promise.resolve({ data: null }),
-  ])
-
-  const church = churchRes.data
+  // Messaging needs sms_credits, sms_sender_id — lean query covers these
+  const church = await getChurchLean(user.id)
   if (!church) return <div className="page-content"><p>No church found.</p></div>
 
-  const { data: recentLogs } = await admin
-    .from('sms_logs')
-    .select('id,type,recipient_count,success_count,credits_used,sent_at')
-    .eq('church_id', church.id)
-    .order('sent_at', { ascending: false })
-    .limit(3)
+  const recentLogs = await getCachedRecentLogs(church.id)
 
-  return <MessagingHub church={church} recentLogs={recentLogs ?? []} />
+  return <MessagingHub church={church} recentLogs={recentLogs} />
 }

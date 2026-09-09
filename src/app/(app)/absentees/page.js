@@ -1,36 +1,31 @@
-import { getUser, getChurch } from '@/lib/auth'
-import { createAdminClient }  from '@/lib/supabase/admin'
-import AbsenteesClient        from '@/components/absentees/AbsenteesClient'
+import { getUser, getChurch }         from '@/lib/auth'
+import { getCachedGroups,
+         getCachedAbsenteeSessions }   from '@/lib/cached-queries'
+import { createAdminClient }           from '@/lib/supabase/admin'
+import AbsenteesClient                 from '@/components/absentees/AbsenteesClient'
 
-export const metadata = { title: 'Follow-Up' }
+export const metadata  = { title: 'Follow-Up' }
 export const revalidate = 30
 
 export default async function AbsenteesPage() {
   const user = await getUser()
   if (!user) return <div style={{padding:'2rem'}}><a href="/login">Sign in</a></div>
 
+  // Absentees needs follow_up_data — full getChurch is correct here
   const church = await getChurch(user.id, user.user_metadata)
   if (!church) return <div style={{padding:'2rem'}}><a href="/dashboard">Retry</a></div>
 
-  const admin = createAdminClient()
-
-  // ── Parallel: groups + latest sessions ──────────────────────────────────────
-  const [groupsRes, sessionsRes] = await Promise.all([
-    admin.from('groups').select('id,name')
-      .eq('church_id', church.id).neq('name', 'First Timers'),
-    admin.from('attendance_sessions')
-      .select('id,date,group_id,groups(name),attendance_records(member_id,present)')
-      .eq('church_id', church.id)
-      .order('date', { ascending: false })
-      .limit(40),   // one latest session per group — 40 is enough for 10 groups × 4 weeks
+  // ── Use cached queries ────────────────────────────────────────────────────
+  const [groups, allSessions] = await Promise.all([
+    getCachedGroups(church.id),
+    getCachedAbsenteeSessions(church.id),
   ])
 
-  const groups   = groupsRes.data ?? []
   const groupIds = new Set(groups.map(g => g.id))
 
   // Latest session per group
   const latestByGroup = {}
-  for (const s of (sessionsRes.data ?? [])) {
+  for (const s of allSessions) {
     if (groupIds.has(s.group_id) && !latestByGroup[s.group_id]) latestByGroup[s.group_id] = s
   }
 
@@ -42,9 +37,10 @@ export default async function AbsenteesPage() {
     }
   }
 
-  // Fetch phone numbers only for absent members
+  // Fetch phone numbers only for absent members (small targeted query — can't cache this)
   let phoneMap = {}
   if (absentMemberIds.size > 0) {
+    const admin = createAdminClient()
     const { data: mems } = await admin.from('members')
       .select('id,name,phone').in('id', [...absentMemberIds])
     for (const m of (mems ?? [])) phoneMap[m.id] = { phone: m.phone, name: m.name }

@@ -20,9 +20,10 @@ export async function GET(request) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
-    const groupId  = searchParams.get('groupId')
-    const churchId = searchParams.get('churchId')
-    const date     = searchParams.get('date')
+    const groupId    = searchParams.get('groupId')
+    const churchId   = searchParams.get('churchId')
+    const date       = searchParams.get('date')
+    const includeAway = searchParams.get('includeAway') === '1'
 
     if (!groupId || !churchId) {
       return NextResponse.json({ error: 'groupId and churchId required' }, { status: 400 })
@@ -40,18 +41,23 @@ export async function GET(request) {
 
     if (!church) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    // ── Fetch members — exclude ONLY away, include active/inactive/null ────────
-    // Using .neq('status', 'away') instead of .eq('status', 'active') so that:
-    //   - members imported without a status (null) are included
-    //   - inactive members (still in the group, not removed) are included
-    //   - only members explicitly marked 'away' are excluded
+    // ── Fetch members ─────────────────────────────────────────────────────────
+    // When includeAway=1 (from the attendance marking UI): return all members
+    // including 'away' so the Away tab can show them.
+    // Default: exclude away members (only active/inactive/null count for attendance).
     const [membersRes, sessionRes] = await Promise.all([
-      admin
-        .from('members')
-        .select('id, name, phone, groupIds, status')
-        .eq('church_id', churchId)
-        .neq('status', 'away')
-        .order('name', { ascending: true }),
+      includeAway
+        ? admin
+            .from('members')
+            .select('id, name, phone, groupIds, status')
+            .eq('church_id', churchId)
+            .order('name', { ascending: true })
+        : admin
+            .from('members')
+            .select('id, name, phone, groupIds, status')
+            .eq('church_id', churchId)
+            .neq('status', 'away')
+            .order('name', { ascending: true }),
 
       // Parallel: load existing session if date provided
       date

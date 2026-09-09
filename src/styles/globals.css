@@ -258,6 +258,63 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   gap: 0.75rem;
 }
 
+/* ── Stat card lift ── */
+.stat-card-lift {
+  transition: transform 0.18s cubic-bezier(0.16,1,0.3,1), box-shadow 0.18s;
+}
+.stat-card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(26,58,42,0.13) !important;
+}
+
+/* ── Row hover ── */
+.row-hover:hover { background: #f7f5f0 !important; }
+
+/* ── Priority badges ── */
+.badge-priority-high   { background: #fef2f2; color: #dc2626; }
+.badge-priority-medium { background: #fffbeb; color: #d97706; }
+.badge-priority-low    { background: #f0fdf4; color: #16a34a; }
+
+/* ── Action bar (member profile) ── */
+.action-bar-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0.875rem 0.5rem;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.action-bar-item:hover { background: rgba(26,58,42,0.04); }
+.action-bar-item:active { background: rgba(26,58,42,0.08); }
+
+/* ── Tab pills ── */
+.tab-pill-container {
+  display: flex;
+  gap: 6px;
+  background: #fff;
+  border-radius: 14px;
+  padding: 5px;
+  border: 1px solid rgba(26,58,42,0.08);
+}
+.tab-pill {
+  flex: 1;
+  height: 36px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: all 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tab-pill.active { background: #1a3a2a; color: #ede9e0; }
+.tab-pill.inactive { background: transparent; color: #8a9e90; }
+
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 
