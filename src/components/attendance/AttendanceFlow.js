@@ -484,7 +484,7 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
             }
           </div>
         ) : (
-          <div style={{ paddingBottom: `calc(${BOTTOM_NAV_H}px + 80px + env(safe-area-inset-bottom,0px))` }}>
+          <div style={{ paddingBottom: `calc(80px + env(safe-area-inset-bottom,0px))` }}>
 
             {/* ── First Timers at TOP when in 'all' view ── */}
             {showFT && filteredFT.length > 0 && (
@@ -573,8 +573,12 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
       </div>
 
       {/* ── Fixed save bar ─────────────────────────────────────────────────── */}
-      <style>{`@media(min-width:1024px){.att-bar{left:${SIDEBAR_W}px!important}}`}</style>
-      <div className="att-bar" style={{ position: 'fixed', bottom: `calc(${BOTTOM_NAV_H}px + env(safe-area-inset-bottom,0px))`, left: 0, right: 0, background: '#fff', borderTop: '1px solid rgba(26,58,42,0.1)', padding: '10px 16px 12px', zIndex: 110 }}>
+      {/* Hide the shell bottom nav while marking — reclaims ~62px of screen */}
+      <style>{`
+        @media(max-width:1023px){ .shell-bottom-nav{ display:none !important; } }
+        @media(min-width:1024px){ .att-bar{ left:${SIDEBAR_W}px !important; } }
+      `}</style>
+      <div className="att-bar" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid rgba(26,58,42,0.1)', padding: `10px 16px calc(12px + env(safe-area-inset-bottom,0px))`, zIndex: 110 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <p style={{ fontSize: 13, color: '#8a9e90', fontWeight: 500, margin: 0, flexShrink: 0 }}>
             <span style={{ color: '#1a3a2a', fontWeight: 700 }}>{memberPresent} present</span> · {absentCount} absent
@@ -632,7 +636,7 @@ function StepMarkFirstTimers({ firstTimers, attendance, date, saving, onToggle, 
         </div>
       </div>
       <div style={{ flex: 1, overflowY: 'auto', background: '#fff' }}>
-        <div style={{ paddingBottom: `calc(${BOTTOM_NAV_H}px + 80px + env(safe-area-inset-bottom,0px))` }}>
+        <div style={{ paddingBottom: `calc(80px + env(safe-area-inset-bottom,0px))` }}>
           {filtered.map((ft, i) => {
             const isPresent = attendance[ft.id] ?? false
             const av = getAv(ft.name)
@@ -652,8 +656,11 @@ function StepMarkFirstTimers({ firstTimers, attendance, date, saving, onToggle, 
           })}
         </div>
       </div>
-      <style>{`@media(min-width:1024px){.att-bar-ft{left:${SIDEBAR_W}px!important}}`}</style>
-      <div className="att-bar-ft" style={{ position: 'fixed', bottom: `calc(${BOTTOM_NAV_H}px + env(safe-area-inset-bottom,0px))`, left: 0, right: 0, background: '#fff', borderTop: '1px solid rgba(26,58,42,0.1)', padding: '10px 16px 12px', zIndex: 110 }}>
+      <style>{`
+        @media(max-width:1023px){ .shell-bottom-nav{ display:none !important; } }
+        @media(min-width:1024px){ .att-bar-ft{ left:${SIDEBAR_W}px !important; } }
+      `}</style>
+      <div className="att-bar-ft" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid rgba(26,58,42,0.1)', padding: `10px 16px calc(12px + env(safe-area-inset-bottom,0px))`, zIndex: 110 }}>
         <button onClick={onSave} disabled={saving} className="btn btn-primary" style={{ width: '100%', height: 50, fontSize: 14, borderRadius: 14, background: 'linear-gradient(135deg,#a8862e,#c9a84c)' }}>
           {saving ? <><Spin /> Saving…</> : `Save — ${presentCount} Present · ${firstTimers.length - presentCount} Absent`}
         </button>

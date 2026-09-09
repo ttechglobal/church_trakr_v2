@@ -8,7 +8,7 @@ import { NextResponse } from 'next/server'
 
 async function getChurch(user) {
   const admin = createAdminClient()
-  const { data } = await admin.from('churches').select('*').eq('admin_user_id', user.id).single()
+  const { data } = await admin.from('churches').select('id,name,account_type,connection_code').eq('admin_user_id', user.id).single()
   return data
 }
 

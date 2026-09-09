@@ -377,11 +377,17 @@ export default function AbsenteesClient({
                     }
 
                     {/* ── Labelled action strip ── */}
-                    <div style={{
-                      display: 'flex', gap: 6, marginTop: 9,
-                      opacity: reached ? 0.5 : 1,
-                      transition: 'opacity 0.18s',
-                    }}>
+                    <div
+                      className="scrollbar-hide"
+                      style={{
+                        display: 'flex', gap: 6, marginTop: 9,
+                        overflowX: 'auto',
+                        opacity: reached ? 0.5 : 1,
+                        transition: 'opacity 0.18s',
+                        /* stop flex children from shrinking — they scroll instead */
+                        flexShrink: 0,
+                      }}
+                    >
                       {/* Call */}
                       {absentee.phone ? (
                         <a

@@ -4,12 +4,21 @@ import { useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  CheckSquare, UserPlus, ChevronRight, MoreVertical,
+  CheckSquare, ChevronRight,
   Phone, X, User, MapPin, Gift, ClipboardList,
   Users, Star, Cake, BarChart2, FileText,
-  UserCheck, Calendar,
+  UserCheck, Calendar, UserPlus,
 } from 'lucide-react'
-import { getGreeting, getAv } from '@/lib/utils'
+import { getGreeting, getAv, toWhatsAppNumber } from '@/lib/utils'
+
+// Inline WhatsApp icon — no external dependency
+function WAIcon({ size = 13 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+    </svg>
+  )
+}
 
 function Sparkline({ color = '#16a34a', pts = [] }) {
   const h = 28, w = 72
@@ -146,15 +155,26 @@ export default function DashboardClient({
         .db-row:hover        { background:#f7f5f0 !important; }
         .db-cta-green:hover  { filter:brightness(1.07); }
         .db-cta-orange:hover { filter:brightness(1.05); }
-        .db-assign-btn {
-          display:inline-flex; align-items:center; gap:5px;
-          padding:5px 12px; border-radius:8px;
-          border:1.5px solid rgba(26,58,42,0.18); background:#fff;
-          color:#1a3a2a; font-size:12px; font-weight:600;
+
+        /* Labelled action buttons in follow-up rows */
+        .db-act-call {
+          display:inline-flex; align-items:center; gap:4px;
+          height:28px; padding:0 10px; border-radius:7px;
+          background:rgba(26,58,42,0.06); border:1px solid rgba(26,58,42,0.14);
+          color:#1a3a2a; font-size:11.5px; font-weight:600;
           font-family:inherit; cursor:pointer; text-decoration:none;
-          white-space:nowrap; transition:all 0.12s;
+          white-space:nowrap; transition:background 0.12s;
         }
-        .db-assign-btn:hover { background:#1a3a2a; color:#fff; border-color:#1a3a2a; }
+        .db-act-call:hover { background:rgba(26,58,42,0.12); }
+        .db-act-wa {
+          display:inline-flex; align-items:center; gap:4px;
+          height:28px; padding:0 10px; border-radius:7px;
+          background:rgba(37,211,102,0.08); border:1px solid rgba(37,211,102,0.22);
+          color:#128c5e; font-size:11.5px; font-weight:600;
+          font-family:inherit; cursor:pointer; text-decoration:none;
+          white-space:nowrap; transition:background 0.12s;
+        }
+        .db-act-wa:hover { background:rgba(37,211,102,0.15); }
 
         .db-layout        { display:block; }
         .db-aside         { display:none; }
@@ -166,8 +186,11 @@ export default function DashboardClient({
         .db-fu-table      { display:none !important; }
         .db-fu-cards      { display:block !important; }
         .db-bottom-stats  { display:grid !important; }
-        .db-attn-mobile   { display:block !important; }
-        .db-fu-attn-row   { display:block; }
+        .db-attn-mobile   { display:block; }
+        .db-fu-attn-row   { display:flex; flex-direction:column; gap:20px; }
+
+        /* Mobile CTA badge — text hidden, only chevron shown */
+        .db-cta-badge-text { display:none; }
 
         @media (min-width:1024px) {
           .db-layout        { display:grid; grid-template-columns:1fr 320px; min-height:calc(100vh - 57px); }
@@ -180,8 +203,8 @@ export default function DashboardClient({
           .db-fu-table      { display:block !important; }
           .db-fu-cards      { display:none !important; }
           .db-bottom-stats  { display:none !important; }
-          .db-attn-mobile   { display:none !important; }
           .db-fu-attn-row   { display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start; }
+          .db-cta-badge-text { display:inline; }
         }
       `}</style>
 
@@ -297,13 +320,13 @@ export default function DashboardClient({
                 <div style={{ width: 50, height: 50, borderRadius: 14, background: 'rgba(255,255,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <CheckSquare size={24} color="#fff" strokeWidth={2} />
                 </div>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 16, fontWeight: 700, color: '#fff', margin: '0 0 2px', fontFamily: 'var(--font-playfair),Georgia,serif' }}>Take Attendance</p>
                   <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', margin: 0 }}>Mark attendance for today</p>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 36, padding: '0 14px', borderRadius: 10, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', flexShrink: 0 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Start Attendance</span>
-                  <ChevronRight size={13} color="#fff" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 36, padding: '0 12px', borderRadius: 10, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', flexShrink: 0 }}>
+                  <span className="db-cta-badge-text" style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Start</span>
+                  <ChevronRight size={14} color="#fff" />
                 </div>
               </Link>
 
@@ -312,13 +335,13 @@ export default function DashboardClient({
                 <div style={{ width: 50, height: 50, borderRadius: 14, background: 'rgba(249,115,22,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <ClipboardList size={24} color="#f97316" strokeWidth={1.75} />
                 </div>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 16, fontWeight: 700, color: '#1a3a2a', margin: '0 0 2px', fontFamily: 'var(--font-playfair),Georgia,serif' }}>Assign Follow-ups</p>
                   <p style={{ fontSize: 12, color: '#8a9e90', margin: 0 }}>Assign members to your team</p>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 36, padding: '0 14px', borderRadius: 10, background: '#f97316', flexShrink: 0 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Assign Now</span>
-                  <ChevronRight size={13} color="#fff" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 36, padding: '0 12px', borderRadius: 10, background: '#f97316', flexShrink: 0 }}>
+                  <span className="db-cta-badge-text" style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Assign</span>
+                  <ChevronRight size={14} color="#fff" />
                 </div>
               </Link>
             </div>
@@ -341,27 +364,43 @@ export default function DashboardClient({
 
                   {/* Desktop table */}
                   <div className="db-fu-table" style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(26,58,42,0.08)', overflow: 'hidden', boxShadow: '0 1px 6px rgba(26,58,42,0.05)' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 100px 1fr 36px', alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid rgba(26,58,42,0.07)', background: '#fafaf9' }}>
-                      {['Name', 'Last Absent', 'Absent For', 'Action', ''].map(h => (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 100px auto', alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid rgba(26,58,42,0.07)', background: '#fafaf9' }}>
+                      {['Name', 'Last Absent', 'Absent For', 'Action'].map(h => (
                         <span key={h} style={{ fontSize: 11, fontWeight: 700, color: '#8a9e90', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</span>
                       ))}
                     </div>
                     {pendingFollowUps.slice(0, 4).map((p, i) => {
-                      const av = getAv(p.name)
+                      const av      = getAv(p.name)
+                      const waNum   = p.phone ? toWhatsAppNumber(p.phone) : null
+                      const waMsg   = encodeURIComponent(`Hi ${p.name.split(' ')[0]}, we missed you at church this Sunday. We hope you're well. Please join us next week! 🙏`)
                       return (
-                        <div key={p.key} className="db-row" style={{ display: 'grid', gridTemplateColumns: '1fr 130px 100px 1fr 36px', alignItems: 'center', padding: '12px 16px', borderBottom: i < Math.min(pendingFollowUps.length, 4) - 1 ? '1px solid rgba(26,58,42,0.06)' : 'none', transition: 'background 0.1s' }}>
+                        <div key={p.key} className="db-row" style={{ display: 'grid', gridTemplateColumns: '1fr 120px 100px auto', alignItems: 'center', padding: '12px 16px', borderBottom: i < Math.min(pendingFollowUps.length, 4) - 1 ? '1px solid rgba(26,58,42,0.06)' : 'none', transition: 'background 0.1s' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <div style={{ width: 32, height: 32, borderRadius: '50%', background: av.bg, color: av.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{av.initials}</div>
                             <span style={{ fontSize: 13, fontWeight: 600, color: '#1a3a2a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
                           </div>
                           <span style={{ fontSize: 12, color: '#6b7280' }}>{p.date ? fmtShortDate(p.date) : '—'}</span>
                           <span style={{ fontSize: 12, color: '#6b7280' }}>1 Sunday</span>
-                          <Link href="/absentees/assign" className="db-assign-btn" style={{ width: 'fit-content' }}>
-                            <UserPlus size={11} /> Assign
-                          </Link>
-                          <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', padding: 4, display: 'flex', alignItems: 'center' }}>
-                            <MoreVertical size={15} />
-                          </button>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {p.phone ? (
+                              <a href={`tel:${p.phone}`} className="db-act-call">
+                                <Phone size={11} strokeWidth={2} /> Call
+                              </a>
+                            ) : (
+                              <span className="db-act-call" style={{ opacity: 0.35, cursor: 'not-allowed' }}>
+                                <Phone size={11} strokeWidth={2} /> Call
+                              </span>
+                            )}
+                            {waNum ? (
+                              <a href={`https://wa.me/${waNum}?text=${waMsg}`} target="_blank" rel="noreferrer" className="db-act-wa">
+                                <WAIcon size={11} /> WhatsApp
+                              </a>
+                            ) : (
+                              <span className="db-act-wa" style={{ opacity: 0.35, cursor: 'not-allowed' }}>
+                                <WAIcon size={11} /> WhatsApp
+                              </span>
+                            )}
+                          </div>
                         </div>
                       )
                     })}
@@ -375,18 +414,40 @@ export default function DashboardClient({
                   {/* Mobile cards */}
                   <div className="db-fu-cards" style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(26,58,42,0.08)', overflow: 'hidden' }}>
                     {pendingFollowUps.slice(0, 4).map((p, i) => {
-                      const av = getAv(p.name)
+                      const av    = getAv(p.name)
+                      const waNum = p.phone ? toWhatsAppNumber(p.phone) : null
+                      const waMsg = encodeURIComponent(`Hi ${p.name.split(' ')[0]}, we missed you at church this Sunday. We hope you're well. Please join us next week! 🙏`)
                       return (
-                        <div key={p.key} className="db-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.875rem 1rem', borderBottom: i < Math.min(pendingFollowUps.length, 4) - 1 ? '1px solid rgba(26,58,42,0.06)' : 'none', transition: 'background 0.1s' }}>
-                          <div style={{ width: 38, height: 38, borderRadius: '50%', background: av.bg, color: av.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{av.initials}</div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ fontSize: 14, fontWeight: 600, color: '#1a3a2a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</p>
-                            <p style={{ fontSize: 12, color: '#8a9e90', margin: '2px 0 0' }}>Absent {p.date ? fmtShortDate(p.date) : ''} · 1 Sunday</p>
+                        <div key={p.key} style={{ padding: '12px 14px', borderBottom: i < Math.min(pendingFollowUps.length, 4) - 1 ? '1px solid rgba(26,58,42,0.06)' : 'none' }}>
+                          {/* Name row */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 9 }}>
+                            <div style={{ width: 36, height: 36, borderRadius: '50%', background: av.bg, color: av.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{av.initials}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ fontSize: 14, fontWeight: 600, color: '#1a3a2a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</p>
+                              <p style={{ fontSize: 11.5, color: '#8a9e90', margin: '2px 0 0' }}>Absent {p.date ? fmtShortDate(p.date) : ''}</p>
+                            </div>
                           </div>
-                          <Link href="/absentees/assign" className="db-assign-btn">
-                            <UserPlus size={11} /> Assign
-                          </Link>
-                          <ChevronRight size={14} color="#d1d5db" style={{ flexShrink: 0 }} />
+                          {/* Action strip */}
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            {p.phone ? (
+                              <a href={`tel:${p.phone}`} className="db-act-call" style={{ flex: 1, justifyContent: 'center' }}>
+                                <Phone size={12} strokeWidth={2} /> Call
+                              </a>
+                            ) : (
+                              <span className="db-act-call" style={{ flex: 1, justifyContent: 'center', opacity: 0.35, cursor: 'not-allowed' }}>
+                                <Phone size={12} strokeWidth={2} /> Call
+                              </span>
+                            )}
+                            {waNum ? (
+                              <a href={`https://wa.me/${waNum}?text=${waMsg}`} target="_blank" rel="noreferrer" className="db-act-wa" style={{ flex: 1, justifyContent: 'center' }}>
+                                <WAIcon size={12} /> WhatsApp
+                              </a>
+                            ) : (
+                              <span className="db-act-wa" style={{ flex: 1, justifyContent: 'center', opacity: 0.35, cursor: 'not-allowed' }}>
+                                <WAIcon size={12} /> WhatsApp
+                              </span>
+                            )}
+                          </div>
                         </div>
                       )
                     })}
@@ -399,39 +460,85 @@ export default function DashboardClient({
                 </div>
               )}
 
-              {/* Needs Attention — beside follow-up on desktop, stacked on mobile */}
-              {urgentItems.length > 0 && (
-                <div className="db-attn-mobile" style={{ minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                    <h2 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 17, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>Needs Attention</h2>
-                    <Link href="/absentees" style={{ fontSize: 13, color: '#1a3a2a', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>
-                      See all <ChevronRight size={13} />
-                    </Link>
-                  </div>
-                  <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(26,58,42,0.08)', overflow: 'hidden' }}>
-                    {urgentItems.map((item, i) => {
-                      const av = getAv(item.name)
-                      return (
-                        <Link key={item.id} href={'/members/' + item.id} className="db-row"
-                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.875rem 1rem', borderBottom: i < urgentItems.length - 1 ? '1px solid rgba(26,58,42,0.06)' : 'none', textDecoration: 'none', transition: 'background 0.1s' }}>
-                          <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{av.initials}</div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ fontSize: 14, fontWeight: 600, color: '#1a3a2a', margin: 0 }}>{item.name}</p>
-                            <p style={{ fontSize: 12, color: '#f97316', margin: '2px 0 0', fontWeight: 500 }}>{item.streak} Sundays absent in a row</p>
+              {/* Needs Attention OR Quick Actions — always fills the second column on desktop */}
+              <div className="db-attn-mobile" style={{ minWidth: 0 }}>
+                {urgentItems.length > 0 ? (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                      <h2 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 17, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>Needs Attention</h2>
+                      <Link href="/absentees" style={{ fontSize: 13, color: '#1a3a2a', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>
+                        See all <ChevronRight size={13} />
+                      </Link>
+                    </div>
+                    <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(26,58,42,0.08)', overflow: 'hidden' }}>
+                      {urgentItems.map((item, i) => {
+                        const av    = getAv(item.name)
+                        const waNum = item.phone ? toWhatsAppNumber(item.phone) : null
+                        const waMsg = encodeURIComponent(`Hi ${item.name.split(' ')[0]}, we noticed you've been absent for a few Sundays. We miss you and hope you're doing well! 🙏`)
+                        return (
+                          <div key={item.id} style={{ borderBottom: i < urgentItems.length - 1 ? '1px solid rgba(26,58,42,0.06)' : 'none' }}>
+                            {/* Name row */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px 8px' }}>
+                              <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{av.initials}</div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <p style={{ fontSize: 14, fontWeight: 600, color: '#1a3a2a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</p>
+                                <p style={{ fontSize: 12, color: '#f97316', margin: '2px 0 0', fontWeight: 500 }}>{item.streak} Sundays absent in a row</p>
+                              </div>
+                            </div>
+                            {/* Action strip */}
+                            <div style={{ display: 'flex', gap: 6, padding: '0 14px 12px' }}>
+                              {item.phone ? (
+                                <a href={`tel:${item.phone}`} className="db-act-call" style={{ flex: 1, justifyContent: 'center' }}>
+                                  <Phone size={12} strokeWidth={2} /> Call
+                                </a>
+                              ) : (
+                                <span className="db-act-call" style={{ flex: 1, justifyContent: 'center', opacity: 0.35, cursor: 'not-allowed' }}>
+                                  <Phone size={12} strokeWidth={2} /> Call
+                                </span>
+                              )}
+                              {waNum ? (
+                                <a href={`https://wa.me/${waNum}?text=${waMsg}`} target="_blank" rel="noreferrer" className="db-act-wa" style={{ flex: 1, justifyContent: 'center' }}>
+                                  <WAIcon size={12} /> WhatsApp
+                                </a>
+                              ) : (
+                                <span className="db-act-wa" style={{ flex: 1, justifyContent: 'center', opacity: 0.35, cursor: 'not-allowed' }}>
+                                  <WAIcon size={12} /> WhatsApp
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          {item.phone && (
-                            <a href={`tel:${item.phone}`} onClick={e => e.stopPropagation()}
-                              style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(22,163,74,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1px solid rgba(22,163,74,0.14)' }}>
-                              <Phone size={14} color="#16a34a" />
-                            </a>
-                          )}
-                          <ChevronRight size={14} color="#d1d5db" style={{ flexShrink: 0 }} />
-                        </Link>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
+                        )
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  /* Quick Actions — shown when no one needs attention */
+                  <>
+                    <h2 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 17, fontWeight: 700, color: '#1a3a2a', margin: '0 0 14px' }}>Quick Actions</h2>
+                    <div style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(26,58,42,0.08)', overflow: 'hidden', boxShadow: '0 1px 4px rgba(26,58,42,0.04)' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+                        {[
+                          { label: 'Add Member',     Icon: UserPlus,  ic: '#1a3a2a', ib: 'rgba(26,58,42,0.08)',   action: () => setShowAddMember(true), bR: true,  bB: true  },
+                          { label: 'Import Members', Icon: Users,     ic: '#2563eb', ib: 'rgba(37,99,235,0.08)',  href: '/members',                     bR: false, bB: true  },
+                          { label: 'View Reports',   Icon: FileText,  ic: '#f97316', ib: 'rgba(249,115,22,0.08)', href: '/report',                      bR: true,  bB: false },
+                          { label: 'Manage Team',    Icon: UserCheck, ic: '#7c3aed', ib: 'rgba(124,58,237,0.08)', href: '/followup-team',               bR: false, bB: false },
+                        ].map(({ label, Icon, ic, ib, action, href, bR, bB }) => {
+                          const inner = (
+                            <div className="db-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', cursor: 'pointer', borderRight: bR ? '1px solid rgba(26,58,42,0.06)' : 'none', borderBottom: bB ? '1px solid rgba(26,58,42,0.06)' : 'none', transition: 'background 0.1s' }}>
+                              <div style={{ width: 30, height: 30, borderRadius: 8, background: ib, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <Icon size={14} color={ic} strokeWidth={1.75} />
+                              </div>
+                              <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1a3a2a' }}>{label}</span>
+                            </div>
+                          )
+                          if (action) return <button key={label} onClick={action} style={{ all: 'unset', cursor: 'pointer', display: 'block' }}>{inner}</button>
+                          return <Link key={label} href={href} style={{ textDecoration: 'none' }}>{inner}</Link>
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
 
             </div>{/* end db-fu-attn-row */}
 

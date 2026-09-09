@@ -44,7 +44,7 @@ export default function ChurchSettingsClient({ church, connections: initialConne
   async function saveProfile() {
     setSaving(true); setSaveMsg('')
     const res = await fetch('/api/settings', {
-      method: 'POST',
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(profile),
     })

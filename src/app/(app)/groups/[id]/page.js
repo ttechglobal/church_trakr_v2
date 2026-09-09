@@ -1,46 +1,61 @@
-import { redirect, notFound } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import GroupDetailClient from '@/components/groups/GroupDetailClient'
+import { getUser, getChurch }    from '@/lib/auth'
+import { createAdminClient }      from '@/lib/supabase/admin'
+import { redirect, notFound }     from 'next/navigation'
+import GroupDetailClient          from '@/components/groups/GroupDetailClient'
 
-export async function generateMetadata() {
-  return { title: 'Group' }
-}
+export const metadata  = { title: 'Group' }
+export const revalidate = 60
 
 export default async function GroupDetailPage({ params }) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getUser()
   if (!user) redirect('/login')
 
-  const { data: church } = await supabase
-    .from('churches').select('id, sms_credits').eq('admin_user_id', user.id).single()
+  // Shares layout's cached church — no extra DB round-trip
+  const church = await getChurch(user.id)
   if (!church) redirect('/signup')
 
-  const { data: group } = await supabase
-    .from('groups').select('*').eq('id', id).eq('church_id', church.id).single()
-  if (!group) notFound()
+  const admin = createAdminClient()
 
-  const { data: members } = await supabase
-    .from('members').select('*').eq('church_id', church.id).eq('status', 'active')
-    .contains('groupIds', [id]).order('name', { ascending: true })
+  // All four queries in parallel
+  const [groupRes, membersRes, allMembersRes, sessionsRes] = await Promise.all([
+    admin
+      .from('groups')
+      .select('id,name,leader,created_at')
+      .eq('id', id)
+      .eq('church_id', church.id)
+      .single(),
+    admin
+      .from('members')
+      .select('id,name,phone,status,groupIds,birthday,address,away_since')
+      .eq('church_id', church.id)
+      .eq('status', 'active')
+      .contains('groupIds', [id])
+      .order('name', { ascending: true }),
+    admin
+      .from('members')
+      .select('id,name,groupIds')
+      .eq('church_id', church.id)
+      .eq('status', 'active')
+      .order('name', { ascending: true }),
+    admin
+      .from('attendance_sessions')
+      .select('id,date,attendance_records(present)')
+      .eq('church_id', church.id)
+      .eq('group_id', id)
+      .order('date', { ascending: false })
+      .limit(5),
+  ])
 
-  const { data: allMembers } = await supabase
-    .from('members').select('id, name, groupIds').eq('church_id', church.id)
-    .eq('status', 'active').order('name', { ascending: true })
-
-  const { data: sessions } = await supabase
-    .from('attendance_sessions')
-    .select('id, date, attendance_records ( present )')
-    .eq('church_id', church.id).eq('group_id', id)
-    .order('date', { ascending: false }).limit(5)
+  if (!groupRes.data) notFound()
 
   return (
     <GroupDetailClient
       church={church}
-      group={group}
-      members={members ?? []}
-      allMembers={allMembers ?? []}
-      sessions={sessions ?? []}
+      group={groupRes.data}
+      members={membersRes.data ?? []}
+      allMembers={allMembersRes.data ?? []}
+      sessions={sessionsRes.data ?? []}
     />
   )
 }

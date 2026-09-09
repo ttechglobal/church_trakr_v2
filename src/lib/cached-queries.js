@@ -36,6 +36,11 @@ export function revalidateMembersForChurch(churchId) {
   revalidateTag(`members:${churchId}`)
 }
 
+export function revalidateSmsLogsForChurch(churchId) {
+  if (!churchId) return
+  revalidateTag(`sms-logs:${churchId}`)
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function admin() { return createAdminClient() }
 
@@ -45,7 +50,7 @@ export function getCachedChurch(userId) {
     async () => {
       const { data } = await admin()
         .from('churches')
-        .select('*')
+        .select('id,name,admin_name,phone,location,admin_user_id,account_type,plan,sms_credits,sms_sender_id,sms_sender_id_status,connection_code,created_at')
         .eq('admin_user_id', userId)
         .single()
       return data ?? null
