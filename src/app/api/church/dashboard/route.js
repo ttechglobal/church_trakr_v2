@@ -8,6 +8,7 @@
 import { createClient }      from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse }      from 'next/server'
+import { loadFollowUpMany } from '@/lib/followUp'
 
 function getMostRecentSunday() {
   const d = new Date()
@@ -96,10 +97,7 @@ export async function GET(request) {
       .from('churches')
       .select('id,name,admin_name')
       .in('id', allSubIds),
-    admin
-      .from('churches')
-      .select('id,follow_up_data')
-      .in('id', allSubIds),
+    loadFollowUpMany(admin, allSubIds, 'absentee'),
     // Always fetch prev sunday in parallel — skip computing if not needed later
     view === 'sunday' && approvedSubIds.length > 0
       ? admin
@@ -112,7 +110,7 @@ export async function GET(request) {
 
   const subMap   = Object.fromEntries((subgroupsRes.data ?? []).map(s => [s.id, s]))
   const connMap  = Object.fromEntries((connections  ?? []).map(c => [c.subgroup_id, c]))
-  const followMap = Object.fromEntries((churchDataRes.data ?? []).map(c => [c.id, c.follow_up_data ?? {}]))
+  const followMap = churchDataRes ?? {}
 
   // Compute stats per subgroup
   const groups = allSubIds.map(sid => {

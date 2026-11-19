@@ -1,4 +1,4 @@
-import { getUser, getChurch } from '@/lib/auth'
+import { getUser, getChurchFull } from '@/lib/auth'
 import { createAdminClient }  from '@/lib/supabase/admin'
 import { redirect }           from 'next/navigation'
 import DashboardClient        from '@/components/dashboard/DashboardClient'
@@ -15,7 +15,7 @@ export default async function DashboardPage() {
   const user = await getUser()
   if (!user) redirect('/login')
 
-  const church = await getChurch(user.id, user.user_metadata)
+  const church = await getChurchFull(user.id)
   if (!church) redirect('/login')
   if (church.account_type === 'church') redirect('/church-dashboard')
 

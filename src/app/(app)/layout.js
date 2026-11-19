@@ -10,7 +10,7 @@ import SupportButton            from '@/components/ui/SupportButton'
 // ── Cached follow-up badge count ─────────────────────────────────────────────
 // Revalidates every 60s. Tagged so attendance saves can bust it immediately.
 // This replaces the raw admin query that was firing on every single navigation.
-function getCachedPendingCount(churchId, followUpData) {
+function getCachedPendingCount(churchId) {
   return unstable_cache(
     async () => {
       const admin = createAdminClient()
@@ -24,15 +24,21 @@ function getCachedPendingCount(churchId, followUpData) {
       const realSession = (sessions ?? []).find(s =>
         (s.attendance_records ?? []).some(r => r.member_id !== null)
       )
-
       if (!realSession) return 0
 
-      const absentUnreached = (realSession.attendance_records ?? []).filter(r => {
-        if (!r.member_id || r.present) return false
-        const key = `${realSession.id}_${r.member_id}`
-        return !(followUpData[key]?.reached)
-      })
-      return absentUnreached.length
+      const absent = (realSession.attendance_records ?? []).filter(r => r.member_id && !r.present)
+      if (!absent.length) return 0
+
+      // Entries for this session that are marked reached (keys are "<sessionId>_<memberId>")
+      const { data: reached } = await admin
+        .from('follow_up_entries')
+        .select('key')
+        .eq('church_id', churchId).eq('kind', 'absentee')
+        .like('key', `${realSession.id}_%`)
+        .eq('data->>reached', 'true')
+      const done = new Set((reached ?? []).map(r => r.key))
+
+      return absent.filter(r => !done.has(`${realSession.id}_${r.member_id}`)).length
     },
     [`followup-badge:${churchId}`],
     { revalidate: 60, tags: [`sessions:${churchId}`, `followup-badge:${churchId}`] }
@@ -55,7 +61,7 @@ export default async function AppLayout({ children }) {
     )
   }
 
-  const church = await getChurch(user.id, user.user_metadata)
+  const church = await getChurch(user.id)
 
   if (!church) {
     const { redirect } = await import('next/navigation')
@@ -65,10 +71,7 @@ export default async function AppLayout({ children }) {
   // Use cached query — no raw DB hit on every navigation
   let pendingFollowUps = 0
   try {
-    pendingFollowUps = await getCachedPendingCount(
-      church.id,
-      church.follow_up_data ?? {}
-    )
+    pendingFollowUps = await getCachedPendingCount(church.id)
   } catch {}
 
   return (

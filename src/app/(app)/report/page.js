@@ -1,4 +1,4 @@
-import { getUser, getChurch }        from '@/lib/auth'
+import { getUser, getChurchFull }        from '@/lib/auth'
 import { getCachedGroups,
          getCachedRecentSessions,
          getCachedFirstTimers,
@@ -32,7 +32,7 @@ export default async function ReportPage() {
   if (!user) return <div style={{padding:'2rem'}}><a href="/login">Sign in</a></div>
 
   // Reports uses follow_up_data from church — full getChurch is correct
-  const church = await getChurch(user.id, user.user_metadata)
+  const church = await getChurchFull(user.id)
   if (!church) return <div style={{padding:'2rem'}}><a href="/dashboard">Retry</a></div>
 
   // All data served from cache — report fetching 200 sessions uncached was very expensive

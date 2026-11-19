@@ -1,4 +1,4 @@
-import { getUser, getChurch }         from '@/lib/auth'
+import { getUser, getChurchFull }         from '@/lib/auth'
 import { getCachedGroups,
          getCachedAbsenteeSessions }   from '@/lib/cached-queries'   // reuse — same shape
 import { createAdminClient }           from '@/lib/supabase/admin'
@@ -12,7 +12,7 @@ export default async function AttendeesPage() {
   if (!user) return <div style={{padding:'2rem'}}><a href="/login">Sign in</a></div>
 
   // Needs attendee_followup_data — full getChurch is correct here
-  const church = await getChurch(user.id, user.user_metadata)
+  const church = await getChurchFull(user.id)
   if (!church) return <div style={{padding:'2rem'}}><a href="/dashboard">Retry</a></div>
 
   // Use cached queries — sessions limited to 60, groups cached 5 min

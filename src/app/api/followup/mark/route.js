@@ -1,74 +1,36 @@
 /**
  * POST /api/followup/mark
+ * Body: { key: "{sessionId}_{memberId}", reached?: boolean, note?: string, reachedBy?: string }
  *
- * Atomically updates a single follow-up entry in follow_up_data.
- * Uses a read-modify-write on the server side so concurrent updates
- * from multiple users don't overwrite each other's entries.
- *
- * Body: {
- *   key:       string,   // "{sessionId}_{memberId}"
- *   reached:   boolean,
- *   note:      string,
- *   reachedBy: string,   // display name of the person marking
- * }
+ * The merge happens inside Postgres (row-locked), so two people marking at the
+ * same moment can never overwrite each other.
  */
-import { createAdminClient } from '@/lib/supabase/admin'
-import { createClient } from '@/lib/supabase/server'
-import { NextResponse } from 'next/server'
+import { NextResponse }  from 'next/server'
+import { revalidateTag } from 'next/cache'
+import { withAuth }      from '@/lib/apiAuth'
 
-export async function POST(request) {
-  try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export const POST = withAuth(async (request, { church, admin }) => {
+  const { key, reached, note, reachedBy } = await request.json().catch(() => ({}))
 
-    const admin = createAdminClient()
-
-    const { data: church } = await admin
-      .from('churches')
-      .select('id, follow_up_data')
-      .eq('admin_user_id', user.id)
-      .single()
-
-    if (!church) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-    const body = await request.json()
-    const { key, reached, note, reachedBy } = body
-
-    if (!key) return NextResponse.json({ error: 'key required' }, { status: 400 })
-
-    // Atomic merge: read current data, merge single key, write back
-    const current = church.follow_up_data ?? {}
-    const existing = current[key] ?? {}
-
-    const updated = {
-      ...current,
-      [key]: {
-        ...existing,
-        reached:    reached ?? existing.reached ?? false,
-        note:       note    ?? existing.note    ?? '',
-        reachedBy:  reached ? (reachedBy || existing.reachedBy || 'Team member') : null,
-        reachedAt:  reached ? (existing.reachedAt ?? new Date().toISOString()) : null,
-        updatedAt:  new Date().toISOString(),
-      },
-    }
-
-    // If un-marking as reached, clear reachedBy/reachedAt
-    if (reached === false) {
-      updated[key].reachedBy = null
-      updated[key].reachedAt = null
-    }
-
-    const { error } = await admin
-      .from('churches')
-      .update({ follow_up_data: updated })
-      .eq('id', church.id)
-
-    if (error) throw error
-
-    return NextResponse.json({ success: true, entry: updated[key] })
-  } catch (err) {
-    console.error('[POST /api/followup/mark]', err)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  if (typeof key !== 'string' || !key || key.length > 200 || key.startsWith('__')) {
+    return NextResponse.json({ error: 'Valid key required' }, { status: 400 })
   }
-}
+  if (reached !== undefined && reached !== null && typeof reached !== 'boolean') {
+    return NextResponse.json({ error: 'reached must be a boolean' }, { status: 400 })
+  }
+
+  const { data: entry, error } = await admin.rpc('mark_follow_up', {
+    p_church:     church.id,
+    p_key:        key,
+    p_reached:    reached ?? null,
+    p_note:       typeof note === 'string' ? note : null,
+    p_reached_by: typeof reachedBy === 'string' ? reachedBy.slice(0, 120) : null,
+  })
+  if (error) {
+    console.error('[followup/mark]', error.code, error.message)
+    return NextResponse.json({ error: 'Could not save follow-up' }, { status: 500 })
+  }
+
+  revalidateTag(`followup-badge:${church.id}`)
+  return NextResponse.json({ success: true, entry })
+})

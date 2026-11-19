@@ -40,15 +40,28 @@ export function useFollowUpSync(churchId, initialData, type, field) {
     } catch {}
   }, [data, localKey])
 
-  // Debounced Supabase write
-  const syncToServer = useCallback(
-    debounce(async (latestData) => {
+  // Entries changed locally but not yet confirmed saved. Only THESE are sent, so a
+  // stale tab can never overwrite entries it did not touch.
+  const dirtyRef = useRef(new Set())
+
+  const flush = useCallback(
+    debounce(async () => {
+      const keys = [...dirtyRef.current]
+      if (!keys.length) return
+      const payload = {}
+      for (const k of keys) if (dataRef.current[k]) payload[k] = dataRef.current[k]
       try {
-        await fetch('/api/followup/save', {
+        const res = await fetch('/api/followup/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ churchId, field, data: latestData }),
+          body: JSON.stringify({ churchId, field, data: payload }),
         })
+        // Only clear what we sent; anything edited meanwhile stays dirty
+        if (res.ok) {
+          for (const k of keys) {
+            if (dataRef.current[k] === payload[k]) dirtyRef.current.delete(k)
+          }
+        }
       } catch (err) {
         console.warn('Follow-up sync failed (will retry)', err)
       }
@@ -56,8 +69,25 @@ export function useFollowUpSync(churchId, initialData, type, field) {
     [churchId, field]
   )
 
+  // On load: anything in localStorage that is newer than what the server gave us was
+  // never saved (offline / closed tab) — queue it so it is not lost.
+  useEffect(() => {
+    try {
+      const local = JSON.parse(localStorage.getItem(localKey) ?? '{}')
+      for (const [k, v] of Object.entries(local)) {
+        if (k.startsWith('__') || !v || typeof v !== 'object') continue
+        const localT  = new Date(v.updatedAt ?? 0).getTime()
+        const serverT = new Date(initialData?.[k]?.updatedAt ?? 0).getTime()
+        if (localT > serverT) dirtyRef.current.add(k)
+      }
+      if (dirtyRef.current.size) flush()
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Fetch fresh data from server (background)
   const syncFromServer = useCallback(async () => {
+    if (dirtyRef.current.size) flush()   // retry anything that failed to save
     try {
       const res = await fetch(`/api/followup/load?churchId=${churchId}&field=${field}`)
       if (!res.ok) return
@@ -68,7 +98,7 @@ export function useFollowUpSync(churchId, initialData, type, field) {
         return merged
       })
     } catch {}
-  }, [churchId, field])
+  }, [churchId, field, flush])
 
   // Background sync every 30s + on tab focus
   useEffect(() => {
@@ -84,19 +114,18 @@ export function useFollowUpSync(churchId, initialData, type, field) {
 
   // Update a follow-up entry
   const update = useCallback((key, patch) => {
-    setData(prev => {
-      const updated = {
-        ...prev,
-        [key]: {
-          ...(prev[key] ?? {}),
-          ...patch,
-          updatedAt: new Date().toISOString(),
-        },
-      }
-      syncToServer(updated)
-      return updated
-    })
-  }, [syncToServer])
+    setData(prev => ({
+      ...prev,
+      [key]: {
+        ...(prev[key] ?? {}),
+        ...patch,
+        updatedAt: new Date().toISOString(),
+      },
+    }))
+    dirtyRef.current.add(key)
+    // dataRef is refreshed on the next render; flush runs after the debounce delay
+    flush()
+  }, [flush])
 
   return { data, update }
 }

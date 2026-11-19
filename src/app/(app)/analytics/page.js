@@ -1,4 +1,4 @@
-import { getUser, getChurch }       from '@/lib/auth'
+import { getUser, getChurchFull }       from '@/lib/auth'
 import { getCachedGroups,
          getCachedRecentSessions,
          getCachedMembers,
@@ -31,7 +31,7 @@ export default async function AnalyticsPage() {
   if (!user) return <div style={{padding:'2rem'}}><a href="/login">Sign in</a></div>
 
   // Analytics uses follow_up_data — full getChurch is correct
-  const church = await getChurch(user.id, user.user_metadata)
+  const church = await getChurchFull(user.id)
   if (!church) return <div style={{padding:'2rem'}}><a href="/dashboard">Retry</a></div>
 
   const [groups, sessions, members, firstTimers, awayMembers] = await Promise.all([

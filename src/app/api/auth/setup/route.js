@@ -37,8 +37,6 @@ export async function POST(request) {
         admin_name: adminName,
         plan: 'free',
         sms_credits: 0,
-        follow_up_data: {},
-        attendee_followup_data: {},
       })
 
     if (error) {

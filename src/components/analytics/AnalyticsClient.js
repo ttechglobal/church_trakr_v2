@@ -95,7 +95,7 @@ export default function AnalyticsClient({church,groups,sessions,members,firstTim
     })
   },[firstTimers,start,period])
   const fuStats=useMemo(()=>{
-    const entries=Object.values(followUpData),total=entries.length,reached=entries.filter(e=>e.reached).length
+    const entries=Object.entries(followUpData).filter(([k])=>!k.startsWith('__')).map(([,v])=>v),total=entries.length,reached=entries.filter(e=>e.reached).length
     return{total,reached,pending:total-reached,rate:total>0?Math.round((reached/total)*100):null}
   },[followUpData])
   const topAtt=useMemo(()=>{

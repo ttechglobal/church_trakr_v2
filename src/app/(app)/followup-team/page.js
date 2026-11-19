@@ -1,4 +1,4 @@
-import { getUser, getChurch }   from '@/lib/auth'
+import { getUser, getChurchFull }   from '@/lib/auth'
 import { getCachedActiveMembers } from '@/lib/cached-queries'
 import FollowUpTeamClient         from '@/components/followup/FollowUpTeamClient'
 
@@ -10,7 +10,7 @@ export default async function FollowUpTeamPage() {
   if (!user) return <div className="page-content"><a href="/login">Sign in</a></div>
 
   // Needs follow_up_data for __team__ array — full getChurch is correct here
-  const church = await getChurch(user.id, user.user_metadata)
+  const church = await getChurchFull(user.id)
   if (!church) return <div className="page-content"><a href="/dashboard">Retry</a></div>
 
   // Member picker list — use cached active members

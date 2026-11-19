@@ -34,47 +34,12 @@ export async function getAuthContext() {
   return { user, church, admin }
 }
 
-// ── getAuthContextFull ───────────────────────────────────────────────────────
-// Used ONLY by the two follow-up update routes that need to read + write back
-// the entire follow_up_data / attendee_followup_data JSONB blobs.
-export async function getAuthContextFull() {
-  const user  = await resolveUser()
-  const admin = createAdminClient()
-
-  const { data: church, error } = await admin
-    .from('churches')
-    .select('id, name, admin_name, sms_credits, follow_up_data, attendee_followup_data')
-    .eq('admin_user_id', user.id)
-    .single()
-
-  if (error || !church) throw new AuthError('Church not found', 404)
-  return { user, church, admin }
-}
-
 // ── withAuth ─────────────────────────────────────────────────────────────────
 // Wraps a handler with lean auth (no follow_up_data). Use for 95% of routes.
 export function withAuth(handler) {
   return async function(request, context) {
     try {
       const authCtx = await getAuthContext()
-      return await handler(request, { ...context, ...authCtx })
-    } catch (err) {
-      if (err.isAuth) {
-        return Response.json({ error: err.message }, { status: err.status })
-      }
-      console.error('[API Error]', err)
-      return Response.json({ error: 'Internal server error' }, { status: 500 })
-    }
-  }
-}
-
-// ── withAuthFull ─────────────────────────────────────────────────────────────
-// Wraps a handler with full church select (includes follow_up_data JSONB).
-// Only use for routes that read and write back follow_up_data.
-export function withAuthFull(handler) {
-  return async function(request, context) {
-    try {
-      const authCtx = await getAuthContextFull()
       return await handler(request, { ...context, ...authCtx })
     } catch (err) {
       if (err.isAuth) {

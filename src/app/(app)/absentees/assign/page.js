@@ -1,4 +1,4 @@
-import { getUser, getChurch }         from '@/lib/auth'
+import { getUser, getChurchFull }         from '@/lib/auth'
 import { getCachedGroups,
          getCachedAbsenteeSessions }   from '@/lib/cached-queries'
 import { createAdminClient }           from '@/lib/supabase/admin'
@@ -12,7 +12,7 @@ export default async function AssignPage() {
   if (!user) return <div className="page-content"><a href="/login">Sign in</a></div>
 
   // Needs follow_up_data for __team__ and __assignments__ — full getChurch is correct
-  const church = await getChurch(user.id, user.user_metadata)
+  const church = await getChurchFull(user.id)
   if (!church) return <div className="page-content"><a href="/dashboard">Retry</a></div>
 
   const [groups, allSessions] = await Promise.all([

@@ -17,6 +17,7 @@
  */
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient }      from '@/lib/supabase/server'
+import { loadFollowUp } from '@/lib/followUp'
 import { NextResponse }      from 'next/server'
 
 // Simple in-memory rate limit — per church, per process
@@ -58,7 +59,7 @@ export async function GET() {
     const churchId = church.id
 
     // ── Fetch all data in parallel ────────────────────────────────────────
-    const [membersRes, groupsRes, sessionsRes, ftRes, smsRes] = await Promise.allSettled([
+    const [membersRes, groupsRes, sessionsRes, ftRes, smsRes, fuRes, fuAttRes] = await Promise.allSettled([
       admin.from('members')
         .select('id, name, phone, address, birthday, status, groupIds, away_since, created_at')
         .eq('church_id', churchId)
@@ -84,6 +85,9 @@ export async function GET() {
         .select('id, type, message, recipient_count, success_count, fail_count, sent_at')
         .eq('church_id', churchId)
         .order('sent_at', { ascending: false }),
+
+      loadFollowUp(admin, churchId, 'absentee'),
+      loadFollowUp(admin, churchId, 'attendee'),
     ])
 
     const exportData = {
@@ -102,6 +106,10 @@ export async function GET() {
       groups:      groupsRes.status  === 'fulfilled' ? (groupsRes.value.data  ?? [])  : [],
       attendance:  sessionsRes.status === 'fulfilled' ? (sessionsRes.value.data ?? []) : [],
       firstTimers: ftRes.status      === 'fulfilled' ? (ftRes.value.data      ?? [])  : [],
+      followUps: {
+        absentees: fuRes.status    === 'fulfilled' ? fuRes.value    : {},
+        attendees: fuAttRes.status === 'fulfilled' ? fuAttRes.value : {},
+      },
       smsHistory:  smsRes.status     === 'fulfilled' ? (smsRes.value.data     ?? [])  : [],
       note: 'SMS history includes message text and recipient counts. Individual phone numbers are not included in this export.',
     }

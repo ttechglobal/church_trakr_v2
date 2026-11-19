@@ -1,6 +1,7 @@
 import { createClient }      from './supabase/server'
 import { createAdminClient } from './supabase/admin'
 import { cache }             from 'react'
+import { loadFollowUp }      from './followUp'
 
 /**
  * SERVER ONLY — do not import this file in any 'use client' component.
@@ -23,36 +24,35 @@ export const getUser = cache(async function _getUser() {
 })
 
 // ── CHURCH COLUMN SETS ────────────────────────────────────────────────────────
-// Never use select('*') — the churches table has 3 JSONB columns
-// (follow_up_data, attendee_followup_data, push_subscriptions) that can be
-// hundreds of KB each. We define two explicit column sets:
-//
-//   LEAN_COLS  — everything EXCEPT the heavy JSONB blobs.
-//                Used by the layout shell, attendance, members, groups,
-//                messaging, credits, settings, and any page that only needs
-//                church.id / plan / sms_credits / sender_id etc.
-//
-//   FULL_COLS  — adds follow_up_data + attendee_followup_data.
-//                Used ONLY by pages that must read the JSONB directly:
-//                dashboard, absentees, attendees, analytics, report,
-//                follow-up-team, assign.
+// Never use select('*'). Follow-ups no longer live on this table — they are in
+// follow_up_entries and are attached only when a page asks for { full: true }
+// (dashboard, absentees, attendees, analytics, report, follow-up team, assign).
 
 const LEAN_COLS =
   'id, name, admin_name, phone, location, admin_user_id, account_type, ' +
   'plan, sms_credits, sms_sender_id, sms_sender_id_status, connection_code, created_at'
 
-const FULL_COLS = LEAN_COLS + ', follow_up_data, attendee_followup_data'
+
+// Attach follow-up entries (from the follow_up_entries table) under the same
+// property names the UI has always read: follow_up_data / attendee_followup_data.
+async function withFollowUps(admin, church) {
+  const [follow_up_data, attendee_followup_data] = await Promise.all([
+    loadFollowUp(admin, church.id, 'absentee'),
+    loadFollowUp(admin, church.id, 'attendee'),
+  ])
+  return { ...church, follow_up_data, attendee_followup_data }
+}
 
 // ── getChurch ─────────────────────────────────────────────────────────────────
 // Returns lean columns by default (the layout doesn't need the JSONB blobs).
-// Pass { full: true } for pages that need follow_up_data / attendee_followup_data.
+// Pass { full: true } (or use getChurchFull) for pages that need follow-up data.
 //
 // IMPORTANT: The cache key includes the `full` flag so lean and full results
 // are stored independently and React cache() de-dups correctly within a render.
 export const getChurch = cache(async function _getChurch(userId, opts = {}) {
   if (!userId) return null
   const full = opts?.full === true
-  const cols = full ? FULL_COLS : LEAN_COLS
+  const cols = LEAN_COLS
 
   try {
     const admin = createAdminClient()
@@ -63,7 +63,7 @@ export const getChurch = cache(async function _getChurch(userId, opts = {}) {
       .eq('admin_user_id', userId)
       .single()
 
-    if (existing) return existing
+    if (existing) return full ? await withFollowUps(admin, existing) : existing
 
     // Auto-create on first login (only runs if no record found)
     const { data: created, error } = await admin
@@ -74,8 +74,6 @@ export const getChurch = cache(async function _getChurch(userId, opts = {}) {
         admin_name:             'Admin',
         plan:                   'free',
         sms_credits:            0,
-        follow_up_data:         {},
-        attendee_followup_data: {},
       })
       .select(cols)
       .single()
@@ -85,12 +83,12 @@ export const getChurch = cache(async function _getChurch(userId, opts = {}) {
         // Race condition: inserted by another request — just fetch it
         const { data: retry } = await admin
           .from('churches').select(cols).eq('admin_user_id', userId).single()
-        return retry ?? null
+        return retry ? (full ? await withFollowUps(admin, retry) : retry) : null
       }
       console.error('[getChurch] insert error:', error.message)
       return null
     }
-    return created
+    return full ? await withFollowUps(admin, created) : created
   } catch (err) {
     console.error('[getChurch] unexpected error:', err.message)
     return null
