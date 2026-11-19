@@ -1,6 +1,6 @@
 import { NextResponse }  from 'next/server'
 import { withAuth }      from '@/lib/apiAuth'
-import { normBirthday }  from '@/lib/utils'
+import { toDbDate }      from '@/lib/memberImport'
 
 /**
  * POST /api/members
@@ -43,7 +43,7 @@ export const POST = withAuth(async (request, { church, admin }) => {
       name:      name.trim().slice(0, 120),
       phone:     phone?.trim().slice(0, 30) || null,
       address:   address?.trim().slice(0, 300) || null,
-      birthday:  birthday ? normBirthday(birthday) : null,
+      birthday:  birthday ? toDbDate(birthday) : null,
       groupIds:  resolvedGroupIds,
       status:    status ?? 'active',
     })
@@ -52,7 +52,7 @@ export const POST = withAuth(async (request, { church, admin }) => {
 
   if (error) {
     console.error('[POST /api/members]', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: 'Could not save member' }, { status: 500 })
   }
 
   return NextResponse.json({ success: true, member })
@@ -76,7 +76,7 @@ export const PATCH = withAuth(async (request, { church, admin }) => {
   }
   if (body.phone   !== undefined) fields.phone   = String(body.phone ?? '').trim().slice(0, 30) || null
   if (body.address !== undefined) fields.address = String(body.address ?? '').trim().slice(0, 300) || null
-  if (body.birthday !== undefined) fields.birthday = body.birthday ? normBirthday(body.birthday) || null : null
+  if (body.birthday !== undefined) fields.birthday = body.birthday ? toDbDate(body.birthday) : null
   if (body.status !== undefined) {
     if (!['active', 'inactive', 'away'].includes(body.status)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
@@ -121,7 +121,7 @@ export const PATCH = withAuth(async (request, { church, admin }) => {
 
   if (error) {
     console.error('[PATCH /api/members]', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: 'Could not save member' }, { status: 500 })
   }
 
   return NextResponse.json({ success: true, member })
@@ -143,7 +143,7 @@ export const DELETE = withAuth(async (request, { church, admin }) => {
 
   if (error) {
     console.error('[DELETE /api/members]', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: 'Could not save member' }, { status: 500 })
   }
 
   return NextResponse.json({ success: true })

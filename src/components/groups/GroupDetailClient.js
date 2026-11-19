@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { fmtDate, fmtBday, getAv, attendanceRate, normBirthday, toWhatsAppNumber } from '@/lib/utils'
 import FixedModal from '@/components/ui/FixedModal'
+import { importMembers, describeImport } from '@/lib/importClient'
 
 export default function GroupDetailClient({ church, group, members: initMembers, allMembers, sessions }) {
   const router = useRouter()
@@ -301,9 +302,9 @@ export default function GroupDetailClient({ church, group, members: initMembers,
           onClose={() => setShowImport(false)}
           onImported={newMembers => {
             setMembers(prev => {
-              const ids = new Set(prev.map(m => m.id))
-              return [...prev, ...newMembers.filter(m => !ids.has(m.id))]
-                .sort((a, b) => a.name.localeCompare(b.name))
+              const byId = new Map(prev.map(m => [m.id, m]))
+              for (const m of newMembers) byId.set(m.id, m)
+              return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name))
             })
             setShowImport(false)
           }}
@@ -461,6 +462,7 @@ function ExcelImportModal({ churchId, groupId, onClose, onImported }) {
   const [preview, setPreview] = useState([])
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState('')
+  const [summary, setSummary] = useState(null)
   const fileRef = useRef()
 
   async function handleFile(e) {
@@ -511,28 +513,14 @@ function ExcelImportModal({ churchId, groupId, onClose, onImported }) {
   async function handleImport() {
     setStage('importing')
     setProgress(0)
-    const imported = []
-    const BATCH = 10
-    for (let i = 0; i < preview.length; i += BATCH) {
-      const batch = preview.slice(i, i + BATCH)
-      await Promise.all(batch.map(async member => {
-        try {
-          const res = await fetch('/api/members', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...member, groupIds: [groupId], status: 'active' }),
-          })
-          const data = await res.json()
-          if (data.member) imported.push(data.member)
-        } catch {}
-      }))
-      setProgress(Math.round(((i + BATCH) / preview.length) * 100))
-    }
-    onImported(imported)
+    const result = await importMembers(preview, { groupId, onProgress: setProgress })
+    setSummary(result)
+    setStage('done')
   }
+  const finish = () => onImported(summary?.members ?? [])
 
   return (
-    <Modal title="Import from Excel / CSV" onClose={onClose}>
+    <Modal title="Import from Excel / CSV" onClose={stage === 'done' ? finish : onClose}>
       {stage === 'upload' && (
         <div className="space-y-4">
           <div
@@ -608,6 +596,17 @@ function ExcelImportModal({ churchId, groupId, onClose, onImported }) {
             />
           </div>
           <p className="text-sm text-mist">{progress}%</p>
+        </div>
+      )}
+
+      {stage === 'done' && summary && (
+        <div className="text-center py-6 space-y-4">
+          <p className="font-medium text-forest">
+            {summary.failed ? '⚠️ ' : '✅ '}{summary.created} member{summary.created === 1 ? '' : 's'} imported
+          </p>
+          <p className="text-sm text-mist">{describeImport(summary)}</p>
+          {summary.error && <p className="text-sm text-error">{summary.error}</p>}
+          <button onClick={finish} className="btn btn-primary w-full">Done</button>
         </div>
       )}
     </Modal>

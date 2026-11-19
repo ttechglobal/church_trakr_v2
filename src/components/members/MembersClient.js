@@ -4,6 +4,7 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import BackButton from '@/components/ui/BackButton'
 import { getAv, fmtBday, normBirthday } from '@/lib/utils'
+import { importMembers, describeImport } from '@/lib/importClient'
 import { Search, Plus, Upload, ChevronRight, X, Pencil, Users, Check, AlertTriangle } from 'lucide-react'
 import FixedModal from '@/components/ui/FixedModal'
 
@@ -254,8 +255,9 @@ export default function MembersClient({ churchId, members: initMembers, groups }
           onClose={() => setShowImport(false)}
           onImported={imported => {
             setMembers(prev => {
-              const ids = new Set(prev.map(m => m.id))
-              return [...prev, ...imported.filter(m => !ids.has(m.id))].sort((a, b) => a.name.localeCompare(b.name))
+              const byId = new Map(prev.map(m => [m.id, m]))
+              for (const m of imported) byId.set(m.id, m)
+              return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name))
             })
             setShowImport(false)
           }}
@@ -394,6 +396,7 @@ function MemberImportModal({ onClose, onImported, defaultGroupId }) {
   const [preview, setPreview] = useState([])
   const [progress, setProgress] = useState(0)
   const [error, setError]     = useState('')
+  const [summary, setSummary] = useState(null)
   const fileRef = useRef()
 
   function parseBirthday(raw) {
@@ -470,15 +473,11 @@ function MemberImportModal({ onClose, onImported, defaultGroupId }) {
 
   async function handleImport() {
     setStage('importing'); setProgress(0)
-    const imported = []; const BATCH = 10
-    for (let i = 0; i < preview.length; i += BATCH) {
-      await Promise.all(preview.slice(i, i + BATCH).map(async m => {
-        try { const res = await fetch('/api/members', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...m, status: 'active', groupIds: defaultGroupId ? [defaultGroupId] : [] }) }); const data = await res.json(); if (data.member) imported.push(data.member) } catch {}
-      }))
-      setProgress(Math.min(100, Math.round(((i + BATCH) / preview.length) * 100)))
-    }
-    onImported(imported)
+    const result = await importMembers(preview, { groupId: defaultGroupId, onProgress: setProgress })
+    setSummary(result); setStage('done')
   }
+  const finish = () => onImported(summary?.members ?? [])
+  const close  = () => (stage === 'done' ? finish() : onClose())
 
   function downloadSample() {
     const csv = 'first_name,last_name,phone,address,birthday\nAda,Okafor,+2348012345678,Lagos,15/03/1990\nEmeka,Nwosu,,Abuja,22-Jul-1985'
@@ -496,12 +495,12 @@ function MemberImportModal({ onClose, onImported, defaultGroupId }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-sm p-4"
-      onClick={e => e.target === e.currentTarget && onClose()}>
+      onClick={e => e.target === e.currentTarget && close()}>
       <div className="bg-white rounded-3xl w-full max-w-md shadow-modal animate-slide-up max-h-[90dvh] overflow-y-auto">
         <div className="p-6">
           <div className="flex items-center justify-between mb-5">
             <h3 className="font-display text-lg font-semibold text-forest">Import Members</h3>
-            <button onClick={onClose} className="btn btn-ghost btn-sm p-1.5"><X size={18} /></button>
+            <button onClick={close} className="btn btn-ghost btn-sm p-1.5"><X size={18} /></button>
           </div>
           {stage === 'upload' && (
             <div className="space-y-4">
@@ -568,6 +567,15 @@ function MemberImportModal({ onClose, onImported, defaultGroupId }) {
                 <div className="h-full bg-forest rounded-full transition-all duration-300" style={{ width: progress + '%' }} />
               </div>
               <p className="text-sm text-mist">{progress}%</p>
+            </div>
+          )}
+          {stage === 'done' && summary && (
+            <div className="text-center py-6 space-y-4">
+              <p className="text-3xl">{summary.failed ? '⚠️' : '✅'}</p>
+              <p className="font-semibold text-forest">{summary.created} member{summary.created === 1 ? '' : 's'} imported</p>
+              <p className="text-sm text-mist">{describeImport(summary)}</p>
+              {summary.error && <p className="text-sm text-error">{summary.error}</p>}
+              <button onClick={finish} className="btn btn-primary w-full">Done</button>
             </div>
           )}
         </div>
