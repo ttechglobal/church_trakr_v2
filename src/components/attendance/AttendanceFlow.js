@@ -7,6 +7,9 @@ import {
   getLastSunday, getPrevSunday, toISODate, getAv
 } from '@/lib/utils'
 import { notifyAttendanceSubmitted } from '@/hooks/useNotifications'
+import { useToast } from '@/components/ui/Toast'
+import { offlineQueue } from '@/lib/offlineQueue'
+import { saveDraft, loadDraft, clearDraft, applyDraft, cacheMembers, loadCachedMembers } from '@/lib/attendanceDraft'
 
 const STEP = { GROUP: 1, DATE: 2, MARK: 3, SUMMARY: 4 }
 const FIRST_TIMERS_ID = '__first_timers__'
@@ -78,6 +81,7 @@ function SkeletonRow() {
 // ─── Root controller (logic only, no render) ──────────────────────────────────
 export default function AttendanceFlow({ church, groups, sessionsByGroup, preselectedGroupId, firstTimers = [] }) {
   const router = useRouter()
+  const { toast } = useToast()
   const [step, setStep] = useState(preselectedGroupId ? STEP.DATE : STEP.GROUP)
   const [selectedGroup, setSelectedGroup] = useState(
     preselectedGroupId ? groups.find(g => g.id === preselectedGroupId) ?? null : null
@@ -87,10 +91,15 @@ export default function AttendanceFlow({ church, groups, sessionsByGroup, presel
   const [members,           setMembers]           = useState([])
   const [attendance,        setAttendance]        = useState({})
   const [loadingMembers,    setLoadingMembers]    = useState(false)
+  const [loadError,         setLoadError]         = useState(null)   // string | null
+  const [usingCache,        setUsingCache]        = useState(false)  // offline: showing last saved member list
   const [saving,            setSaving]            = useState(false)
+  const [saveError,         setSaveError]         = useState(null)   // string | null
   const [savingFT,          setSavingFT]          = useState(false)
   const [savedResult,       setSavedResult]       = useState(null)
   const [ftAttendance,      setFtAttendance]      = useState({})
+  const [dirty,             setDirty]             = useState(false)  // marks changed since load/save
+  const serverMarks = useRef({})                                     // marks exactly as the server has them
 
   useEffect(() => {
     if (!preselectedGroupId && groups.length === 1) {
@@ -101,9 +110,74 @@ export default function AttendanceFlow({ church, groups, sessionsByGroup, presel
 
   function handleGroupSelect(group) { setSelectedGroup(group); setStep(STEP.DATE) }
 
+  // ── Draft autosave: never lose marks to a locked phone / dropped signal / back-tap ──
+  const draftActive = step === STEP.MARK && dirty && selectedGroup && selectedGroup.id !== FIRST_TIMERS_ID && selectedDate
+  useEffect(() => {
+    if (!draftActive) return
+    const t = setTimeout(() => saveDraft(localStorage, selectedGroup.id, selectedDate, attendance), 400)
+    return () => clearTimeout(t)
+  }, [draftActive, attendance, selectedGroup, selectedDate])
+  useEffect(() => {
+    if (!draftActive) return
+    const flushNow = () => { if (document.visibilityState === 'hidden') saveDraft(localStorage, selectedGroup.id, selectedDate, attendance) }
+    document.addEventListener('visibilitychange', flushNow)
+    window.addEventListener('pagehide', flushNow)
+    return () => { document.removeEventListener('visibilitychange', flushNow); window.removeEventListener('pagehide', flushNow) }
+  }, [draftActive, attendance, selectedGroup, selectedDate])
+
+  function applyLoaded(memberList, existingRecords, group, date, fromCache) {
+    setMembers(memberList)
+    setUsingCache(fromCache)
+    const initial = {}
+    for (const m of memberList) initial[m.id] = false
+    for (const r of existingRecords ?? []) if (r.member_id in initial) initial[r.member_id] = !!r.present
+    serverMarks.current = initial
+
+    const draft = loadDraft(localStorage, group.id, date)
+    if (draft) {
+      const { marks, applied } = applyDraft(initial, draft.marks)
+      if (applied > 0) {
+        setAttendance(marks); setDirty(true)
+        toast(`Restored your unsaved marks (${applied} change${applied === 1 ? '' : 's'})`, {
+          action: { label: 'Discard', onClick: () => { clearDraft(localStorage, group.id, date); setAttendance(serverMarks.current); setDirty(false) } },
+        })
+        return
+      }
+      clearDraft(localStorage, group.id, date)   // draft matches the server: nothing to restore
+    }
+    setAttendance(initial); setDirty(false)
+  }
+
+  async function loadMembers(group, date) {
+    setLoadingMembers(true); setLoadError(null); setUsingCache(false)
+    try {
+      // includeAway=1 so away members come through for the "Away" tab
+      const res = await fetch(`/api/attendance/members?groupId=${group.id}&churchId=${church.id}&date=${date}&includeAway=1`)
+      const data = await res.json().catch(() => ({}))
+      // The API reports some database failures as 200 + { error }: treat those as server trouble too
+      if (!res.ok || data.error) throw Object.assign(new Error(data.error || 'load failed'), { status: res.ok ? 500 : res.status })
+      const list = data.members ?? []
+      cacheMembers(localStorage, group.id, list)
+      applyLoaded(list, data.existingRecords, group, date, false)
+    } catch (err) {
+      const cached = loadCachedMembers(localStorage, group.id)
+      const offline = err.status === undefined || err.status >= 500
+      if (cached && offline) {
+        applyLoaded(cached.members, null, group, date, true)   // work from the last saved member list
+      } else {
+        setMembers([]); setAttendance({})
+        setLoadError(err.status === 401
+          ? 'Your session has expired. Please sign in again.'
+          : offline ? "Couldn't reach the server. Check your connection and try again."
+                    : "Couldn't load this group's members.")
+      }
+    } finally { setLoadingMembers(false) }
+  }
+
   async function handleDateSelect(date, existingId) {
     setSelectedDate(date)
     setExistingSessionId(existingId)
+    setSaveError(null)
     if (selectedGroup?.id === FIRST_TIMERS_ID) {
       const initFt = {}
       for (const ft of firstTimers) initFt[ft.id] = false
@@ -111,60 +185,82 @@ export default function AttendanceFlow({ church, groups, sessionsByGroup, presel
         try {
           const res = await fetch(`/api/attendance/firsttimers?date=${date}`)
           for (const r of ((await res.json()).records ?? [])) initFt[r.member_id] = r.present
-        } catch {}
+        } catch { toast("Couldn't load the first-timer marks already saved for this date.", { type: 'error' }) }
       }
       setFtAttendance(initFt)
       setStep(STEP.MARK)
       return
     }
-    setLoadingMembers(true)
     setStep(STEP.MARK)
-    try {
-      // NOTE: we pass includeAway=1 so away members come through for the "Away" tab
-      const res = await fetch(`/api/attendance/members?groupId=${selectedGroup.id}&churchId=${church.id}&date=${date}&includeAway=1`)
-      const data = await res.json()
-      const memberList = data.members ?? []
-      setMembers(memberList)
-      const initial = {}
-      if (data.existingRecords?.length > 0) {
-        for (const m of memberList) initial[m.id] = false
-        for (const r of data.existingRecords) initial[r.member_id] = r.present
-      } else {
-        for (const m of memberList) initial[m.id] = false
-      }
-      setAttendance(initial)
-    } catch (err) { console.error('Failed to load members', err) }
-    finally { setLoadingMembers(false) }
+    await loadMembers(selectedGroup, date)
   }
 
-  function toggleMember(memberId) { setAttendance(prev => ({ ...prev, [memberId]: !prev[memberId] })) }
+  function toggleMember(memberId) {
+    setAttendance(prev => ({ ...prev, [memberId]: !prev[memberId] }))
+    setDirty(true)
+  }
+
+  // Mark many at once (e.g. "All present"), with Undo.
+  function bulkSet(ids, present) {
+    if (!ids.length) return
+    const before = Object.fromEntries(ids.map(id => [id, attendance[id] ?? false]))
+    setAttendance(prev => { const next = { ...prev }; for (const id of ids) next[id] = present; return next })
+    setDirty(true)
+    toast(present ? `${ids.length} marked present` : `${ids.length} marked absent`, {
+      action: { label: 'Undo', onClick: () => setAttendance(prev => ({ ...prev, ...before })) },
+    })
+  }
+
+  // First-timer marks saved alongside a group's attendance: failure must be visible, not swallowed.
+  async function saveFirstTimersAlongside(date, marks) {
+    const records = firstTimers.map(ft => ({ memberId: ft.id, name: ft.name, present: marks[ft.id] ?? false }))
+    try {
+      const res = await fetch('/api/attendance/firsttimers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date, records }) })
+      if (!res.ok) throw new Error()
+    } catch {
+      toast("Attendance was saved, but the first-timer marks weren't.", {
+        type: 'error',
+        action: { label: 'Retry', onClick: () => saveFirstTimersAlongside(date, marks) },
+      })
+    }
+  }
 
   async function handleSave() {
-    setSaving(true)
+    setSaving(true); setSaveError(null)
     // Only save non-away members in attendance records
     const records = members
       .filter(m => m.status !== 'away')
       .map(m => ({ memberId: m.id, name: m.name, present: attendance[m.id] ?? false }))
     const payload = { groupId: selectedGroup.id, date: selectedDate, records, existingSessionId: existingSessionId ?? undefined }
-    if (!navigator.onLine) {
-      const q = JSON.parse(localStorage.getItem('ct_offline_queue') ?? '[]')
-      q.push({ ...payload, queuedAt: new Date().toISOString() })
-      localStorage.setItem('ct_offline_queue', JSON.stringify(q))
-      setSaving(false); setSavedResult({ ...payload, sessionId: 'offline', offline: true }); setStep(STEP.SUMMARY)
-      return
+
+    // Keep the marks safe on this phone and move on; they upload automatically later.
+    const saveOnPhone = (reason) => {
+      offlineQueue()?.enqueue(payload)
+      clearDraft(localStorage, selectedGroup.id, selectedDate)
+      setDirty(false)
+      setSavedResult({ ...payload, sessionId: 'offline', offline: true, reason })
+      setStep(STEP.SUMMARY)
     }
+
     try {
-      const res = await fetch('/api/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Save failed')
-      if (firstTimers.length > 0 && Object.keys(ftAttendance).length > 0) {
-        fetch('/api/attendance/firsttimers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: selectedDate, records: firstTimers.map(ft => ({ memberId: ft.id, name: ft.name, present: ftAttendance[ft.id] ?? false })) }) }).catch(() => {})
-      }
+      if (!navigator.onLine) { saveOnPhone('offline'); return }
+      let res
+      try {
+        res = await fetch('/api/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      } catch { saveOnPhone('offline'); return }                // network failure mid-request
+
+      if (res.status === 401) { saveOnPhone('signin'); return } // session expired: don't lose the marks
+
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setSaveError(data.error || `Save failed (error ${res.status}).`); return }
+
+      clearDraft(localStorage, selectedGroup.id, selectedDate)
+      setDirty(false)
+      if (firstTimers.length > 0 && Object.keys(ftAttendance).length > 0) saveFirstTimersAlongside(selectedDate, ftAttendance)
       setSavedResult(data); setStep(STEP.SUMMARY)
       localStorage.setItem('ct_last_attendance_date', selectedDate)
       try { notifyAttendanceSubmitted(localStorage.getItem('ct_display_name') || 'A team member', records.filter(r => r.present).length, records.length - records.filter(r => r.present).length) } catch {}
-    } catch (err) { alert('Failed to save: ' + err.message) }
-    finally { setSaving(false) }
+    } finally { setSaving(false) }
   }
 
   async function handleSaveFirstTimers() {
@@ -172,30 +268,15 @@ export default function AttendanceFlow({ church, groups, sessionsByGroup, presel
     const records = firstTimers.map(ft => ({ memberId: ft.id, name: ft.name, present: ftAttendance[ft.id] ?? false }))
     try {
       const res = await fetch('/api/attendance/firsttimers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: selectedDate, records }) })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error ?? 'Save failed')
       setSavedResult({ ...data, isFirstTimers: true, ftMembers: firstTimers, ftAttendance: { ...ftAttendance } })
       setStep(STEP.SUMMARY)
       localStorage.setItem('ct_last_attendance_date', selectedDate)
-    } catch (err) { alert('Failed to save: ' + err.message) }
-    finally { setSavingFT(false) }
+    } catch (err) {
+      toast(`Couldn't save first-timer attendance: ${err.message}`, { type: 'error' })
+    } finally { setSavingFT(false) }
   }
-
-  // Flush offline queue
-  useEffect(() => {
-    async function flush() {
-      const q = JSON.parse(localStorage.getItem('ct_offline_queue') ?? '[]')
-      if (!q.length) return
-      const rem = []
-      for (const item of q) {
-        try { if (!(await fetch('/api/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) })).ok) rem.push(item) }
-        catch { rem.push(item) }
-      }
-      localStorage.setItem('ct_offline_queue', JSON.stringify(rem))
-    }
-    window.addEventListener('online', flush); flush()
-    return () => window.removeEventListener('online', flush)
-  }, [])
 
   return (
     <div style={{ minHeight: '100dvh', background: '#f7f5f0' }}>
@@ -204,7 +285,7 @@ export default function AttendanceFlow({ church, groups, sessionsByGroup, presel
       {step === STEP.MARK   && selectedGroup && selectedDate && (
         selectedGroup.id === FIRST_TIMERS_ID
           ? <StepMarkFirstTimers firstTimers={firstTimers} attendance={ftAttendance} date={selectedDate} saving={savingFT} onToggle={id => setFtAttendance(p => ({ ...p, [id]: !p[id] }))} onSave={handleSaveFirstTimers} onBack={() => setStep(STEP.GROUP)} />
-          : <StepMark group={selectedGroup} date={selectedDate} members={members} attendance={attendance} loading={loadingMembers} saving={saving} onToggle={toggleMember} onSave={handleSave} onBack={() => setStep(STEP.DATE)} firstTimers={firstTimers} ftAttendance={ftAttendance} onToggleFT={id => setFtAttendance(p => ({ ...p, [id]: !p[id] }))} />
+          : <StepMark group={selectedGroup} date={selectedDate} members={members} attendance={attendance} loading={loadingMembers} loadError={loadError} usingCache={usingCache} saveError={saveError} saving={saving} onToggle={toggleMember} onBulk={bulkSet} onRetryLoad={() => loadMembers(selectedGroup, selectedDate)} onSave={handleSave} onBack={() => setStep(STEP.DATE)} firstTimers={firstTimers} ftAttendance={ftAttendance} onToggleFT={id => setFtAttendance(p => ({ ...p, [id]: !p[id] }))} />
       )}
       {step === STEP.SUMMARY && savedResult && <StepSummary group={selectedGroup} date={selectedDate} members={members} attendance={attendance} result={savedResult} onDone={() => router.push('/dashboard')} onEdit={() => setStep(STEP.MARK)} onViewAbsentees={() => router.push('/absentees')} />}
     </div>
@@ -213,11 +294,11 @@ export default function AttendanceFlow({ church, groups, sessionsByGroup, presel
 
 // ─── STEP 1 — Group Selection ─────────────────────────────────────────────────
 function StepGroup({ groups, sessionsByGroup, onSelect, onBack, firstTimers = [] }) {
-  const btn = { width: 38, height: 38, borderRadius: 11, background: '#fff', border: '1px solid rgba(26,58,42,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }
+  const btn = { width: 44, height: 44, borderRadius: 11, background: '#fff', border: '1px solid rgba(26,58,42,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }
   return (
     <div className="page-content">
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.625rem' }}>
-        <button onClick={onBack} style={btn}><ChevL /></button>
+        <button onClick={onBack} aria-label="Go back" style={btn}><ChevL /></button>
         <div>
           <h1 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 22, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>Take Attendance</h1>
           <p style={{ fontSize: 13, color: '#5b7062', margin: '2px 0 0' }}>Select a group to begin</p>
@@ -329,7 +410,7 @@ function StepDate({ group, church, onSelect, onBack, isFirstTimers }) {
   return (
     <div className="page-content">
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.625rem' }}>
-        <button onClick={onBack} style={{ width: 38, height: 38, borderRadius: 11, background: '#fff', border: '1px solid rgba(26,58,42,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevL /></button>
+        <button onClick={onBack} aria-label="Go back" style={{ width: 44, height: 44, borderRadius: 11, background: '#fff', border: '1px solid rgba(26,58,42,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevL /></button>
         <div>
           <h1 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 20, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>{group.name}</h1>
           <p style={{ fontSize: 13, color: '#5b7062', margin: '2px 0 0' }}>Choose a date</p>
@@ -376,7 +457,7 @@ function StepDate({ group, church, onSelect, onBack, isFirstTimers }) {
 }
 
 // ─── STEP 3 — Mark Attendance ─────────────────────────────────────────────────
-function StepMark({ group, date, members, attendance, loading, saving, onToggle, onSave, onBack, firstTimers = [], ftAttendance = {}, onToggleFT }) {
+function StepMark({ group, date, members, attendance, loading, loadError, usingCache, saveError, saving, onToggle, onBulk, onRetryLoad, onSave, onBack, firstTimers = [], ftAttendance = {}, onToggleFT }) {
   const [search,     setSearch]     = useState('')
   const [viewFilter, setViewFilter] = useState('all') // 'all' | 'absent' | 'away'
 
@@ -400,6 +481,10 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
     return base.filter(m => m.name.toLowerCase().includes(q))
   }, [viewFilter, awayMembers, activeMembers, attendance, q])
 
+  // "Mark all present" acts on exactly what is on screen (respects the search box and tabs)
+  const bulkTargets = useMemo(() => filteredMain.filter(m => m.status !== 'away'), [filteredMain])
+  const allPresent  = bulkTargets.length > 0 && bulkTargets.every(m => attendance[m.id])
+
   const showFT = viewFilter === 'all' // First Timers only shown in 'all' view
 
   return (
@@ -409,7 +494,7 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
       <div style={{ position: 'sticky', top: 0, zIndex: 30, background: '#fff', borderBottom: '1px solid rgba(26,58,42,0.08)' }}>
         {/* Row 1 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px 6px' }}>
-          <button onClick={onBack} style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(26,58,42,0.06)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}><ChevL /></button>
+          <button onClick={onBack} aria-label="Go back" style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(26,58,42,0.06)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}><ChevL /></button>
           <p style={{ flex: 1, fontSize: 17, fontWeight: 700, color: '#1a3a2a', margin: 0, fontFamily: 'var(--font-playfair),Georgia,serif' }}>Attendance</p>
           <span style={{ fontSize: 12, color: '#5b7062', flexShrink: 0 }}>
             {new Date(date + 'T00:00:00').toLocaleDateString('en-NG', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
@@ -423,12 +508,12 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px 12px' }}>
           <div style={{ minWidth: 52 }}>
             <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 28, fontWeight: 700, color: '#1a3a2a', margin: 0, lineHeight: 1 }}>{memberPresent}</p>
-            <p style={{ fontSize: 10, color: '#5b7062', margin: '3px 0 0', fontWeight: 600 }}>Present</p>
+            <p style={{ fontSize: 12, color: '#5b7062', margin: '3px 0 0', fontWeight: 600 }}>Present</p>
           </div>
           <div style={{ width: 1, height: 34, background: 'rgba(26,58,42,0.1)', flexShrink: 0 }} />
           <div style={{ minWidth: 52 }}>
             <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 28, fontWeight: 700, color: '#dc2626', margin: 0, lineHeight: 1 }}>{absentCount}</p>
-            <p style={{ fontSize: 10, color: '#5b7062', margin: '3px 0 0', fontWeight: 600 }}>Absent</p>
+            <p style={{ fontSize: 12, color: '#5b7062', margin: '3px 0 0', fontWeight: 600 }}>Absent</p>
           </div>
           <div style={{ width: 1, height: 34, background: 'rgba(26,58,42,0.1)', flexShrink: 0 }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -438,7 +523,7 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
             </svg>
             <div>
               <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 18, fontWeight: 700, color: rateCol, margin: 0, lineHeight: 1 }}>{rate}%</p>
-              <p style={{ fontSize: 10, color: '#5b7062', margin: '2px 0 0', fontWeight: 600 }}>Attendance rate</p>
+              <p style={{ fontSize: 12, color: '#5b7062', margin: '2px 0 0', fontWeight: 600 }}>Attendance rate</p>
             </div>
           </div>
         </div>
@@ -446,13 +531,19 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
         <div style={{ height: 4, background: '#f0ede7', margin: '0 16px', borderRadius: 2, overflow: 'hidden', marginBottom: 12 }}>
           <div style={{ height: '100%', background: '#16a34a', borderRadius: 2, width: `${progress}%`, transition: 'width 0.25s ease' }} />
         </div>
-        {/* Search */}
+        {/* Search + bulk action */}
         <div style={{ padding: '0 16px 10px', display: 'flex', gap: 8 }}>
-          <div style={{ flex: 1, position: 'relative' }}>
+          <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
             <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#5b7062', display: 'flex', pointerEvents: 'none' }}><SearchIco /></span>
-            <input type="search" placeholder="Search members…" value={search} onChange={e => setSearch(e.target.value)}
-              style={{ width: '100%', height: 40, borderRadius: 12, border: '1px solid rgba(26,58,42,0.14)', background: '#f7f5f0', paddingLeft: 34, paddingRight: 12, fontSize: 13.5, outline: 'none', fontFamily: 'inherit', color: '#1a3a2a', boxSizing: 'border-box' }} />
+            <input type="search" aria-label="Search members" placeholder="Search members…" value={search} onChange={e => setSearch(e.target.value)}
+              style={{ width: '100%', height: 44, borderRadius: 12, border: '1px solid rgba(26,58,42,0.14)', background: '#f7f5f0', paddingLeft: 34, paddingRight: 12, fontSize: 14, fontFamily: 'inherit', color: '#1a3a2a', boxSizing: 'border-box' }} />
           </div>
+          {viewFilter !== 'away' && bulkTargets.length > 0 && !loading && !loadError && (
+            <button type="button" onClick={() => onBulk(bulkTargets.map(m => m.id), !allPresent)}
+              style={{ height: 44, padding: '0 14px', borderRadius: 12, border: '1px solid rgba(26,58,42,0.2)', background: '#fff', color: '#1a3a2a', fontFamily: 'inherit', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {allPresent ? 'Clear all' : (search || viewFilter !== 'all') ? `Mark ${bulkTargets.length} present` : 'Mark all present'}
+            </button>
+          )}
         </div>
         {/* Tabs: All | Absent | Away */}
         <div style={{ display: 'flex', margin: '0 16px 12px', borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(26,58,42,0.1)' }}>
@@ -463,7 +554,7 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
           ].map(({ key, label }, i) => {
             const active = viewFilter === key
             return (
-              <button key={key} onClick={() => setViewFilter(key)} style={{ flex: 1, height: 36, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5, fontWeight: 600, transition: 'all 0.15s', background: active ? '#1a3a2a' : 'transparent', color: active ? '#fff' : '#5b7062', borderRight: i < 2 ? '1px solid rgba(26,58,42,0.1)' : 'none' }}>
+              <button key={key} onClick={() => setViewFilter(key)} aria-pressed={active} style={{ flex: 1, height: 44, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, fontWeight: 600, transition: 'all 0.15s', background: active ? '#1a3a2a' : 'transparent', color: active ? '#fff' : '#5b7062', borderRight: i < 2 ? '1px solid rgba(26,58,42,0.1)' : 'none' }}>
                 {label}
               </button>
             )
@@ -475,6 +566,12 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
       <div style={{ flex: 1, overflowY: 'auto', background: '#fff' }}>
         {loading ? (
           <div>{[...Array(7)].map((_, i) => <SkeletonRow key={i} />)}</div>
+        ) : loadError ? (
+          <div role="alert" style={{ textAlign: 'center', padding: '3rem 1.5rem' }}>
+            <p style={{ fontSize: 15, fontWeight: 600, color: '#1a3a2a', margin: '0 0 6px' }}>{loadError}</p>
+            <p style={{ fontSize: 13, color: '#5b7062', margin: '0 0 18px' }}>Nothing has been changed.</p>
+            <button type="button" className="btn btn-primary" onClick={onRetryLoad}>Try again</button>
+          </div>
         ) : filteredMain.length === 0 && (!showFT || filteredFT.length === 0) ? (
           <div style={{ textAlign: 'center', padding: '3rem 1.5rem', color: '#5b7062' }}>
             {viewFilter === 'away' && awayMembers.length === 0
@@ -483,7 +580,13 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
             }
           </div>
         ) : (
-          <div style={{ paddingBottom: `calc(80px + env(safe-area-inset-bottom,0px))` }}>
+          <div style={{ paddingBottom: `calc(${saveError ? 150 : 80}px + env(safe-area-inset-bottom,0px))` }}>
+
+            {usingCache && (
+              <div role="status" style={{ padding: '10px 16px', background: '#fef3c7', borderBottom: '1px solid rgba(217,119,6,0.25)', color: '#78350f', fontSize: 13, lineHeight: 1.45 }}>
+                <strong>You're offline.</strong> Showing the last member list saved on this phone. If attendance for this date was already recorded, saving will replace it.
+              </div>
+            )}
 
             {/* ── First Timers at TOP when in 'all' view ── */}
             {showFT && filteredFT.length > 0 && (
@@ -534,8 +637,8 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
               const isAway    = member.status === 'away'
               const av = getAv(member.name)
               return (
-                <button key={member.id} onClick={() => !isAway && onToggle(member.id)} style={{
-                  width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
+                <button key={member.id} onClick={() => !isAway && onToggle(member.id)} aria-pressed={isAway ? undefined : isPresent} style={{
+                  width: '100%', minHeight: 56, display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px',
                   background: isPresent ? 'rgba(22,163,74,0.03)' : '#fff',
                   borderBottom: i < filteredMain.length - 1 ? '1px solid rgba(26,58,42,0.06)' : 'none',
                   border: 'none', cursor: isAway ? 'default' : 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'background 0.1s',
@@ -544,10 +647,7 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
                     {av.initials}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 14.5, fontWeight: 600, color: isAway ? '#5b7062' : '#1a3a2a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.name}</p>
-                    <p style={{ fontSize: 11.5, color: '#5b7062', margin: '2px 0 0' }}>
-                      {isAway ? 'Away' : group.name}
-                    </p>
+                    <p style={{ fontSize: 15, fontWeight: 600, color: isAway ? '#5b7062' : '#1a3a2a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.name}</p>
                   </div>
                   {isAway ? (
                     <span style={{ fontSize: 11.5, fontWeight: 600, color: '#d97706', background: 'rgba(217,119,6,0.1)', padding: '4px 10px', borderRadius: 8, flexShrink: 0 }}>Away</span>
@@ -578,13 +678,18 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
         @media(min-width:1024px){ .att-bar{ left:${SIDEBAR_W}px !important; } }
       `}</style>
       <div className="att-bar" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid rgba(26,58,42,0.1)', padding: `10px 16px calc(12px + env(safe-area-inset-bottom,0px))`, zIndex: 110 }}>
+        {saveError && (
+          <div role="alert" style={{ marginBottom: 10, padding: '10px 12px', borderRadius: 12, background: '#fee2e2', color: '#7f1d1d', fontSize: 13, lineHeight: 1.45 }}>
+            <strong>Couldn't save.</strong> {saveError.replace(/[.!?\s]*$/, '.')} Your marks are still here. Try again.
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <p style={{ fontSize: 13, color: '#5b7062', fontWeight: 500, margin: 0, flexShrink: 0 }}>
+          <p aria-live="polite" style={{ fontSize: 13, color: '#5b7062', fontWeight: 500, margin: 0, flexShrink: 0 }}>
             <span style={{ color: '#1a3a2a', fontWeight: 700 }}>{memberPresent} present</span> · {absentCount} absent
           </p>
-          <button onClick={onSave} disabled={saving || loading || activeMembers.length === 0} className="btn btn-primary"
+          <button onClick={onSave} disabled={saving || loading || !!loadError || activeMembers.length === 0} className="btn btn-primary"
             style={{ height: 44, paddingLeft: 20, paddingRight: 20, fontSize: 14, borderRadius: 13, background: 'linear-gradient(135deg,#1a3a2a,#2d5a42)', flexShrink: 0, gap: 6 }}>
-            {saving ? <><Spin /> Saving…</> : 'Save Attendance →'}
+            {saving ? <><Spin /> Saving…</> : saveError ? 'Try again →' : 'Save Attendance →'}
           </button>
         </div>
       </div>
@@ -602,7 +707,7 @@ function StepMarkFirstTimers({ firstTimers, attendance, date, saving, onToggle, 
     return (
       <div className="page-content">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
-          <button onClick={onBack} style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(26,58,42,0.06)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevL /></button>
+          <button onClick={onBack} aria-label="Go back" style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(26,58,42,0.06)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevL /></button>
           <h1 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 20, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>First Timers</h1>
         </div>
         <div style={{ background: '#fff', borderRadius: 20, padding: '3rem 1.5rem', textAlign: 'center' }}>
@@ -618,7 +723,7 @@ function StepMarkFirstTimers({ firstTimers, attendance, date, saving, onToggle, 
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: '#f7f5f0' }}>
       <div style={{ position: 'sticky', top: 0, zIndex: 30, background: '#fff', borderBottom: '1px solid rgba(26,58,42,0.08)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px 8px' }}>
-          <button onClick={onBack} style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(26,58,42,0.06)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevL /></button>
+          <button onClick={onBack} aria-label="Go back" style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(26,58,42,0.06)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevL /></button>
           <div style={{ flex: 1 }}>
             <p style={{ fontSize: 17, fontWeight: 700, color: '#7a5c12', margin: 0, fontFamily: 'var(--font-playfair),Georgia,serif' }}>First Timers</p>
             <p style={{ fontSize: 12, color: '#5b7062', margin: '2px 0 0' }}>{fmtDate(date)}</p>
@@ -689,12 +794,18 @@ function StepSummary({ group, date, members, attendance, result, onDone, onEdit,
         <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }} aria-hidden>
           {[...Array(12)].map((_, i) => <div key={i} style={{ position: 'absolute', top: '30%', left: '50%', width: 2, height: 36, borderRadius: 2, transformOrigin: '0 0', transform: `rotate(${i * 30}deg) translateY(-80px)`, background: i % 3 === 0 ? 'rgba(201,168,76,0.3)' : i % 3 === 1 ? 'rgba(22,163,74,0.2)' : 'rgba(26,58,42,0.1)' }} />)}
         </div>
-        <div style={{ width: 80, height: 80, borderRadius: '50%', background: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem', boxShadow: '0 8px 28px rgba(22,163,74,0.35)' }}>
+        <div style={{ width: 80, height: 80, borderRadius: '50%', background: result.offline ? '#b45309' : '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem', boxShadow: result.offline ? '0 8px 28px rgba(180,83,9,0.35)' : '0 8px 28px rgba(22,163,74,0.35)' }}>
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
         </div>
-        <h2 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 28, fontWeight: 700, color: '#1a3a2a', margin: '0 0 6px' }}>Attendance Saved!</h2>
+        <h2 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 28, fontWeight: 700, color: '#1a3a2a', margin: '0 0 6px' }}>{result.offline ? 'Saved on this phone' : 'Attendance Saved!'}</h2>
         <p style={{ fontSize: 13.5, color: '#5b7062', margin: '0 0 1.5rem', fontWeight: 500 }}>{group?.name ?? 'First Timers'} · {dateStr}</p>
-        {result.offline && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 10, background: 'rgba(217,119,6,0.1)', color: '#d97706', fontSize: 12.5, fontWeight: 600, marginBottom: '1rem' }}>Saved offline — syncing when back online</div>}
+        {result.offline && (
+          <div role="status" style={{ padding: '10px 14px', borderRadius: 12, background: '#fef3c7', color: '#78350f', fontSize: 13, fontWeight: 600, lineHeight: 1.45, marginBottom: '1rem' }}>
+            {result.reason === 'signin'
+              ? 'Your session expired. The attendance is safe on this phone. Sign in again and it will upload automatically.'
+              : "No connection. The attendance is safe on this phone and will upload automatically when you're back online."}
+          </div>
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: '1.375rem' }}>
           {[
             { label: 'Present', value: presentMembers.length, color: '#1a3a2a', bg: 'rgba(26,58,42,0.07)' },

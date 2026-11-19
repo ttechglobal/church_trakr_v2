@@ -6,6 +6,7 @@ import PWAInit                  from '@/components/PWAInit'
 import FollowUpBanner           from '@/components/FollowUpBanner'
 import PWAPromptLoader          from '@/components/PWAPromptLoader'
 import SupportButton            from '@/components/ui/SupportButton'
+import SyncStatus               from '@/components/ui/SyncStatus'
 
 // ── Cached follow-up badge count ─────────────────────────────────────────────
 // Revalidates every 60s. Tagged so attendance saves can bust it immediately.
@@ -77,6 +78,7 @@ export default async function AppLayout({ children }) {
   return (
     <AppShell church={church} user={user} pendingFollowUps={pendingFollowUps}>
       <PWAInit pendingFollowUps={pendingFollowUps} />
+      <SyncStatus />
       <FollowUpBanner pendingCount={pendingFollowUps} />
       <PWAPromptLoader />
       {children}

@@ -27,7 +27,14 @@ Date: 2026-11-19. Companion to the backend audit (all items from it are fixed or
 | 21 Faux bold | **Fixed** (DM Sans 700 now loaded) |
 | New: service worker | **Fixed.** It cached 404/500 responses for static files forever and failed to pre-cache because it listed a non-existent `/offline` route. Cache bumped to v3 so old poisoned caches are discarded. |
 | 23 Brand name / logo | **Not changed — needs your decision.** Marketing says "Church Trakr" (also used deliberately as an SEO variant) while the app says "ChurchTrakr". The marketing/login pages use a "+" tile while the app sidebar uses the glossy green/orange `logo.png`. |
-| 4, 5, 6, 7, 11–18, 20, 22, 24–26 | Open |
+| 4 Attendance fails silently | **Fixed.** Load failure shows a clear message + Try again (and falls back to the last saved member list when offline); save failure is an inline banner that keeps the marks; first-timer save failure shows a Retry toast. No more `alert()` on this screen. |
+| 5 Mark all present | **Fixed.** "Mark all present" / "Clear all" acts on exactly what is on screen (respects search and tabs), with an Undo toast. |
+| 6 Draft loss | **Fixed.** Marks autosave on this phone and are restored after a restart, a lock or a back-tap, with a Discard option. |
+| 7 Offline queue | **Fixed.** One shared queue (`lib/offlineQueue.js`): one save per group+date, single-flight uploads, 5xx/network/401 retried, permanent rejections reported, gives up after 15 attempts, plus a visible "N saves waiting · Upload now" pill. Session-expired saves are kept, not discarded. |
+| 14 Toast system | **Added** (`components/ui/Toast.js`), used by the attendance flow. 21 `alert()/confirm()` calls remain in other screens. |
+| 16, 26 Tiny text / tap targets | **Fixed on the attendance flow** (back buttons, tabs and search are 44px; stat labels 12px; rows 56px). Other screens still open. |
+| New: summary wording | "Attendance Saved!" now says **"Saved on this phone"** (amber) when the save is only queued. |
+| 11–13, 15, 17, 18, 20, 22, 24, 25 | Open |
 
 ---
 

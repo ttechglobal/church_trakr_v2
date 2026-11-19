@@ -1,5 +1,6 @@
 'use client'
 
+import { offlineQueue } from '@/lib/offlineQueue'
 import { useState, useEffect, useCallback } from 'react'
 
 const STORAGE_KEY  = 'ct_notification_prefs'
@@ -260,27 +261,10 @@ function _showBrowserNotification(title, body, url) {
   } catch {}
 }
 
-// Flush offline attendance queue — called when SW signals connectivity restored
+// Flush offline attendance queue — called when the SW signals connectivity restored.
+// The queue itself lives in lib/offlineQueue.js (single-flight, so this and SyncStatus can't double-upload).
 async function flushOfflineQueue() {
-  try {
-    const queue = JSON.parse(localStorage.getItem('ct_offline_queue') ?? '[]')
-    if (!queue.length) return
-
-    const remaining = []
-    for (const payload of queue) {
-      try {
-        const res = await fetch('/api/attendance', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify(payload),
-        })
-        if (!res.ok) remaining.push(payload)
-      } catch {
-        remaining.push(payload)
-      }
-    }
-    localStorage.setItem('ct_offline_queue', JSON.stringify(remaining))
-  } catch {}
+  try { await offlineQueue()?.flush() } catch {}
 }
 
 // ── VAPID helper ──────────────────────────────────────────────────────────────
