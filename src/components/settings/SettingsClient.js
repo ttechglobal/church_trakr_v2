@@ -75,6 +75,8 @@ export default function SettingsClient({ church: initialChurch, user }) {
 
   // ── Account / sign out / delete ───────────────────────────────────────────
   const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteError,   setDeleteError]   = useState('')
   const [deleting,      setDeleting]      = useState(false)
 
   async function handleSignOut() {
@@ -84,20 +86,25 @@ export default function SettingsClient({ church: initialChurch, user }) {
   }
 
   async function handleDeleteAccount() {
-    if (deleteConfirm !== 'DELETE MY ACCOUNT') return
-    setDeleting(true)
+    if (deleteConfirm !== 'DELETE MY ACCOUNT' || !deletePassword) return
+    setDeleting(true); setDeleteError('')
     try {
       const res = await fetch('/api/settings/delete-account', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confirmText: 'DELETE MY ACCOUNT' }),
+        body: JSON.stringify({ confirmText: 'DELETE MY ACCOUNT', password: deletePassword }),
       })
+      const data = await res.json().catch(() => ({}))
       if (res.ok) {
         const supabase = createClient()
-        await supabase.auth.signOut()
+        await supabase.auth.signOut().catch(() => {})
         router.push('/login')
+        return
       }
-    } catch {} finally { setDeleting(false) }
+      setDeleteError(data.error || 'Could not delete your account. Please try again.')
+    } catch {
+      setDeleteError('Network problem — nothing was deleted. Please try again.')
+    } finally { setDeleting(false) }
   }
 
   return (
@@ -238,8 +245,12 @@ export default function SettingsClient({ church: initialChurch, user }) {
             <p className="text-sm text-mist">Permanently delete your account and all data. This cannot be undone.</p>
             <input className="input text-sm border-error/30" placeholder='Type "DELETE MY ACCOUNT" to confirm'
               value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} />
+            <input className="input text-sm border-error/30" type="password" autoComplete="current-password"
+              placeholder="Enter your password to confirm"
+              value={deletePassword} onChange={e => setDeletePassword(e.target.value)} />
+            {deleteError && <p className="text-sm text-error" role="alert">{deleteError}</p>}
             <p className="text-xs text-mist">This will permanently erase all members, attendance records, follow-up data, and SMS logs. There is no undo.</p>
-            <button onClick={handleDeleteAccount} disabled={deleteConfirm !== 'DELETE MY ACCOUNT' || deleting}
+            <button onClick={handleDeleteAccount} disabled={deleteConfirm !== 'DELETE MY ACCOUNT' || !deletePassword || deleting}
               className="btn btn-danger w-full">
               {deleting ? 'Deleting everything…' : 'Permanently delete my account and all data'}
             </button>

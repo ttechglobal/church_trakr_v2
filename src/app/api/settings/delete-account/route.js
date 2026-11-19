@@ -1,31 +1,51 @@
 /**
  * DELETE /api/settings/delete-account
  *
- * Permanently deletes the church account and ALL associated data:
- *   - attendance_records (via cascade from sessions)
- *   - attendance_sessions
- *   - ft_attendance (via cascade from sessions)
- *   - members
- *   - first_timers
- *   - groups
- *   - sms_logs
- *   - church_connections
- *   - credit_transactions
- *   - manual_transfer_requests
- *   - sender_id_requests
- *   - churches (the account row itself)
- *   - auth.users (the Supabase auth identity)
+ * Permanently deletes the church account, ALL its data, and the sign-in identity.
+ * Irreversible — no soft delete, no recovery.
  *
- * Requires the user to confirm with their password to prevent accidents.
- * This is irreversible — no soft delete, no recovery.
+ * Body: { confirmText: "DELETE MY ACCOUNT", password: "<current password>" }
  *
- * Body: { confirmText: "DELETE MY ACCOUNT" }
+ * Safety:
+ *  - The current password is re-verified, so a stolen/shared logged-in session
+ *    cannot wipe an account (failed attempts are rate-limited per user).
+ *  - Data deletion is ONE database transaction (delete_church_data): all of it or none.
+ *  - The auth user is removed only after the data is gone. If an earlier attempt
+ *    removed the data but not the login, calling this again finishes the cleanup.
  */
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient }      from '@/lib/supabase/server'
 import { NextResponse }      from 'next/server'
 
 const CONFIRM_TEXT = 'DELETE MY ACCOUNT'
+const MAX_FAILS    = 5
+const WINDOW_MS    = 15 * 60 * 1000
+
+// Per-instance limiter for wrong-password attempts (best effort on serverless)
+const fails = new Map()   // userId -> { n, resetAt }
+function tooMany(userId) {
+  const f = fails.get(userId)
+  if (!f) return false
+  if (Date.now() > f.resetAt) { fails.delete(userId); return false }
+  return f.n >= MAX_FAILS
+}
+function recordFail(userId) {
+  const f = fails.get(userId)
+  if (!f || Date.now() > f.resetAt) fails.set(userId, { n: 1, resetAt: Date.now() + WINDOW_MS })
+  else f.n++
+}
+
+async function passwordIsValid(email, password) {
+  // Separate, cookie-less client so this never touches the user's real session
+  const verifier = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }
+  )
+  const { error } = await verifier.auth.signInWithPassword({ email, password })
+  return !error
+}
 
 export async function DELETE(request) {
   try {
@@ -35,87 +55,69 @@ export async function DELETE(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Require explicit confirmation string
     const body = await request.json().catch(() => ({}))
     if (body.confirmText !== CONFIRM_TEXT) {
-      return NextResponse.json(
-        { error: `Type "${CONFIRM_TEXT}" to confirm deletion` },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: `Type "${CONFIRM_TEXT}" to confirm deletion` }, { status: 400 })
     }
+    if (typeof body.password !== 'string' || !body.password || body.password.length > 200) {
+      return NextResponse.json({ error: 'Enter your password to confirm' }, { status: 400 })
+    }
+    if (!user.email) {
+      return NextResponse.json({ error: 'This account has no email sign-in; please contact support.' }, { status: 400 })
+    }
+
+    if (tooMany(user.id)) {
+      return NextResponse.json({ error: 'Too many wrong attempts. Try again in 15 minutes.' }, { status: 429 })
+    }
+    if (!(await passwordIsValid(user.email, body.password))) {
+      recordFail(user.id)
+      return NextResponse.json({ error: 'Incorrect password' }, { status: 403 })
+    }
+    fails.delete(user.id)
 
     const admin = createAdminClient()
 
-    // Load church record to get church_id
     const { data: church, error: churchErr } = await admin
-      .from('churches')
-      .select('id')
-      .eq('admin_user_id', user.id)
-      .single()
-
-    if (churchErr || !church) {
-      return NextResponse.json({ error: 'Account not found' }, { status: 404 })
+      .from('churches').select('id').eq('admin_user_id', user.id).maybeSingle()
+    if (churchErr) {
+      console.error('[delete-account] church lookup failed:', churchErr.code)
+      return NextResponse.json({ error: 'Could not delete your account. Please try again.' }, { status: 500 })
     }
 
-    const churchId = church.id
-
-    // ── Delete in dependency order ─────────────────────────────────────────
-    // attendance_records are FK children of attendance_sessions.
-    // Supabase will cascade if FK is set with ON DELETE CASCADE,
-    // otherwise we delete records first.
-
-    const deletions = [
-      // Member-level data first
-      admin.from('attendance_records').delete().eq('church_id', churchId),
-      admin.from('ft_attendance').delete().in(
-        'session_id',
-        admin.from('attendance_sessions').select('id').eq('church_id', churchId)
-      ),
-    ]
-
-    // Run first batch — child rows
-    await Promise.allSettled(deletions)
-
-    // Run second batch — parent rows
-    await Promise.allSettled([
-      admin.from('attendance_sessions').delete().eq('church_id', churchId),
-      admin.from('members').delete().eq('church_id', churchId),
-      admin.from('first_timers').delete().eq('church_id', churchId),
-      admin.from('groups').delete().eq('church_id', churchId),
-      admin.from('sms_logs').delete().eq('church_id', churchId),
-      admin.from('church_connections').delete().eq('church_id', churchId),
-      admin.from('church_connections').delete().eq('subgroup_id', churchId),
-    ])
-
-    // Optional tables — ignore errors if they don't exist
-    await Promise.allSettled([
-      admin.from('credit_transactions').delete().eq('church_id', churchId),
-      admin.from('manual_transfer_requests').delete().eq('church_id', churchId),
-      admin.from('sender_id_requests').delete().eq('church_id', churchId),
-    ])
-
-    // Delete the church record itself
-    const { error: delChurchErr } = await admin
-      .from('churches')
-      .delete()
-      .eq('id', churchId)
-
-    if (delChurchErr) {
-      console.error('[delete-account] churches delete failed:', delChurchErr.code)
-      return NextResponse.json({ error: 'Failed to delete account data. Please contact support.' }, { status: 500 })
+    // ── 1. Data: one transaction, all or nothing ──────────────────────────
+    // (No church row = a previous attempt already removed the data; finish the login cleanup.)
+    if (church) {
+      const { error } = await admin.rpc('delete_church_data', { p_church: church.id })
+      if (error && error.code !== 'P0002') {
+        console.error('[delete-account] delete_church_data failed:', error.code, error.message)
+        return NextResponse.json(
+          { error: 'We could not delete your data, so nothing was changed. Please try again or contact support.' },
+          { status: 500 }
+        )
+      }
     }
 
-    // Delete the Supabase Auth user (point of no return)
-    const { error: delUserErr } = await admin.auth.admin.deleteUser(user.id)
-    if (delUserErr) {
-      // Church data is already deleted but auth user remains — log for manual cleanup
-      console.error('[delete-account] auth user delete failed — church data removed but auth user remains (contact support)')
-      // Still return success to client — their data is gone
+    // ── 2. Sign-in identity (data is already gone, so retry once) ─────────
+    let removed = false
+    for (let i = 0; i < 2 && !removed; i++) {
+      const { error } = await admin.auth.admin.deleteUser(user.id)
+      if (!error) removed = true
+      else console.error('[delete-account] auth user delete failed (attempt', i + 1, '):', error.message)
     }
 
+    // End this browser session either way
+    await supabase.auth.signOut().catch(() => {})
+
+    if (!removed) {
+      // Data is erased. A leftover login is harmless but should be cleaned up.
+      return NextResponse.json({
+        success: true,
+        warning: 'Your data was deleted, but your login could not be fully removed. Contact support to finish.',
+      })
+    }
     return NextResponse.json({ success: true, message: 'Account and all data permanently deleted.' })
   } catch (err) {
-    console.error('[DELETE /api/settings/delete-account] Unhandled error')
+    console.error('[DELETE /api/settings/delete-account] Unhandled error:', err?.message)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
