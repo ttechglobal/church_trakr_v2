@@ -33,7 +33,7 @@ export async function POST(request) {
         .from('churches').select('id')
         .eq('admin_user_id', user.id).single()
       if (error || !data) {
-        return NextResponse.json({ error: 'Church not found', detail: error?.message }, { status: 404 })
+        return NextResponse.json({ error: 'Church not found' }, { status: 404 })
       }
       church = data
     }
@@ -46,75 +46,54 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Group not found' }, { status: 404 })
     }
 
-    // ── UPSERT session ──────────────────────────────────────────────────────
-    // Always look for an existing session first (by group + date) — fixes duplicate key error
-    let sessionId = existingSessionId ?? null
+    // Validate payload
+    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date))) {
+      return NextResponse.json({ error: 'Invalid date' }, { status: 400 })
+    }
+    if (records.length > 5000) {
+      return NextResponse.json({ error: 'Too many records' }, { status: 400 })
+    }
+    const clean = records
+      .filter(r => r && UUID.test(String(r.memberId)))
+      .map(r => ({
+        member_id: r.memberId,
+        name:      String(r.name ?? '').slice(0, 120),
+        present:   Boolean(r.present),
+      }))
+    if (!clean.length) return NextResponse.json({ error: 'No valid records' }, { status: 400 })
 
-    if (!sessionId) {
-      const { data: existing } = await admin
-        .from('attendance_sessions')
-        .select('id')
-        .eq('church_id', church.id)
-        .eq('group_id', groupId)
-        .eq('date', date)
-        .single()
-
-      if (existing) {
-        // Session already exists — reuse it
-        sessionId = existing.id
+    // One atomic DB call: verifies session/group/members belong to this church,
+    // replaces the records in a single transaction (no delete-then-insert gap).
+    const { data: saved, error: saveErr } = await admin.rpc('save_attendance', {
+      p_church_id:  church.id,
+      p_group_id:   groupId,
+      p_date:       date,
+      p_session_id: existingSessionId && UUID.test(String(existingSessionId)) ? existingSessionId : null,
+      p_records:    clean,
+    })
+    if (saveErr) {
+      if (saveErr.code === 'P0002') {
+        return NextResponse.json({ error: 'Session or group not found' }, { status: 404 })
       }
+      console.error('[POST /api/attendance] save_attendance:', saveErr.code, saveErr.message)
+      return NextResponse.json({ error: 'Failed to save attendance' }, { status: 500 })
     }
-
-    if (!sessionId) {
-      // Create new session
-      const { data: newSession, error: sessionErr } = await admin
-        .from('attendance_sessions')
-        .insert({ church_id: church.id, group_id: groupId, date })
-        .select('id')
-        .single()
-
-      if (sessionErr || !newSession?.id) {
-        return NextResponse.json({
-          error: 'Failed to create session',
-          detail: sessionErr?.message,
-          code: sessionErr?.code,
-        }, { status: 500 })
-      }
-      sessionId = newSession.id
-    }
-
-    // ── Delete old records then re-insert ───────────────────────────────────
-    await admin.from('attendance_records').delete().eq('session_id', sessionId)
-
-    const rows = records.map(r => ({
-      session_id: sessionId,
-      member_id:  r.memberId,
-      name:       r.name ?? '',
-      present:    Boolean(r.present),
-    }))
-
-    const { error: recErr } = await admin.from('attendance_records').insert(rows)
-    if (recErr) {
-      return NextResponse.json({
-        error: 'Failed to save records',
-        detail: recErr.message,
-      }, { status: 500 })
-    }
+    const sessionId = saved.sessionId
 
     // Bust the sessions cache and follow-up badge so the UI reflects the save immediately
     revalidateTag(`sessions:${church.id}`)
     revalidateTag(`followup-badge:${church.id}`)
 
-    const presentCount = records.filter(r => r.present).length
     return NextResponse.json({
       success: true, sessionId,
-      present: presentCount,
-      absent: records.length - presentCount,
-      total: records.length,
+      present: saved.present,
+      absent:  saved.total - saved.present,
+      total:   saved.total,
     })
 
   } catch (err) {
     console.error('[POST /api/attendance]', err)
-    return NextResponse.json({ error: 'Internal server error', detail: err.message }, { status: 500 })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
