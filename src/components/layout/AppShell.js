@@ -132,7 +132,7 @@ export default function AppShell({ church, user, children, pendingFollowUps = 0 
           </div>
           <div style={{ minWidth: 0 }}>
             <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontWeight: 700, fontSize: 17, color: '#fff', margin: 0, lineHeight: 1.2, letterSpacing: '-0.01em' }}>ChurchTrakr</p>
-            <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{church.name}</p>
+            <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{church.name}</p>
           </div>
         </div>
       </div>
@@ -142,7 +142,7 @@ export default function AppShell({ church, user, children, pendingFollowUps = 0 
         {NAV_GROUPS.map((group, gi) => (
           <div key={gi}>
             {group.label && (
-              <p style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.1em', padding: '0.875rem 0.625rem 0.375rem', margin: 0 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.1em', padding: '0.875rem 0.625rem 0.375rem', margin: 0 }}>
                 {group.label}
               </p>
             )}
@@ -175,9 +175,9 @@ export default function AppShell({ church, user, children, pendingFollowUps = 0 
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontSize: 13, fontWeight: 600, color: '#fff', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{church.admin_name || 'Admin'}</p>
-            <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Admin</p>
+            <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', margin: 0 }}>Admin</p>
           </div>
-          <button onClick={signOut} title="Sign out" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          <button onClick={signOut} title="Sign out" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.6)', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
             <LogOut size={14} />
           </button>
         </div>
@@ -293,9 +293,9 @@ export default function AppShell({ church, user, children, pendingFollowUps = 0 
                     background: active ? 'rgba(26,58,42,0.1)' : 'transparent',
                     transition: 'background 0.15s',
                   }}>
-                    <Icon size={20} strokeWidth={active ? 2.5 : 1.75} color={active ? '#1a3a2a' : '#8a9e90'} />
+                    <Icon size={20} strokeWidth={active ? 2.5 : 1.75} color={active ? '#1a3a2a' : '#5b7062'} />
                   </div>
-                  <span style={{ color: active ? '#1a3a2a' : '#8a9e90', fontSize: 10, fontWeight: active ? 700 : 500 }}>{label}</span>
+                  <span style={{ color: active ? '#1a3a2a' : '#5b7062', fontSize: 10, fontWeight: active ? 700 : 500 }}>{label}</span>
                 </Link>
               )
             })}

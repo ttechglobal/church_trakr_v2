@@ -89,7 +89,7 @@ export default function FixedModal({ title, onClose, children, footer }) {
               background: 'rgba(26,58,42,0.06)',
               border: 'none', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#8a9e90', flexShrink: 0,
+              color: '#5b7062', flexShrink: 0,
             }}
           >
             <X size={17} />

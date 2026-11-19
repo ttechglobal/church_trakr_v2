@@ -220,7 +220,7 @@ function StepGroup({ groups, sessionsByGroup, onSelect, onBack, firstTimers = []
         <button onClick={onBack} style={btn}><ChevL /></button>
         <div>
           <h1 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 22, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>Take Attendance</h1>
-          <p style={{ fontSize: 13, color: '#8a9e90', margin: '2px 0 0' }}>Select a group to begin</p>
+          <p style={{ fontSize: 13, color: '#5b7062', margin: '2px 0 0' }}>Select a group to begin</p>
         </div>
       </div>
 
@@ -228,7 +228,7 @@ function StepGroup({ groups, sessionsByGroup, onSelect, onBack, firstTimers = []
         <div style={{ background: '#fff', borderRadius: 20, padding: '3rem 1.5rem', textAlign: 'center', border: '1px solid rgba(26,58,42,0.07)' }}>
           <p style={{ fontSize: 36, marginBottom: 12 }}>👥</p>
           <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 17, fontWeight: 700, color: '#1a3a2a', margin: '0 0 6px' }}>No groups yet</p>
-          <p style={{ fontSize: 13, color: '#8a9e90', marginBottom: 20, margin: '0 0 20px' }}>Create a group first to take attendance.</p>
+          <p style={{ fontSize: 13, color: '#5b7062', marginBottom: 20, margin: '0 0 20px' }}>Create a group first to take attendance.</p>
           <a href="/groups" className="btn btn-primary">Go to Groups</a>
         </div>
       ) : (
@@ -248,7 +248,7 @@ function StepGroup({ groups, sessionsByGroup, onSelect, onBack, firstTimers = []
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 15, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>{group.name}</p>
-                  {group.leader && <p style={{ fontSize: 12, color: '#8a9e90', margin: '2px 0 0' }}>{group.leader}</p>}
+                  {group.leader && <p style={{ fontSize: 12, color: '#5b7062', margin: '2px 0 0' }}>{group.leader}</p>}
                 </div>
                 {lR !== null && (
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -269,10 +269,10 @@ function StepGroup({ groups, sessionsByGroup, onSelect, onBack, firstTimers = []
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.75"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 15, fontWeight: 700, color: '#a8862e', margin: 0 }}>First Timers</p>
-                <p style={{ fontSize: 12, color: '#8a9e90', margin: '2px 0 0' }}>{firstTimers.length} visitor{firstTimers.length !== 1 ? 's' : ''} registered</p>
+                <p style={{ fontSize: 15, fontWeight: 700, color: '#7a5c12', margin: 0 }}>First Timers</p>
+                <p style={{ fontSize: 12, color: '#5b7062', margin: '2px 0 0' }}>{firstTimers.length} visitor{firstTimers.length !== 1 ? 's' : ''} registered</p>
               </div>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#a8862e', background: 'rgba(201,168,76,0.15)', padding: '4px 10px', borderRadius: 8 }}>{firstTimers.length}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#7a5c12', background: 'rgba(201,168,76,0.15)', padding: '4px 10px', borderRadius: 8 }}>{firstTimers.length}</span>
               <ChevR />
             </button>
           )}
@@ -332,7 +332,7 @@ function StepDate({ group, church, onSelect, onBack, isFirstTimers }) {
         <button onClick={onBack} style={{ width: 38, height: 38, borderRadius: 11, background: '#fff', border: '1px solid rgba(26,58,42,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevL /></button>
         <div>
           <h1 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 20, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>{group.name}</h1>
-          <p style={{ fontSize: 13, color: '#8a9e90', margin: '2px 0 0' }}>Choose a date</p>
+          <p style={{ fontSize: 13, color: '#5b7062', margin: '2px 0 0' }}>Choose a date</p>
         </div>
       </div>
 
@@ -343,10 +343,10 @@ function StepDate({ group, church, onSelect, onBack, isFirstTimers }) {
             <button key={date} onClick={() => handleQuickTap(date)} style={cardS(active)}>
               <div>
                 <p style={{ fontSize: 15, fontWeight: 700, color: active ? '#e8d5a0' : '#1a3a2a', margin: 0 }}>{label}</p>
-                <p style={{ fontSize: 12, color: active ? 'rgba(232,213,160,0.55)' : '#8a9e90', margin: '3px 0 0' }}>{fmtDate(date)}</p>
+                <p style={{ fontSize: 12, color: active ? 'rgba(232,213,160,0.55)' : '#5b7062', margin: '3px 0 0' }}>{fmtDate(date)}</p>
               </div>
               {existingMap[date]
-                ? <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(201,168,76,0.2)', color: '#a8862e', padding: '4px 10px', borderRadius: 7 }}>Edit existing</span>
+                ? <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(201,168,76,0.2)', color: '#7a5c12', padding: '4px 10px', borderRadius: 7 }}>Edit existing</span>
                 : active && <span style={{ fontSize: 12, color: '#c9a84c', fontWeight: 700 }}>Selected ✓</span>}
             </button>
           )
@@ -364,7 +364,7 @@ function StepDate({ group, church, onSelect, onBack, isFirstTimers }) {
         </div>
       )}
 
-      <button onClick={handleGo} disabled={!activeDate || checking} className="btn btn-primary btn-lg" style={{ width: '100%', height: 54, fontSize: 15, borderRadius: 16, background: hasExisting ? 'linear-gradient(135deg,#a8862e,#c9a84c)' : 'linear-gradient(135deg,#1a3a2a,#2d5a42)', opacity: !activeDate ? 0.5 : 1 }}>
+      <button onClick={handleGo} disabled={!activeDate || checking} className="btn btn-primary btn-lg" style={{ width: '100%', height: 54, fontSize: 15, borderRadius: 16, background: hasExisting ? 'linear-gradient(135deg,#7a5c12,#c9a84c)' : 'linear-gradient(135deg,#1a3a2a,#2d5a42)', opacity: !activeDate ? 0.5 : 1 }}>
         {checking ? <Spin />
           : !activeDate ? 'Select a date first'
           : isFirstTimers ? (hasExisting ? `Edit First Timers — ${fmtDate(activeDate)}` : `Mark First Timers — ${fmtDate(activeDate)}`)
@@ -411,25 +411,24 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px 6px' }}>
           <button onClick={onBack} style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(26,58,42,0.06)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}><ChevL /></button>
           <p style={{ flex: 1, fontSize: 17, fontWeight: 700, color: '#1a3a2a', margin: 0, fontFamily: 'var(--font-playfair),Georgia,serif' }}>Attendance</p>
-          <span style={{ fontSize: 12, color: '#8a9e90', flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: '#5b7062', flexShrink: 0 }}>
             {new Date(date + 'T00:00:00').toLocaleDateString('en-NG', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
           </span>
         </div>
         {/* Group + service */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px 10px' }}>
           <p style={{ fontSize: 14, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>{group.name}</p>
-          <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(22,163,74,0.1)', color: '#16a34a', padding: '3px 10px', borderRadius: 7 }}>Service 1 · 9:00 AM</span>
         </div>
         {/* Stats */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px 12px' }}>
           <div style={{ minWidth: 52 }}>
             <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 28, fontWeight: 700, color: '#1a3a2a', margin: 0, lineHeight: 1 }}>{memberPresent}</p>
-            <p style={{ fontSize: 10, color: '#8a9e90', margin: '3px 0 0', fontWeight: 600 }}>Present</p>
+            <p style={{ fontSize: 10, color: '#5b7062', margin: '3px 0 0', fontWeight: 600 }}>Present</p>
           </div>
           <div style={{ width: 1, height: 34, background: 'rgba(26,58,42,0.1)', flexShrink: 0 }} />
           <div style={{ minWidth: 52 }}>
             <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 28, fontWeight: 700, color: '#dc2626', margin: 0, lineHeight: 1 }}>{absentCount}</p>
-            <p style={{ fontSize: 10, color: '#8a9e90', margin: '3px 0 0', fontWeight: 600 }}>Absent</p>
+            <p style={{ fontSize: 10, color: '#5b7062', margin: '3px 0 0', fontWeight: 600 }}>Absent</p>
           </div>
           <div style={{ width: 1, height: 34, background: 'rgba(26,58,42,0.1)', flexShrink: 0 }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -439,7 +438,7 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
             </svg>
             <div>
               <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 18, fontWeight: 700, color: rateCol, margin: 0, lineHeight: 1 }}>{rate}%</p>
-              <p style={{ fontSize: 10, color: '#8a9e90', margin: '2px 0 0', fontWeight: 600 }}>Attendance rate</p>
+              <p style={{ fontSize: 10, color: '#5b7062', margin: '2px 0 0', fontWeight: 600 }}>Attendance rate</p>
             </div>
           </div>
         </div>
@@ -450,7 +449,7 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
         {/* Search */}
         <div style={{ padding: '0 16px 10px', display: 'flex', gap: 8 }}>
           <div style={{ flex: 1, position: 'relative' }}>
-            <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#8a9e90', display: 'flex', pointerEvents: 'none' }}><SearchIco /></span>
+            <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#5b7062', display: 'flex', pointerEvents: 'none' }}><SearchIco /></span>
             <input type="search" placeholder="Search members…" value={search} onChange={e => setSearch(e.target.value)}
               style={{ width: '100%', height: 40, borderRadius: 12, border: '1px solid rgba(26,58,42,0.14)', background: '#f7f5f0', paddingLeft: 34, paddingRight: 12, fontSize: 13.5, outline: 'none', fontFamily: 'inherit', color: '#1a3a2a', boxSizing: 'border-box' }} />
           </div>
@@ -464,7 +463,7 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
           ].map(({ key, label }, i) => {
             const active = viewFilter === key
             return (
-              <button key={key} onClick={() => setViewFilter(key)} style={{ flex: 1, height: 36, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5, fontWeight: 600, transition: 'all 0.15s', background: active ? '#1a3a2a' : 'transparent', color: active ? '#fff' : '#8a9e90', borderRight: i < 2 ? '1px solid rgba(26,58,42,0.1)' : 'none' }}>
+              <button key={key} onClick={() => setViewFilter(key)} style={{ flex: 1, height: 36, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5, fontWeight: 600, transition: 'all 0.15s', background: active ? '#1a3a2a' : 'transparent', color: active ? '#fff' : '#5b7062', borderRight: i < 2 ? '1px solid rgba(26,58,42,0.1)' : 'none' }}>
                 {label}
               </button>
             )
@@ -477,7 +476,7 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
         {loading ? (
           <div>{[...Array(7)].map((_, i) => <SkeletonRow key={i} />)}</div>
         ) : filteredMain.length === 0 && (!showFT || filteredFT.length === 0) ? (
-          <div style={{ textAlign: 'center', padding: '3rem 1.5rem', color: '#8a9e90' }}>
+          <div style={{ textAlign: 'center', padding: '3rem 1.5rem', color: '#5b7062' }}>
             {viewFilter === 'away' && awayMembers.length === 0
               ? 'No members are currently marked away'
               : search ? `No members matching "${search}"` : 'No members in this view'
@@ -491,7 +490,7 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
               <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px 8px', background: 'rgba(201,168,76,0.05)' }}>
                   <div style={{ flex: 1, height: 1, background: 'rgba(201,168,76,0.3)' }} />
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#a8862e', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>⭐ FIRST TIMERS ({filteredFT.length})</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#7a5c12', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>⭐ FIRST TIMERS ({filteredFT.length})</span>
                   <div style={{ flex: 1, height: 1, background: 'rgba(201,168,76,0.3)' }} />
                 </div>
                 {filteredFT.map((ft, i) => {
@@ -501,12 +500,12 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
                     <button key={'ft_' + ft.id} onClick={() => onToggleFT?.(ft.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: isPresent ? 'rgba(201,168,76,0.04)' : '#fff', borderBottom: '1px solid rgba(26,58,42,0.06)', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'background 0.1s' }}>
                       <div style={{ width: 40, height: 40, borderRadius: '50%', background: av.bg, color: av.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{av.initials}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: 14.5, fontWeight: 600, color: '#a8862e', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ft.name}</p>
-                        {ft.phone && <p style={{ fontSize: 11.5, color: '#8a9e90', margin: '2px 0 0' }}>{ft.phone}</p>}
+                        <p style={{ fontSize: 14.5, fontWeight: 600, color: '#7a5c12', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ft.name}</p>
+                        {ft.phone && <p style={{ fontSize: 11.5, color: '#5b7062', margin: '2px 0 0' }}>{ft.phone}</p>}
                       </div>
-                      <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 8, background: isPresent ? 'rgba(201,168,76,0.15)' : 'rgba(26,58,42,0.06)', color: isPresent ? '#a8862e' : '#8a9e90', flexShrink: 0 }}>{isPresent ? 'Present' : 'Absent'}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 8, background: isPresent ? 'rgba(201,168,76,0.15)' : 'rgba(26,58,42,0.06)', color: isPresent ? '#7a5c12' : '#5b7062', flexShrink: 0 }}>{isPresent ? 'Present' : 'Absent'}</span>
                       <div style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isPresent ? '#c9a84c' : 'rgba(26,58,42,0.07)', flexShrink: 0 }}>
-                        {isPresent ? <CheckSvg size={13} color="#fff" /> : <span style={{ fontSize: 12, color: '#8a9e90' }}>—</span>}
+                        {isPresent ? <CheckSvg size={13} color="#fff" /> : <span style={{ fontSize: 12, color: '#5b7062' }}>—</span>}
                       </div>
                     </button>
                   )
@@ -514,7 +513,7 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
                 {/* Separator before regular members */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px 8px', background: '#fafaf9' }}>
                   <div style={{ flex: 1, height: 1, background: 'rgba(26,58,42,0.08)' }} />
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#8a9e90', letterSpacing: '0.06em' }}>MEMBERS ({activeMembers.length})</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#5b7062', letterSpacing: '0.06em' }}>MEMBERS ({activeMembers.length})</span>
                   <div style={{ flex: 1, height: 1, background: 'rgba(26,58,42,0.08)' }} />
                 </div>
               </>
@@ -541,12 +540,12 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
                   borderBottom: i < filteredMain.length - 1 ? '1px solid rgba(26,58,42,0.06)' : 'none',
                   border: 'none', cursor: isAway ? 'default' : 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'background 0.1s',
                 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: '50%', background: isAway ? '#f0ede7' : av.bg, color: isAway ? '#8a9e90' : av.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '50%', background: isAway ? '#f0ede7' : av.bg, color: isAway ? '#5b7062' : av.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
                     {av.initials}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 14.5, fontWeight: 600, color: isAway ? '#8a9e90' : '#1a3a2a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.name}</p>
-                    <p style={{ fontSize: 11.5, color: '#b0bab5', margin: '2px 0 0' }}>
+                    <p style={{ fontSize: 14.5, fontWeight: 600, color: isAway ? '#5b7062' : '#1a3a2a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.name}</p>
+                    <p style={{ fontSize: 11.5, color: '#5b7062', margin: '2px 0 0' }}>
                       {isAway ? 'Away' : group.name}
                     </p>
                   </div>
@@ -580,7 +579,7 @@ function StepMark({ group, date, members, attendance, loading, saving, onToggle,
       `}</style>
       <div className="att-bar" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid rgba(26,58,42,0.1)', padding: `10px 16px calc(12px + env(safe-area-inset-bottom,0px))`, zIndex: 110 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <p style={{ fontSize: 13, color: '#8a9e90', fontWeight: 500, margin: 0, flexShrink: 0 }}>
+          <p style={{ fontSize: 13, color: '#5b7062', fontWeight: 500, margin: 0, flexShrink: 0 }}>
             <span style={{ color: '#1a3a2a', fontWeight: 700 }}>{memberPresent} present</span> · {absentCount} absent
           </p>
           <button onClick={onSave} disabled={saving || loading || activeMembers.length === 0} className="btn btn-primary"
@@ -609,7 +608,7 @@ function StepMarkFirstTimers({ firstTimers, attendance, date, saving, onToggle, 
         <div style={{ background: '#fff', borderRadius: 20, padding: '3rem 1.5rem', textAlign: 'center' }}>
           <p style={{ fontSize: 36, marginBottom: 12 }}>👋</p>
           <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 17, fontWeight: 700, color: '#1a3a2a', margin: '0 0 6px' }}>No first timers yet</p>
-          <p style={{ fontSize: 13, color: '#8a9e90', margin: 0 }}>Add them on the First Timers page first.</p>
+          <p style={{ fontSize: 13, color: '#5b7062', margin: 0 }}>Add them on the First Timers page first.</p>
         </div>
       </div>
     )
@@ -621,8 +620,8 @@ function StepMarkFirstTimers({ firstTimers, attendance, date, saving, onToggle, 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px 8px' }}>
           <button onClick={onBack} style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(26,58,42,0.06)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevL /></button>
           <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 17, fontWeight: 700, color: '#a8862e', margin: 0, fontFamily: 'var(--font-playfair),Georgia,serif' }}>First Timers</p>
-            <p style={{ fontSize: 12, color: '#8a9e90', margin: '2px 0 0' }}>{fmtDate(date)}</p>
+            <p style={{ fontSize: 17, fontWeight: 700, color: '#7a5c12', margin: 0, fontFamily: 'var(--font-playfair),Georgia,serif' }}>First Timers</p>
+            <p style={{ fontSize: 12, color: '#5b7062', margin: '2px 0 0' }}>{fmtDate(date)}</p>
           </div>
           <span style={{ fontSize: 12, fontWeight: 700, background: 'rgba(22,163,74,0.1)', color: '#16a34a', padding: '4px 10px', borderRadius: 8 }}>{presentCount} present</span>
         </div>
@@ -630,7 +629,7 @@ function StepMarkFirstTimers({ firstTimers, attendance, date, saving, onToggle, 
           <div style={{ height: '100%', background: '#c9a84c', borderRadius: 2, width: firstTimers.length > 0 ? `${(presentCount / firstTimers.length) * 100}%` : '0%', transition: 'width 0.25s ease' }} />
         </div>
         <div style={{ padding: '0 16px 12px', position: 'relative' }}>
-          <span style={{ position: 'absolute', left: 27, top: '50%', transform: 'translateY(-50%)', color: '#8a9e90', pointerEvents: 'none', display: 'flex', marginTop: -6 }}><SearchIco /></span>
+          <span style={{ position: 'absolute', left: 27, top: '50%', transform: 'translateY(-50%)', color: '#5b7062', pointerEvents: 'none', display: 'flex', marginTop: -6 }}><SearchIco /></span>
           <input type="search" placeholder="Search first timers…" value={search} onChange={e => setSearch(e.target.value)}
             style={{ width: '100%', height: 40, borderRadius: 12, border: '1px solid rgba(26,58,42,0.14)', background: '#f7f5f0', paddingLeft: 34, fontSize: 13.5, outline: 'none', fontFamily: 'inherit', color: '#1a3a2a', boxSizing: 'border-box' }} />
         </div>
@@ -644,12 +643,12 @@ function StepMarkFirstTimers({ firstTimers, attendance, date, saving, onToggle, 
               <button key={ft.id} onClick={() => onToggle(ft.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: isPresent ? 'rgba(201,168,76,0.04)' : '#fff', borderBottom: i < filtered.length - 1 ? '1px solid rgba(26,58,42,0.06)' : 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
                 <div style={{ width: 40, height: 40, borderRadius: '50%', background: av.bg, color: av.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>{av.initials}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 14.5, fontWeight: 600, color: '#a8862e', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ft.name}</p>
-                  {ft.phone && <p style={{ fontSize: 11.5, color: '#8a9e90', margin: '2px 0 0' }}>{ft.phone}</p>}
+                  <p style={{ fontSize: 14.5, fontWeight: 600, color: '#7a5c12', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ft.name}</p>
+                  {ft.phone && <p style={{ fontSize: 11.5, color: '#5b7062', margin: '2px 0 0' }}>{ft.phone}</p>}
                 </div>
-                <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 8, background: isPresent ? 'rgba(201,168,76,0.15)' : 'rgba(26,58,42,0.06)', color: isPresent ? '#a8862e' : '#8a9e90', flexShrink: 0 }}>{isPresent ? 'Present' : 'Absent'}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 8, background: isPresent ? 'rgba(201,168,76,0.15)' : 'rgba(26,58,42,0.06)', color: isPresent ? '#7a5c12' : '#5b7062', flexShrink: 0 }}>{isPresent ? 'Present' : 'Absent'}</span>
                 <div style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isPresent ? '#c9a84c' : 'rgba(26,58,42,0.07)', flexShrink: 0 }}>
-                  {isPresent ? <CheckSvg size={13} color="#fff" /> : <span style={{ fontSize: 12, color: '#8a9e90' }}>—</span>}
+                  {isPresent ? <CheckSvg size={13} color="#fff" /> : <span style={{ fontSize: 12, color: '#5b7062' }}>—</span>}
                 </div>
               </button>
             )
@@ -661,7 +660,7 @@ function StepMarkFirstTimers({ firstTimers, attendance, date, saving, onToggle, 
         @media(min-width:1024px){ .att-bar-ft{ left:${SIDEBAR_W}px !important; } }
       `}</style>
       <div className="att-bar-ft" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid rgba(26,58,42,0.1)', padding: `10px 16px calc(12px + env(safe-area-inset-bottom,0px))`, zIndex: 110 }}>
-        <button onClick={onSave} disabled={saving} className="btn btn-primary" style={{ width: '100%', height: 50, fontSize: 14, borderRadius: 14, background: 'linear-gradient(135deg,#a8862e,#c9a84c)' }}>
+        <button onClick={onSave} disabled={saving} className="btn btn-primary" style={{ width: '100%', height: 50, fontSize: 14, borderRadius: 14, background: 'linear-gradient(135deg,#7a5c12,#c9a84c)' }}>
           {saving ? <><Spin /> Saving…</> : `Save — ${presentCount} Present · ${firstTimers.length - presentCount} Absent`}
         </button>
       </div>
@@ -694,7 +693,7 @@ function StepSummary({ group, date, members, attendance, result, onDone, onEdit,
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
         </div>
         <h2 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 28, fontWeight: 700, color: '#1a3a2a', margin: '0 0 6px' }}>Attendance Saved!</h2>
-        <p style={{ fontSize: 13.5, color: '#8a9e90', margin: '0 0 1.5rem', fontWeight: 500 }}>{group?.name ?? 'First Timers'} · {dateStr}</p>
+        <p style={{ fontSize: 13.5, color: '#5b7062', margin: '0 0 1.5rem', fontWeight: 500 }}>{group?.name ?? 'First Timers'} · {dateStr}</p>
         {result.offline && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 10, background: 'rgba(217,119,6,0.1)', color: '#d97706', fontSize: 12.5, fontWeight: 600, marginBottom: '1rem' }}>Saved offline — syncing when back online</div>}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: '1.375rem' }}>
           {[
@@ -707,7 +706,7 @@ function StepSummary({ group, date, members, attendance, result, onDone, onEdit,
               </div>
               <div style={{ textAlign: 'left' }}>
                 <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 30, fontWeight: 700, color, margin: 0, lineHeight: 1 }}>{value}</p>
-                <p style={{ fontSize: 11, color: '#8a9e90', margin: '3px 0 0', fontWeight: 600 }}>{label}</p>
+                <p style={{ fontSize: 11, color: '#5b7062', margin: '3px 0 0', fontWeight: 600 }}>{label}</p>
               </div>
             </div>
           ))}
@@ -732,7 +731,7 @@ function StepSummary({ group, date, members, attendance, result, onDone, onEdit,
         <div style={{ background: '#fff', borderRadius: 20, border: '1px solid rgba(26,58,42,0.07)', overflow: 'hidden', marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', borderBottom: '1px solid rgba(26,58,42,0.06)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: '#16a34a' }} /><p style={{ fontSize: 13, fontWeight: 700, color: '#16a34a', margin: 0 }}>Present</p></div>
-            <span style={{ fontSize: 12, color: '#8a9e90' }}>{presentMembers.length}</span>
+            <span style={{ fontSize: 12, color: '#5b7062' }}>{presentMembers.length}</span>
           </div>
           {(showAllPresent ? presentMembers : presentMembers.slice(0, PREVIEW)).map((m, i, arr) => (
             <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderBottom: i < arr.length - 1 ? '1px solid rgba(26,58,42,0.05)' : 'none' }}>
@@ -748,7 +747,7 @@ function StepSummary({ group, date, members, attendance, result, onDone, onEdit,
         <div style={{ background: '#fff', borderRadius: 20, border: '1px solid rgba(26,58,42,0.07)', overflow: 'hidden', marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', borderBottom: '1px solid rgba(26,58,42,0.06)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: '#dc2626' }} /><p style={{ fontSize: 13, fontWeight: 700, color: '#dc2626', margin: 0 }}>Absent</p></div>
-            <span style={{ fontSize: 12, color: '#8a9e90' }}>{absentMembers.length}</span>
+            <span style={{ fontSize: 12, color: '#5b7062' }}>{absentMembers.length}</span>
           </div>
           {(showAllAbsent ? absentMembers : absentMembers.slice(0, PREVIEW)).map((m, i, arr) => (
             <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderBottom: i < arr.length - 1 ? '1px solid rgba(26,58,42,0.05)' : 'none' }}>
@@ -759,7 +758,7 @@ function StepSummary({ group, date, members, attendance, result, onDone, onEdit,
           {absentMembers.length > PREVIEW && <button onClick={() => setShowAllA(v => !v)} style={{ width: '100%', padding: '10px', background: '#f7f5f0', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#dc2626', fontFamily: 'inherit' }}>{showAllAbsent ? 'Show less' : `Show all ${absentMembers.length} →`}</button>}
         </div>
       )}
-      <button onClick={onEdit} style={{ width: '100%', marginTop: 10, padding: '12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#8a9e90', fontFamily: 'inherit' }}>Edit Attendance</button>
+      <button onClick={onEdit} style={{ width: '100%', marginTop: 10, padding: '12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#5b7062', fontFamily: 'inherit' }}>Edit Attendance</button>
     </div>
   )
 }

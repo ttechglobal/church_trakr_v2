@@ -81,7 +81,7 @@ function AddMemberModal({ onClose, onAdded }) {
             { key: 'birthday', Icon: Gift,   placeholder: 'Birthday (DD/MM or DD/MM/YYYY)', type: 'text' },
           ].map(({ key, Icon, placeholder, type }) => (
             <div key={key} style={{ position: 'relative' }}>
-              <Icon size={14} color="#8a9e90" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+              <Icon size={14} color="#5b7062" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
               <input value={form[key]} onChange={e => set(key, e.target.value)} placeholder={placeholder} type={type} autoFocus={key === 'name'}
                 style={{ width: '100%', height: 48, borderRadius: 12, border: '1.5px solid rgba(26,58,42,0.15)', paddingLeft: 36, paddingRight: 14, fontSize: 14, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', color: '#1a3a2a', background: '#fafaf9' }} />
             </div>
@@ -89,7 +89,7 @@ function AddMemberModal({ onClose, onAdded }) {
         </div>
         {error && <p style={{ fontSize: 13, color: '#dc2626', margin: '10px 0 0', fontWeight: 500 }}>{error}</p>}
         <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-          <button onClick={onClose} style={{ flex: 1, height: 50, borderRadius: 13, border: '1.5px solid rgba(26,58,42,0.15)', background: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 600, color: '#8a9e90', fontFamily: 'inherit' }}>Cancel</button>
+          <button onClick={onClose} style={{ flex: 1, height: 50, borderRadius: 13, border: '1.5px solid rgba(26,58,42,0.15)', background: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 600, color: '#5b7062', fontFamily: 'inherit' }}>Cancel</button>
           <button onClick={handleSubmit} disabled={saving || !form.name.trim()} className="btn btn-primary" style={{ flex: 2, height: 50, borderRadius: 13, fontSize: 15, opacity: (saving || !form.name.trim()) ? 0.6 : 1 }}>
             {saving ? 'Adding…' : 'Add Member'}
           </button>
@@ -213,7 +213,7 @@ export default function DashboardClient({
       {/* Desktop sticky header */}
       <div className="db-hdr-desktop" style={{ alignItems: 'center', justifyContent: 'space-between', padding: '1rem 2rem', background: '#fff', borderBottom: '1px solid rgba(26,58,42,0.07)', position: 'sticky', top: 0, zIndex: 40 }}>
         <div>
-          <p style={{ fontSize: 13, color: '#8a9e90', margin: '0 0 1px' }}>{getGreeting()}</p>
+          <p style={{ fontSize: 13, color: '#5b7062', margin: '0 0 1px' }}>{getGreeting()}</p>
           <h1 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 22, fontWeight: 700, color: '#1a3a2a', margin: 0, letterSpacing: '-0.02em' }}>
             {church.admin_name || church.name} 👋
           </h1>
@@ -222,7 +222,7 @@ export default function DashboardClient({
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, height: 38, padding: '0 14px', borderRadius: 10, border: '1px solid rgba(26,58,42,0.15)', background: '#fff' }}>
             <Calendar size={14} color="#1a3a2a" strokeWidth={1.75} />
             <span style={{ fontSize: 13, fontWeight: 600, color: '#1a3a2a' }}>{lastSession ? fmtShortDate(lastSession.date) : todayStr}</span>
-            <ChevronRight size={13} color="#8a9e90" style={{ transform: 'rotate(90deg)' }} />
+            <ChevronRight size={13} color="#5b7062" style={{ transform: 'rotate(90deg)' }} />
           </div>
           <button onClick={() => setShowAddMember(true)} className="btn btn-primary" style={{ height: 38, padding: '0 16px', borderRadius: 10, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
             <UserPlus size={14} /> Add Member
@@ -255,29 +255,29 @@ export default function DashboardClient({
                 <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(26,58,42,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
                   <Users size={16} color="#1a3a2a" strokeWidth={1.75} />
                 </div>
-                <p style={{ fontSize: 9, color: '#8a9e90', margin: '0 0 2px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1.2 }}>Present Today</p>
+                <p style={{ fontSize: 9, color: '#5b7062', margin: '0 0 2px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1.2 }}>Present Today</p>
                 <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 24, fontWeight: 700, color: '#1a3a2a', margin: '4px 0 4px', lineHeight: 1 }}>{lastPresent}</p>
-                <p style={{ fontSize: 10, color: '#8a9e90', margin: '0 0 8px' }}>{presentRate !== null ? `${presentRate}% of members` : 'No data yet'}</p>
+                <p style={{ fontSize: 10, color: '#5b7062', margin: '0 0 8px' }}>{presentRate !== null ? `${presentRate}% of members` : 'No data yet'}</p>
                 <Sparkline color="#16a34a" pts={presentSparkPts} />
               </div>
               <div style={{ background: '#fff', borderRadius: 16, padding: '14px 12px 12px' }}>
                 <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(249,115,22,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
                   <UserCheck size={16} color="#f97316" strokeWidth={1.75} />
                 </div>
-                <p style={{ fontSize: 9, color: '#8a9e90', margin: '0 0 2px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1.2 }}>Absent Today</p>
+                <p style={{ fontSize: 9, color: '#5b7062', margin: '0 0 2px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1.2 }}>Absent Today</p>
                 <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 24, fontWeight: 700, color: '#f97316', margin: '4px 0 4px', lineHeight: 1 }}>{lastAbsent}</p>
-                <p style={{ fontSize: 10, color: '#8a9e90', margin: '0 0 8px' }}>{absentRate !== null ? `${absentRate}% of members` : 'No data yet'}</p>
+                <p style={{ fontSize: 10, color: '#5b7062', margin: '0 0 8px' }}>{absentRate !== null ? `${absentRate}% of members` : 'No data yet'}</p>
                 <Sparkline color="#f97316" pts={absentSparkPts} />
               </div>
               <div style={{ background: '#fff', borderRadius: 16, padding: '14px 12px 12px' }}>
                 <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(22,163,74,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
                   <BarChart2 size={16} color="#16a34a" strokeWidth={1.75} />
                 </div>
-                <p style={{ fontSize: 9, color: '#8a9e90', margin: '0 0 2px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1.2 }}>Attendance Rate</p>
+                <p style={{ fontSize: 9, color: '#5b7062', margin: '0 0 2px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1.2 }}>Attendance Rate</p>
                 <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 24, fontWeight: 700, color: lastSundayColor, margin: '4px 0 4px', lineHeight: 1 }}>
                   {presentRate !== null ? `${presentRate}%` : '—'}
                 </p>
-                <p style={{ fontSize: 10, color: '#8a9e90', margin: '0 0 8px' }}>This Sunday</p>
+                <p style={{ fontSize: 10, color: '#5b7062', margin: '0 0 8px' }}>This Sunday</p>
                 <Sparkline color={lastSundayColor || '#16a34a'} pts={rateSparkPts} />
               </div>
             </div>
@@ -297,9 +297,9 @@ export default function DashboardClient({
                   <div style={{ width: 44, height: 44, borderRadius: 13, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
                     <Icon size={20} color={color} strokeWidth={1.75} />
                   </div>
-                  <p style={{ fontSize: 11, color: '#8a9e90', margin: '0 0 4px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</p>
+                  <p style={{ fontSize: 11, color: '#5b7062', margin: '0 0 4px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</p>
                   <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 34, fontWeight: 700, color, margin: '0 0 3px', lineHeight: 1 }}>{value}</p>
-                  <p style={{ fontSize: 12, color: '#8a9e90', margin: '0 0 12px' }}>{sub}</p>
+                  <p style={{ fontSize: 12, color: '#5b7062', margin: '0 0 12px' }}>{sub}</p>
                   <Sparkline color={sc} pts={pts} />
                 </div>
               ))}
@@ -337,7 +337,7 @@ export default function DashboardClient({
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 16, fontWeight: 700, color: '#1a3a2a', margin: '0 0 2px', fontFamily: 'var(--font-playfair),Georgia,serif' }}>Assign Follow-ups</p>
-                  <p style={{ fontSize: 12, color: '#8a9e90', margin: 0 }}>Assign members to your team</p>
+                  <p style={{ fontSize: 12, color: '#5b7062', margin: 0 }}>Assign members to your team</p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 36, padding: '0 12px', borderRadius: 10, background: '#f97316', flexShrink: 0 }}>
                   <span className="db-cta-badge-text" style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Assign</span>
@@ -366,7 +366,7 @@ export default function DashboardClient({
                   <div className="db-fu-table" style={{ background: '#fff', borderRadius: 16, border: '1px solid rgba(26,58,42,0.08)', overflow: 'hidden', boxShadow: '0 1px 6px rgba(26,58,42,0.05)' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 100px auto', alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid rgba(26,58,42,0.07)', background: '#fafaf9' }}>
                       {['Name', 'Last Absent', 'Absent For', 'Action'].map(h => (
-                        <span key={h} style={{ fontSize: 11, fontWeight: 700, color: '#8a9e90', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</span>
+                        <span key={h} style={{ fontSize: 11, fontWeight: 700, color: '#5b7062', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</span>
                       ))}
                     </div>
                     {pendingFollowUps.slice(0, 4).map((p, i) => {
@@ -424,7 +424,7 @@ export default function DashboardClient({
                             <div style={{ width: 36, height: 36, borderRadius: '50%', background: av.bg, color: av.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{av.initials}</div>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <p style={{ fontSize: 14, fontWeight: 600, color: '#1a3a2a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</p>
-                              <p style={{ fontSize: 11.5, color: '#8a9e90', margin: '2px 0 0' }}>Absent {p.date ? fmtShortDate(p.date) : ''}</p>
+                              <p style={{ fontSize: 11.5, color: '#5b7062', margin: '2px 0 0' }}>Absent {p.date ? fmtShortDate(p.date) : ''}</p>
                             </div>
                           </div>
                           {/* Action strip */}
@@ -555,8 +555,8 @@ export default function DashboardClient({
                     <Icon size={14} color={ic} strokeWidth={1.75} />
                   </div>
                   <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 20, fontWeight: 700, color: '#1a3a2a', margin: '0 0 3px', lineHeight: 1 }}>{value}</p>
-                  <p style={{ fontSize: 9, color: '#8a9e90', margin: 0, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', lineHeight: 1.3 }}>{label}</p>
-                  <p style={{ fontSize: 9, color: '#b0bab5', margin: '2px 0 0' }}>{sub}</p>
+                  <p style={{ fontSize: 9, color: '#5b7062', margin: 0, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', lineHeight: 1.3 }}>{label}</p>
+                  <p style={{ fontSize: 9, color: '#5b7062', margin: '2px 0 0' }}>{sub}</p>
                 </div>
               ))}
             </div>
@@ -640,13 +640,13 @@ export default function DashboardClient({
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 13, fontWeight: 600, color: '#1a3a2a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</p>
-                    <p style={{ fontSize: 11, color: '#8a9e90', margin: '2px 0 0' }}>{m.birthday || 'Date not set'}</p>
+                    <p style={{ fontSize: 11, color: '#5b7062', margin: '2px 0 0' }}>{m.birthday || 'Date not set'}</p>
                   </div>
                 </div>
               ))}
               {members.length === 0 && (
                 <div style={{ padding: '1.5rem', textAlign: 'center' }}>
-                  <p style={{ fontSize: 13, color: '#8a9e90', margin: 0 }}>No birthdays set yet</p>
+                  <p style={{ fontSize: 13, color: '#5b7062', margin: 0 }}>No birthdays set yet</p>
                 </div>
               )}
             </div>

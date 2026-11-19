@@ -233,7 +233,7 @@ export default function MessagingComposer({ church, groups, members, latestByGro
               { label: 'Remaining',     value: `${sendResult.new_balance} credits`,   color: '#1a3a2a' },
             ].map(({ label, value, color }) => (
               <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(26,58,42,0.07)' }}>
-                <span style={{ fontSize: 13, color: '#8a9e90' }}>{label}</span>
+                <span style={{ fontSize: 13, color: '#5b7062' }}>{label}</span>
                 <span style={{ fontSize: 14, fontWeight: 700, color }}>{value}</span>
               </div>
             ))}
@@ -243,7 +243,7 @@ export default function MessagingComposer({ church, groups, members, latestByGro
             <div style={{ marginBottom: 12 }}>
               <button onClick={() => setShowSentNames(v => !v)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '8px 0', textAlign: 'left' }}>
                 <p style={{ fontSize: 12, fontWeight: 700, color: '#1a3a2a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reached ({sentNames.length})</p>
-                {showSentNames ? <ChevronUp size={14} color="#8a9e90"/> : <ChevronDown size={14} color="#8a9e90"/>}
+                {showSentNames ? <ChevronUp size={14} color="#5b7062"/> : <ChevronDown size={14} color="#5b7062"/>}
               </button>
               {showSentNames && (
                 <div style={{ maxHeight: 200, overflowY: 'auto', paddingTop: 6 }}>
@@ -413,7 +413,7 @@ export default function MessagingComposer({ church, groups, members, latestByGro
             </button>
             {showPreview && (
               <div style={{ marginTop: 10, background: '#f7f5f0', borderRadius: 10, padding: '10px 14px' }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#8a9e90', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 6px' }}>Preview — as sent to "{SAMPLE_NAME}"</p>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#5b7062', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 6px' }}>Preview — as sent to "{SAMPLE_NAME}"</p>
                 <p style={{ fontSize: 13, color: '#1a3a2a', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{analysis.resolved}</p>
                 <p style={{ fontSize: 11, color: analysis.resolvedChars > safeLimit * analysis.pages ? '#d97706' : '#16a34a', marginTop: 6 }}>
                   Resolved length: {analysis.resolvedChars} / {safeLimit} chars {analysis.resolvedChars <= safeLimit ? '✓' : '⚠ may wrap to page 2 for long names'}

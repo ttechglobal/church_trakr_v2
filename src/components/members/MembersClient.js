@@ -236,7 +236,7 @@ export default function MembersClient({ churchId, members: initMembers, groups }
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <p className="font-semibold text-forest text-[14px] truncate">{m.name}</p>
                     {m.status === 'inactive' && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-forest/8 text-mist shrink-0">inactive</span>}
-                    {m.status === 'away' && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'rgba(217,119,6,0.1)', color: '#a8862e' }}>away</span>}
+                    {m.status === 'away' && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'rgba(217,119,6,0.1)', color: '#7a5c12' }}>away</span>}
                   </div>
                   {m.phone && <p className="text-xs text-mist truncate">{m.phone}</p>}
                   {memberGroups.length > 0 && <p className="text-xs text-forest-muted truncate">{memberGroups.join(', ')}</p>}

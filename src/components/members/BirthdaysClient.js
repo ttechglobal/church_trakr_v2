@@ -224,7 +224,7 @@ export default function BirthdaysClient({ members, churchName, churchId }) {
               flex: 1, height: 34, borderRadius: 9, border: 'none', cursor: 'pointer',
               fontSize: 12, fontWeight: tab === t.id ? 700 : 500,
               background: tab === t.id ? '#fff' : 'transparent',
-              color: tab === t.id ? '#1a3a2a' : '#8a9e90',
+              color: tab === t.id ? '#1a3a2a' : '#5b7062',
               boxShadow: tab === t.id ? '0 1px 4px rgba(0,0,0,.08)' : 'none',
               transition: 'all .15s',
               position: 'relative',
@@ -379,7 +379,7 @@ export default function BirthdaysClient({ members, churchName, churchId }) {
                     opacity: isPast ? 0.55 : 1,
                   }}>
                     <p style={{
-                      fontSize: 12, fontWeight: 700, color: isTod ? '#c9a84c' : '#8a9e90',
+                      fontSize: 12, fontWeight: 700, color: isTod ? '#c9a84c' : '#5b7062',
                       minWidth: 42, flexShrink: 0,
                     }}>
                       {MONTH_NAMES[todayMonth()].slice(0,3)} {m.bday.day}
@@ -417,16 +417,16 @@ export default function BirthdaysClient({ members, churchName, churchId }) {
                   }}>
                   <p style={{
                     flex: 1, fontSize: 14, fontWeight: 700,
-                    color: isCurrentMonth ? '#1a3a2a' : mems.length === 0 ? '#8a9e90' : '#1a3a2a',
+                    color: isCurrentMonth ? '#1a3a2a' : mems.length === 0 ? '#5b7062' : '#1a3a2a',
                   }}>
                     {name}
                     {isCurrentMonth && <span className="ml-2 text-xs font-normal text-mist">← this month</span>}
                   </p>
-                  <p style={{ fontSize: 12, color: '#8a9e90', flexShrink: 0 }}>
+                  <p style={{ fontSize: 12, color: '#5b7062', flexShrink: 0 }}>
                     {mems.length === 0 ? '—' : `${mems.length} birthday${mems.length > 1 ? 's' : ''}`}
                   </p>
                   {mems.length > 0 && (
-                    isOpen ? <ChevronUp size={14} color="#8a9e90"/> : <ChevronDown size={14} color="#8a9e90"/>
+                    isOpen ? <ChevronUp size={14} color="#5b7062"/> : <ChevronDown size={14} color="#5b7062"/>
                   )}
                 </button>
 
@@ -442,7 +442,7 @@ export default function BirthdaysClient({ members, churchName, churchId }) {
                           borderBottom: i < mems.length - 1 ? '1px solid rgba(26,58,42,0.04)' : 'none',
                           background: isTod ? 'rgba(201,168,76,0.05)' : 'transparent',
                         }}>
-                          <p style={{ fontSize: 12, color: isTod ? '#c9a84c' : '#8a9e90', minWidth: 42, flexShrink: 0, fontWeight: isTod ? 700 : 400 }}>
+                          <p style={{ fontSize: 12, color: isTod ? '#c9a84c' : '#5b7062', minWidth: 42, flexShrink: 0, fontWeight: isTod ? 700 : 400 }}>
                             {name.slice(0,3)} {m.bday.day}
                           </p>
                           <p className="flex-1 text-sm text-forest truncate">{m.name}</p>

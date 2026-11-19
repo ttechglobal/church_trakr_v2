@@ -52,7 +52,7 @@ export default async function DashboardPage() {
         {/* Page header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.5rem', gap: 12 }}>
           <div>
-            <p style={{ fontSize: 13, color: '#8a9e90', margin: '0 0 3px', fontWeight: 500 }}>
+            <p style={{ fontSize: 13, color: '#5b7062', margin: '0 0 3px', fontWeight: 500 }}>
               {getGreeting()}{firstName ? `, ${firstName}` : ''}
             </p>
             <h1 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 'clamp(1.4rem,3vw,1.875rem)', fontWeight: 700, color: '#1a3a2a', margin: 0, letterSpacing: '-0.025em' }}>
@@ -82,12 +82,12 @@ export default async function DashboardPage() {
           {[
             { label: 'Members',     value: members.length,     Icon: Users,    href: '/members',     color: '#1a3a2a' },
             { label: 'Avg Rate',    value: avgRate !== null ? `${avgRate}%` : '—', Icon: BarChart2, href: '/analytics', color: avgRate !== null && avgRate >= 75 ? '#16a34a' : avgRate !== null && avgRate >= 50 ? '#d97706' : '#1a3a2a' },
-            { label: 'First Timers',value: firstTimers.length, Icon: Star,     href: '/firsttimers', color: '#a8862e' },
+            { label: 'First Timers',value: firstTimers.length, Icon: Star,     href: '/firsttimers', color: '#7a5c12' },
           ].map(({ label, value, Icon, href, color }) => (
             <Link key={label} href={href} prefetch className="d-stat" style={{ display: 'block', padding: '1rem 0.875rem', background: '#fff', border: '1px solid rgba(26,58,42,0.08)', borderRadius: 14, textDecoration: 'none', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', transition: 'transform 0.18s ease, box-shadow 0.18s ease' }}>
               <Icon size={18} color={color} strokeWidth={1.75} style={{ marginBottom: 8, display: 'block' }} />
               <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 24, fontWeight: 800, color, margin: '0 0 3px', letterSpacing: '-0.03em', lineHeight: 1 }}>{value}</p>
-              <p style={{ fontSize: 11, color: '#8a9e90', margin: 0, fontWeight: 600 }}>{label}</p>
+              <p style={{ fontSize: 11, color: '#5b7062', margin: 0, fontWeight: 600 }}>{label}</p>
             </Link>
           ))}
         </div>
@@ -126,7 +126,7 @@ export default async function DashboardPage() {
             <div style={{ background: '#fff', border: '1px solid rgba(26,58,42,0.08)', borderRadius: 14, padding: '2.5rem 1.5rem', textAlign: 'center' }}>
               <BarChart2 size={36} color="#c9c9c9" strokeWidth={1.5} style={{ margin: '0 auto 12px', display: 'block' }} />
               <p style={{ fontSize: 15, fontWeight: 700, color: '#1a3a2a', margin: '0 0 6px' }}>No sessions yet</p>
-              <p style={{ fontSize: 13, color: '#8a9e90', margin: '0 0 16px' }}>Take your first attendance to see activity here</p>
+              <p style={{ fontSize: 13, color: '#5b7062', margin: '0 0 16px' }}>Take your first attendance to see activity here</p>
               <Link href="/attendance" prefetch style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0.5rem 1.125rem', background: '#1a3a2a', color: '#e8d5a0', borderRadius: 9, textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>
                 Take Attendance
               </Link>
@@ -146,7 +146,7 @@ export default async function DashboardPage() {
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: 14, fontWeight: 700, color: '#1a3a2a', margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.groups?.name ?? 'Unknown group'}</p>
-                      <p style={{ fontSize: 12, color: '#8a9e90', margin: 0 }}>{fmtDate(s.date)} · {present}/{total} present</p>
+                      <p style={{ fontSize: 12, color: '#5b7062', margin: 0 }}>{fmtDate(s.date)} · {present}/{total} present</p>
                     </div>
                   </div>
                 )

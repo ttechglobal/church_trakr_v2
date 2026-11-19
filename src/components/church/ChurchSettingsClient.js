@@ -5,8 +5,8 @@ import { Building2, Copy, RefreshCw, Link2Off, Check, Clock, Wifi, WifiOff, User
 import Link from 'next/link'
 
 const C = {
-  forest:'#1a3a2a', mid:'#2d5a42', muted:'#8a9e90',
-  gold:'#c9a84c', goldDk:'#a8862e', ivory:'#f7f5f0',
+  forest:'#1a3a2a', mid:'#2d5a42', muted:'#5b7062',
+  gold:'#c9a84c', goldDk:'#7a5c12', ivory:'#f7f5f0',
   success:'#16a34a', error:'#dc2626', warning:'#d97706',
 }
 

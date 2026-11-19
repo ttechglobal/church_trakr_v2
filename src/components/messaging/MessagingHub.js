@@ -119,7 +119,7 @@ export default function MessagingHub({ church, recentLogs = [] }) {
             </div>
             <div style={{ minWidth:0 }}>
               <p style={{ fontSize:13, fontWeight:700, color:'#1a3a2a', margin:0, lineHeight:1.3 }}>{label}</p>
-              <p style={{ fontSize:11, color:'#8a9e90', margin:'3px 0 0', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{sub}</p>
+              <p style={{ fontSize:11, color:'#5b7062', margin:'3px 0 0', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{sub}</p>
             </div>
           </Link>
         ))}
@@ -155,13 +155,13 @@ export default function MessagingHub({ church, recentLogs = [] }) {
                 <p style={{ fontSize:13, fontWeight:700, color:'#1a3a2a', margin:0 }}>
                   {TYPE_LABELS[log.type] ?? log.type ?? 'SMS'}
                 </p>
-                <p style={{ fontSize:11, color:'#8a9e90', margin:'2px 0 0' }}>{fmtDate(log.sent_at)}</p>
+                <p style={{ fontSize:11, color:'#5b7062', margin:'2px 0 0' }}>{fmtDate(log.sent_at)}</p>
               </div>
               <div style={{ textAlign:'right', flexShrink:0 }}>
                 <p style={{ fontSize:13, fontWeight:700, color:'#1a3a2a', margin:0 }}>
                   {log.success_count ?? log.recipient_count} sent
                 </p>
-                <p style={{ fontSize:11, color:'#8a9e90', margin:'2px 0 0' }}>{log.credits_used} credits</p>
+                <p style={{ fontSize:11, color:'#5b7062', margin:'2px 0 0' }}>{log.credits_used} credits</p>
               </div>
             </div>
           ))}

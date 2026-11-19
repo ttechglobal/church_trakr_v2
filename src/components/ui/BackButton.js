@@ -20,12 +20,12 @@ export default function BackButton({ href, label = 'Back' }) {
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
         background: 'none', border: 'none', cursor: 'pointer',
-        fontSize: 13, fontWeight: 600, color: '#8a9e90',
+        fontSize: 13, fontWeight: 600, color: '#5b7062',
         padding: '4px 0', marginBottom: 16, letterSpacing: '-0.01em',
         transition: 'color 0.14s',
       }}
       onMouseEnter={e => e.currentTarget.style.color = '#1a3a2a'}
-      onMouseLeave={e => e.currentTarget.style.color = '#8a9e90'}
+      onMouseLeave={e => e.currentTarget.style.color = '#5b7062'}
     >
       <ArrowLeft size={14} strokeWidth={2.5} />
       {label}

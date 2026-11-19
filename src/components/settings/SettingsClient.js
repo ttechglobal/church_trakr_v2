@@ -159,7 +159,7 @@ export default function SettingsClient({ church: initialChurch, user }) {
           <button onClick={() => router.push('/credits')}
             className="card w-full text-left flex items-center gap-3 hover:shadow-md transition-shadow">
             <div className="w-10 h-10 rounded-xl bg-gold/15 flex items-center justify-center shrink-0">
-              <CreditCard size={16} style={{ color: '#a8862e' }} />
+              <CreditCard size={16} style={{ color: '#7a5c12' }} />
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-forest text-sm">SMS Credits</p>
@@ -214,7 +214,7 @@ export default function SettingsClient({ church: initialChurch, user }) {
               <span className="text-mist">SMS Credits</span>
               <span className="font-semibold text-forest">{initialChurch.sms_credits}</span>
             </div>
-            <button onClick={() => router.push('/credits')} className="btn btn-outline w-full gap-2" style={{ color: '#a8862e', borderColor: 'rgba(201,168,76,0.4)' }}>
+            <button onClick={() => router.push('/credits')} className="btn btn-outline w-full gap-2" style={{ color: '#7a5c12', borderColor: 'rgba(201,168,76,0.4)' }}>
               <CreditCard size={14} /> Buy SMS Credits
             </button>
             <div className="divider" />

@@ -9,15 +9,15 @@
   --color-forest:        #1a3a2a;
   --color-forest-mid:    #2d5a42;
   --color-forest-light:  #3d7a58;
-  --color-forest-muted:  #4a8a65;
+  --color-forest-muted:  #2d6a47;
   --color-gold:          #c9a84c;
   --color-gold-light:    #e8d5a0;
-  --color-gold-dark:     #a8862e;
+  --color-gold-dark:     #7a5c12;
   --color-ivory:         #f7f5f0;
   --color-ivory-dark:    #ede9e0;
   --color-ivory-deeper:  #e0dbd0;
   --color-ink:           #0f1a13;
-  --color-mist:          #8a9e90;
+  --color-mist:          #5b7062;
   --color-success:       #16a34a;
   --color-error:         #dc2626;
   --color-warning:       #d97706;
@@ -166,7 +166,7 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   min-height: 48px;
   outline: none;
 }
-.input::placeholder { color: #8a9e90; }
+.input::placeholder { color: #5b7062; }
 .input:focus {
   border-color: #1a3a2a;
   box-shadow: 0 0 0 3px rgba(26,58,42,0.08);
@@ -189,10 +189,10 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   font-weight: 500;
   padding: 0.25rem 0.625rem;
 }
-.badge-green  { background: rgba(22,163,74,0.10);  color: #16a34a; }
-.badge-red    { background: rgba(220,38,38,0.10);  color: #dc2626; }
-.badge-gold   { background: rgba(201,168,76,0.20); color: #a8862e; }
-.badge-muted  { background: rgba(26,58,42,0.08);   color: #4a8a65; }
+.badge-green  { background: rgba(22,163,74,0.10);  color: #166534; }
+.badge-red    { background: rgba(220,38,38,0.10);  color: #b91c1c; }
+.badge-gold   { background: rgba(201,168,76,0.20); color: #7a5c12; }
+.badge-muted  { background: rgba(26,58,42,0.08);   color: #2d6a47; }
 
 .avatar {
   display: inline-flex;
@@ -271,9 +271,9 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
 .row-hover:hover { background: #f7f5f0 !important; }
 
 /* ── Priority badges ── */
-.badge-priority-high   { background: #fef2f2; color: #dc2626; }
-.badge-priority-medium { background: #fffbeb; color: #d97706; }
-.badge-priority-low    { background: #f0fdf4; color: #16a34a; }
+.badge-priority-high   { background: #fef2f2; color: #b91c1c; }
+.badge-priority-medium { background: #fffbeb; color: #92400e; }
+.badge-priority-low    { background: #f0fdf4; color: #166534; }
 
 /* ── Action bar (member profile) ── */
 .action-bar-item {
@@ -313,7 +313,7 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   text-overflow: ellipsis;
 }
 .tab-pill.active { background: #1a3a2a; color: #ede9e0; }
-.tab-pill.inactive { background: transparent; color: #8a9e90; }
+.tab-pill.inactive { background: transparent; color: #5b7062; }
 
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }

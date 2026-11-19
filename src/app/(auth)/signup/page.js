@@ -53,7 +53,7 @@ function Progress({ step, total }) {
 function BackBtn({ onClick }) {
   return (
     <button type="button" onClick={onClick}
-      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#8a9e90', marginBottom: 16, padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#5b7062', marginBottom: 16, padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
       ← Back
     </button>
   )
@@ -83,15 +83,15 @@ function Step1Type({ onNext }) {
           type="church"
           selected={selected}
           onSelect={setSelected}
-          icon={<Building2 size={20} strokeWidth={1.75} style={{ color: '#a8862e' }} />}
+          icon={<Building2 size={20} strokeWidth={1.75} style={{ color: '#7a5c12' }} />}
           label="Church Dashboard"
           desc="Connect all sub-groups, see attendance across every department."
           iconBg="rgba(201,168,76,0.1)"
           badge="ADMIN"
-          badgeColor="#a8862e"
+          badgeColor="#7a5c12"
           borderColor={selected === 'church' ? '#a8862e' : 'rgba(201,168,76,0.3)'}
           selectedBg="rgba(201,168,76,0.06)"
-          checkColor="#a8862e"
+          checkColor="#7a5c12"
         />
       </div>
       <button disabled={!selected} onClick={() => onNext(selected)}

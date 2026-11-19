@@ -225,9 +225,9 @@ export default function AssignClient({
       {/* No-team nudge — soft prompt, does not block */}
       {noTeam && (
         <div className="flex items-start gap-3 rounded-xl p-3 mb-4" style={{ background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.2)' }}>
-          <Users size={15} className="shrink-0" style={{ color:'#a8862e', marginTop:1 }} />
+          <Users size={15} className="shrink-0" style={{ color:'#7a5c12', marginTop:1 }} />
           <div className="flex-1">
-            <p className="text-xs font-medium" style={{ color:'#a8862e' }}>
+            <p className="text-xs font-medium" style={{ color:'#7a5c12' }}>
               You haven't set up a follow-up team yet. You can still assign manually below.{' '}
               <Link href="/followup-team" className="underline font-semibold">Create a team →</Link>
             </p>

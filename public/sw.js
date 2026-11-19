@@ -1,17 +1,18 @@
 // ChurchTrakr Service Worker
 // Handles: push notifications, offline caching, background sync
-const CACHE_NAME  = 'churchtrakr-v2'
+// Bumped from v2: older caches could hold cached 404/500 responses for static files.
+// The activate handler deletes every cache that is not this one.
+const CACHE_NAME  = 'churchtrakr-v3'
 const CACHE_URLS  = [
   '/',
   '/dashboard',
-  '/offline',
 ]
 
 // ── Install: cache shell ──────────────────────────────────────────────────────
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(CACHE_URLS).catch(() => {}))
+      .then(cache => Promise.all(CACHE_URLS.map(u => cache.add(u).catch(() => {}))))
       .then(() => self.skipWaiting())
   )
 })
@@ -40,8 +41,10 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(request)
         .then(res => {
-          const clone = res.clone()
-          caches.open(CACHE_NAME).then(c => c.put(request, clone)).catch(() => {})
+          if (res.ok) {
+            const clone = res.clone()
+            caches.open(CACHE_NAME).then(c => c.put(request, clone)).catch(() => {})
+          }
           return res
         })
         .catch(() => caches.match(request).then(r => r || caches.match('/')))
@@ -59,8 +62,11 @@ self.addEventListener('fetch', event => {
       caches.match(request).then(cached => {
         if (cached) return cached
         return fetch(request).then(res => {
-          const clone = res.clone()
-          caches.open(CACHE_NAME).then(c => c.put(request, clone)).catch(() => {})
+          // Never cache 404/500s: a missing file must be re-checked once it is added.
+          if (res.ok && res.type !== 'opaque') {
+            const clone = res.clone()
+            caches.open(CACHE_NAME).then(c => c.put(request, clone)).catch(() => {})
+          }
           return res
         })
       })
@@ -81,7 +87,7 @@ self.addEventListener('push', event => {
     self.registration.showNotification(data.title, {
       body:    data.body,
       icon:    '/icons/icon-192.png',
-      badge:   '/icons/icon-72.png',
+      badge:   '/icons/icon-192.png',
       tag:     data.tag || 'churchtrakr',
       data:    { url: data.url || '/dashboard' },
       actions: data.actions || [],

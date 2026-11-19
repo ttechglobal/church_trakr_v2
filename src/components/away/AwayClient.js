@@ -178,7 +178,7 @@ export default function AwayClient({ churchId, awayMembers: initAway, activeMemb
     <div style={{ maxWidth: 860, margin: '0 auto', padding: '1.75rem 1.25rem 3rem' }}>
 
       {/* Back */}
-      <a href="/attendance" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#8a9e90', textDecoration: 'none', marginBottom: 16 }}>
+      <a href="/attendance" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#5b7062', textDecoration: 'none', marginBottom: 16 }}>
         <ArrowLeft size={14} strokeWidth={2.5} />
         Back to Attendance
       </a>
@@ -188,7 +188,7 @@ export default function AwayClient({ churchId, awayMembers: initAway, activeMemb
         <h1 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 'clamp(1.4rem,3vw,1.875rem)', fontWeight: 700, color: '#1a3a2a', margin: '0 0 4px', letterSpacing: '-0.025em' }}>
           Away Members
         </h1>
-        <p style={{ fontSize: 14, color: '#8a9e90', margin: 0 }}>
+        <p style={{ fontSize: 14, color: '#5b7062', margin: 0 }}>
           {away.length} member{away.length !== 1 ? 's' : ''} currently away
           {overdueCount > 0 && <span style={{ color: '#d97706', marginLeft: 8, fontWeight: 600 }}>· {overdueCount} need check-in</span>}
         </p>
@@ -221,7 +221,7 @@ export default function AwayClient({ churchId, awayMembers: initAway, activeMemb
         <div style={{ background: '#fff', border: '1px solid rgba(26,58,42,0.08)', borderRadius: 16, padding: '2.5rem 2rem', textAlign: 'center', marginBottom: '1.5rem' }}>
           <p style={{ fontSize: 40, marginBottom: 10 }}>✈️</p>
           <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 18, fontWeight: 700, color: '#1a3a2a', margin: '0 0 8px' }}>No one away</p>
-          <p style={{ fontSize: 14, color: '#8a9e90', margin: 0 }}>
+          <p style={{ fontSize: 14, color: '#5b7062', margin: 0 }}>
             Use the section below to mark members as away. They'll be hidden from attendance and follow-up lists.
           </p>
         </div>
@@ -278,7 +278,7 @@ export default function AwayClient({ churchId, awayMembers: initAway, activeMemb
                           {reason ?? 'No reason given'}
                         </p>
                         <button onClick={() => { setEditTarget(m); setEditReason(reason ?? '') }}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8a9e90', padding: '2px', display: 'flex', alignItems: 'center' }}>
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5b7062', padding: '2px', display: 'flex', alignItems: 'center' }}>
                           <Pencil size={11} strokeWidth={2} />
                         </button>
                       </div>
@@ -295,7 +295,7 @@ export default function AwayClient({ churchId, awayMembers: initAway, activeMemb
                         />
                         <div style={{ display: 'flex', gap: 6 }}>
                           <button onClick={() => setEditTarget(null)}
-                            style={{ flex: 1, height: 32, borderRadius: 8, border: '1px solid rgba(26,58,42,0.15)', background: '#fff', color: '#8a9e90', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                            style={{ flex: 1, height: 32, borderRadius: 8, border: '1px solid rgba(26,58,42,0.15)', background: '#fff', color: '#5b7062', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                             Cancel
                           </button>
                           <button onClick={() => saveEditReason(m)} disabled={isSaving === 'editing'}
@@ -395,13 +395,13 @@ export default function AwayClient({ churchId, awayMembers: initAway, activeMemb
         <button onClick={() => setShowAdd(p => !p)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '1rem 1.25rem', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
           <div>
             <p style={{ fontSize: 15, fontWeight: 700, color: '#1a3a2a', margin: '0 0 2px' }}>Add to Away List</p>
-            <p style={{ fontSize: 13, color: '#8a9e90', margin: 0 }}>
+            <p style={{ fontSize: 13, color: '#5b7062', margin: 0 }}>
               {activeMembers.length} active member{activeMembers.length !== 1 ? 's' : ''} · tap to mark as away
             </p>
           </div>
           {showAdd
-            ? <ChevronUp size={16} color="#8a9e90" />
-            : <ChevronDown size={16} color="#8a9e90" />
+            ? <ChevronUp size={16} color="#5b7062" />
+            : <ChevronDown size={16} color="#5b7062" />
           }
         </button>
 
@@ -416,7 +416,7 @@ export default function AwayClient({ churchId, awayMembers: initAway, activeMemb
                     ✈️ Mark <em>{addTarget.name}</em> as Away?
                   </p>
                   <button onClick={() => { setAddTarget(null); setAddReason('') }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8a9e90', padding: 2 }}>
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5b7062', padding: 2 }}>
                     <X size={14} strokeWidth={2.5} />
                   </button>
                 </div>
@@ -434,7 +434,7 @@ export default function AwayClient({ churchId, awayMembers: initAway, activeMemb
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => { setAddTarget(null); setAddReason('') }}
-                    style={{ flex: 1, height: 42, borderRadius: 11, border: '1px solid rgba(26,58,42,0.15)', background: '#fff', color: '#8a9e90', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                    style={{ flex: 1, height: 42, borderRadius: 11, border: '1px solid rgba(26,58,42,0.15)', background: '#fff', color: '#5b7062', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
                     Cancel
                   </button>
                   <button onClick={() => markAway(addTarget, addReason)}
@@ -458,7 +458,7 @@ export default function AwayClient({ churchId, awayMembers: initAway, activeMemb
             </div>
 
             {addCandidates.length === 0 ? (
-              <p style={{ fontSize: 14, color: '#8a9e90', textAlign: 'center', padding: '1rem 0' }}>
+              <p style={{ fontSize: 14, color: '#5b7062', textAlign: 'center', padding: '1rem 0' }}>
                 {addSearch ? `No results for "${addSearch}"` : 'No active members found'}
               </p>
             ) : (
@@ -483,7 +483,7 @@ export default function AwayClient({ churchId, awayMembers: initAway, activeMemb
                         <p style={{ fontSize: 14, fontWeight: 600, color: '#1a3a2a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {m.name}
                         </p>
-                        {m.phone && <p style={{ fontSize: 12, color: '#8a9e90', margin: 0 }}>{m.phone}</p>}
+                        {m.phone && <p style={{ fontSize: 12, color: '#5b7062', margin: 0 }}>{m.phone}</p>}
                       </div>
                       {isSelected && (
                         <span style={{ fontSize: 11, fontWeight: 700, color: '#1a3a2a', background: 'rgba(26,58,42,0.1)', borderRadius: 20, padding: '2px 8px', flexShrink: 0 }}>

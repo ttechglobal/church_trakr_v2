@@ -52,7 +52,7 @@ export default async function AppLayout({ children }) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', fontFamily: 'system-ui' }}>
         <div style={{ textAlign: 'center' }}>
-          <p style={{ color: '#8a9e90', marginBottom: 16 }}>Session expired.</p>
+          <p style={{ color: '#5b7062', marginBottom: 16 }}>Session expired.</p>
           <a href="/login" style={{ background: '#1a3a2a', color: '#e8d5a0', padding: '0.625rem 1.5rem', borderRadius: 10, textDecoration: 'none', fontWeight: 700 }}>
             Sign in again
           </a>

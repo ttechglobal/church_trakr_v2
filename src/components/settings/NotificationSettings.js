@@ -94,7 +94,7 @@ export default function NotificationSettings() {
             <Smartphone size={15} strokeWidth={2} />
             Install on iPhone
           </p>
-          <p style={{ fontSize: 13, color: '#8a9e90', margin: 0, lineHeight: 1.5 }}>
+          <p style={{ fontSize: 13, color: '#5b7062', margin: 0, lineHeight: 1.5 }}>
             Tap the <strong>Share</strong> button in Safari, then <strong>"Add to Home Screen"</strong> to install ChurchTrakr as an app.
           </p>
         </div>
@@ -110,14 +110,14 @@ export default function NotificationSettings() {
           }}>
             {isGranted
               ? <Bell size={18} color="#16a34a" strokeWidth={1.75} />
-              : <BellOff size={18} color={isDenied ? '#dc2626' : '#8a9e90'} strokeWidth={1.75} />
+              : <BellOff size={18} color={isDenied ? '#dc2626' : '#5b7062'} strokeWidth={1.75} />
             }
           </div>
           <div style={{ flex: 1 }}>
             <p style={{ fontSize: 15, fontWeight: 700, color: '#1a3a2a', margin: '0 0 3px' }}>
               {isGranted ? 'Notifications enabled' : isDenied ? 'Notifications blocked' : 'Enable notifications'}
             </p>
-            <p style={{ fontSize: 13, color: '#8a9e90', margin: 0, lineHeight: 1.4 }}>
+            <p style={{ fontSize: 13, color: '#5b7062', margin: 0, lineHeight: 1.4 }}>
               {isGranted
                 ? 'You\'ll receive reminders on this device'
                 : isDenied
@@ -136,7 +136,7 @@ export default function NotificationSettings() {
             style={{
               width: '100%', height: 44, borderRadius: 11, border: 'none',
               background: requesting ? '#e0dbd0' : '#1a3a2a',
-              color: requesting ? '#8a9e90' : '#e8d5a0',
+              color: requesting ? '#5b7062' : '#e8d5a0',
               fontSize: 14, fontWeight: 700,
               cursor: requesting ? 'wait' : 'pointer',
             }}>
@@ -166,7 +166,7 @@ export default function NotificationSettings() {
               }}>
                 <div style={{ flex: 1 }}>
                   <p style={{ fontSize: 14, fontWeight: 600, color: '#1a3a2a', margin: '0 0 2px' }}>{n.label}</p>
-                  <p style={{ fontSize: 12, color: '#8a9e90', margin: 0, lineHeight: 1.4 }}>{n.desc}</p>
+                  <p style={{ fontSize: 12, color: '#5b7062', margin: 0, lineHeight: 1.4 }}>{n.desc}</p>
                 </div>
                 {/* Toggle switch */}
                 <button onClick={() => toggle(n.key)} style={{
@@ -194,7 +194,7 @@ export default function NotificationSettings() {
             <p style={{ fontSize: 15, fontWeight: 700, color: '#1a3a2a', margin: '0 0 3px' }}>
               {isInstalled ? 'App installed ✓' : 'Install this app'}
             </p>
-            <p style={{ fontSize: 13, color: '#8a9e90', margin: '0 0 12px', lineHeight: 1.4 }}>
+            <p style={{ fontSize: 13, color: '#5b7062', margin: '0 0 12px', lineHeight: 1.4 }}>
               {isInstalled
                 ? 'ChurchTrakr is installed on this device.'
                 : 'Add to your home screen for faster access and offline support.'
@@ -206,10 +206,10 @@ export default function NotificationSettings() {
                     Install App
                   </button>
                 : /iPhone|iPad|iPod/.test(navigator?.userAgent ?? '')
-                  ? <p style={{ fontSize: 12, color: '#8a9e90', background: 'rgba(26,58,42,0.04)', padding: '0.625rem 0.75rem', borderRadius: 9, margin: 0, lineHeight: 1.5 }}>
+                  ? <p style={{ fontSize: 12, color: '#5b7062', background: 'rgba(26,58,42,0.04)', padding: '0.625rem 0.75rem', borderRadius: 9, margin: 0, lineHeight: 1.5 }}>
                       Tap the <strong>Share</strong> button in Safari, then <strong>"Add to Home Screen"</strong>
                     </p>
-                  : <p style={{ fontSize: 12, color: '#8a9e90', margin: 0 }}>
+                  : <p style={{ fontSize: 12, color: '#5b7062', margin: 0 }}>
                       Open this app in Chrome on Android to install it.
                     </p>
             )}

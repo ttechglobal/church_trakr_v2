@@ -9,7 +9,7 @@ export default function PrivacyPage() {
       <h1 style={{ fontFamily: 'Georgia, serif', fontSize: 28, fontWeight: 700, color: '#1a3a2a', marginBottom: 6 }}>
         Privacy Policy
       </h1>
-      <p style={{ fontSize: 13, color: '#8a9e90', marginBottom: '2rem' }}>Last updated: {LAST_UPDATED}</p>
+      <p style={{ fontSize: 13, color: '#5b7062', marginBottom: '2rem' }}>Last updated: {LAST_UPDATED}</p>
 
       <Section title="What this is">
         ChurchTrakr is an attendance and follow-up management tool for churches and ministry groups. This policy explains what personal data we collect, why we collect it, how it is protected, and your rights over it. We have written this in plain language, not legal jargon.

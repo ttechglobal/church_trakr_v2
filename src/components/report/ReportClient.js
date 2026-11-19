@@ -10,8 +10,8 @@ import {
 
 // ── Brand colors ──────────────────────────────────────────────────────────────
 const C = {
-  forest:'#1a3a2a', mid:'#2d5a42', light:'#4a8a65', muted:'#8a9e90',
-  gold:'#c9a84c', goldDk:'#a8862e', goldLt:'#e8d5a0',
+  forest:'#1a3a2a', mid:'#2d5a42', light:'#4a8a65', muted:'#5b7062',
+  gold:'#c9a84c', goldDk:'#7a5c12', goldLt:'#e8d5a0',
   ivory:'#f7f5f0', ivoryDk:'#ede9e0', ivoryDeep:'#e0dbd0',
   success:'#16a34a', error:'#dc2626', warning:'#d97706',
 }

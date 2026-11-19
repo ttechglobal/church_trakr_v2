@@ -92,7 +92,7 @@ function ReachTick({ reached, syncing, onClick }) {
       ) : reached ? (
         <svg width="16" height="16" viewBox="0 0 20 20" fill="#fff"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
       ) : (
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" stroke="#8a9e90" strokeWidth="0.5" fill="rgba(26,58,42,0.12)"/></svg>
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" stroke="#5b7062" strokeWidth="0.5" fill="rgba(26,58,42,0.12)"/></svg>
       )}
     </button>
   )
@@ -240,7 +240,7 @@ export default function AbsenteesClient({
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div>
             <h1 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 24, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>Absentees</h1>
-            <p style={{ fontSize: 13, color: '#8a9e90', margin: '3px 0 0' }}>
+            <p style={{ fontSize: 13, color: '#5b7062', margin: '3px 0 0' }}>
               {totalPending > 0 ? `${totalPending} people need follow-up` : '✓ All followed up!'}
             </p>
           </div>
@@ -272,7 +272,7 @@ export default function AbsenteesClient({
       {/* ── Search + group + assign ───────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <div style={{ flex: 1, position: 'relative' }}>
-          <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#8a9e90', display: 'flex', pointerEvents: 'none' }}>
+          <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#5b7062', display: 'flex', pointerEvents: 'none' }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
           </span>
           <input type="search" placeholder="Search members…" value={search} onChange={e => setSearch(e.target.value)}
@@ -297,7 +297,7 @@ export default function AbsenteesClient({
           <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 17, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>
             {absentees.length === 0 ? 'No absentees this week' : 'No matches'}
           </p>
-          <p style={{ fontSize: 13, color: '#8a9e90', margin: 0 }}>
+          <p style={{ fontSize: 13, color: '#5b7062', margin: 0 }}>
             {absentees.length === 0 ? 'Great attendance this Sunday! 🙌' : 'Try a different filter.'}
           </p>
         </div>
@@ -359,7 +359,7 @@ export default function AbsenteesClient({
                     </div>
 
                     {/* Group · last seen */}
-                    <p style={{ fontSize: 11.5, color: '#8a9e90', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <p style={{ fontSize: 11.5, color: '#5b7062', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {absentee.groupName}{absentee.date ? ` · Last seen ${fmtDate(absentee.date)}` : ''}
                     </p>
 
@@ -369,10 +369,10 @@ export default function AbsenteesClient({
                           ✓ Reached by {entry.reachedBy}{entry.reachedAt ? ` · ${new Date(entry.reachedAt).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })}` : ''}
                         </p>
                       : note
-                        ? <p style={{ fontSize: 11, color: '#8a9e90', margin: '2px 0 0', fontStyle: 'italic' }}>"{note}"</p>
+                        ? <p style={{ fontSize: 11, color: '#5b7062', margin: '2px 0 0', fontStyle: 'italic' }}>"{note}"</p>
                         : <p style={{ fontSize: 11, margin: '2px 0 0', fontWeight: 500 }}>
                             <span style={{ color: urgency.color, background: urgency.bg, padding: '1px 7px', borderRadius: 5, fontSize: 10 }}>{urgency.label}</span>
-                            <span style={{ color: '#b0bab5', marginLeft: 6 }}>{lastSeenLabel(absentee.date)}</span>
+                            <span style={{ color: '#5b7062', marginLeft: 6 }}>{lastSeenLabel(absentee.date)}</span>
                           </p>
                     }
 
@@ -471,7 +471,7 @@ export default function AbsenteesClient({
                           borderRadius: 8,
                           background: note ? 'rgba(201,168,76,0.10)' : 'rgba(26,58,42,0.05)',
                           border: note ? '1px solid rgba(201,168,76,0.28)' : '1px solid rgba(26,58,42,0.14)',
-                          color: note ? '#a8862e' : '#8a9e90',
+                          color: note ? '#7a5c12' : '#5b7062',
                           cursor: 'pointer',
                           fontSize: 11.5, fontWeight: 600, fontFamily: 'inherit',
                           whiteSpace: 'nowrap', flexShrink: 0,
@@ -516,7 +516,7 @@ export default function AbsenteesClient({
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.125rem 1.25rem 0.875rem', borderBottom: '1px solid rgba(26,58,42,0.08)' }}>
               <div>
                 <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 18, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>Send Bulk SMS</p>
-                <p style={{ fontSize: 12, color: '#8a9e90', margin: '2px 0 0' }}>{smsTargets.length} of {absentees.length} absentees have phone numbers</p>
+                <p style={{ fontSize: 12, color: '#5b7062', margin: '2px 0 0' }}>{smsTargets.length} of {absentees.length} absentees have phone numbers</p>
               </div>
               <button onClick={() => !sending && setShowSms(false)} style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'rgba(26,58,42,0.07)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1a3a2a' }}>
                 <X size={15} />
@@ -544,7 +544,7 @@ export default function AbsenteesClient({
                         { label: '💳 Balance', value: `${smsResult.newBalance} credits`, color: '#1a3a2a' },
                       ].map(({ label, value, color }, i, arr) => (
                         <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: i < arr.length - 1 ? '1px solid rgba(26,58,42,0.06)' : 'none' }}>
-                          <span style={{ fontSize: 13, color: '#8a9e90' }}>{label}</span>
+                          <span style={{ fontSize: 13, color: '#5b7062' }}>{label}</span>
                           <span style={{ fontSize: 13, fontWeight: 700, color }}>{value}</span>
                         </div>
                       ))}
@@ -555,24 +555,24 @@ export default function AbsenteesClient({
                 <>
                   {!hasCredits && (
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 13px', borderRadius: 12, background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.3)' }}>
-                      <AlertCircle size={14} color="#a8862e" style={{ flexShrink: 0, marginTop: 1 }} />
-                      <p style={{ fontSize: 12.5, color: '#1a3a2a', margin: 0 }}>No SMS credits. <a href="/credits" style={{ fontWeight: 700, color: '#a8862e' }}>Buy credits →</a></p>
+                      <AlertCircle size={14} color="#7a5c12" style={{ flexShrink: 0, marginTop: 1 }} />
+                      <p style={{ fontSize: 12.5, color: '#1a3a2a', margin: 0 }}>No SMS credits. <a href="/credits" style={{ fontWeight: 700, color: '#7a5c12' }}>Buy credits →</a></p>
                     </div>
                   )}
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                       <label style={{ fontSize: 13, fontWeight: 600, color: '#1a3a2a' }}>Message</label>
-                      <span style={{ fontSize: 11, color: '#8a9e90' }}>{smsText.length} chars</span>
+                      <span style={{ fontSize: 11, color: '#5b7062' }}>{smsText.length} chars</span>
                     </div>
                     <textarea className="input" style={{ resize: 'none', minHeight: 110, fontSize: 13.5 }}
                       value={smsText} onChange={e => setSmsText(e.target.value)} placeholder="Type your message…" />
-                    <p style={{ fontSize: 12, color: '#8a9e90', margin: '5px 0 0' }}>
+                    <p style={{ fontSize: 12, color: '#5b7062', margin: '5px 0 0' }}>
                       💡 Use <code style={{ background: '#f0ede7', padding: '1px 5px', borderRadius: 4, fontSize: 11 }}>{'{name}'}</code> to personalise
                     </p>
                   </div>
                   {smsTargets.length > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 13px', borderRadius: 12, background: 'rgba(26,58,42,0.04)' }}>
-                      <span style={{ fontSize: 12.5, color: '#8a9e90' }}>To {Math.min(smsTargets.length, maxCanSend)} · {Math.min(smsTargets.length, maxCanSend) * CREDITS_PER_SMS} credits</span>
+                      <span style={{ fontSize: 12.5, color: '#5b7062' }}>To {Math.min(smsTargets.length, maxCanSend)} · {Math.min(smsTargets.length, maxCanSend) * CREDITS_PER_SMS} credits</span>
                       <span style={{ fontSize: 12.5, fontWeight: 700, color: '#1a3a2a' }}>{smsCredits} available</span>
                     </div>
                   )}

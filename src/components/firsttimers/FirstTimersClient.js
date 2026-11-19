@@ -110,7 +110,7 @@ export default function FirstTimersClient({ churchId, firstTimers: init, groups,
         <button onClick={() => setSelected(null)} style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
           background: 'none', border: 'none', cursor: 'pointer',
-          fontSize: 13, fontWeight: 600, color: '#8a9e90',
+          fontSize: 13, fontWeight: 600, color: '#5b7062',
           padding: '4px 0', marginBottom: 20,
         }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -128,7 +128,7 @@ export default function FirstTimersClient({ churchId, firstTimers: init, groups,
                 {selected.name}
               </h1>
               {visits > 1 && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: '#a8862e', background: 'rgba(201,168,76,0.12)', borderRadius: 20, padding: '3px 10px' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: '#7a5c12', background: 'rgba(201,168,76,0.12)', borderRadius: 20, padding: '3px 10px' }}>
                   {visits}× visitor
                 </span>
               )}
@@ -146,7 +146,7 @@ export default function FirstTimersClient({ churchId, firstTimers: init, groups,
               <div key={row.label} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                 <span style={{ fontSize: 16, width: 22, flexShrink: 0 }}>{row.icon}</span>
                 <div>
-                  <p style={{ fontSize: 11, color: '#8a9e90', margin: '0 0 1px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{row.label}</p>
+                  <p style={{ fontSize: 11, color: '#5b7062', margin: '0 0 1px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{row.label}</p>
                   <p style={{ fontSize: 14, color: '#1a3a2a', margin: 0, fontWeight: 500 }}>{row.value}</p>
                 </div>
               </div>
@@ -270,7 +270,7 @@ export default function FirstTimersClient({ churchId, firstTimers: init, groups,
           <h1 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 'clamp(1.4rem,3vw,1.875rem)', fontWeight: 700, color: '#1a3a2a', margin: '0 0 4px', letterSpacing: '-0.025em' }}>
             First Timers
           </h1>
-          <p style={{ fontSize: 14, color: '#8a9e90', margin: 0 }}>
+          <p style={{ fontSize: 14, color: '#5b7062', margin: 0 }}>
             {list.length} visitor{list.length !== 1 ? 's' : ''} · {repeatCount} returning
           </p>
         </div>
@@ -289,11 +289,11 @@ export default function FirstTimersClient({ churchId, firstTimers: init, groups,
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: '1.25rem' }}>
         {[
           { label: 'Total Visitors', value: list.length,    color: '#1a3a2a' },
-          { label: 'Came Back',      value: repeatCount,    color: '#a8862e' },
+          { label: 'Came Back',      value: repeatCount,    color: '#7a5c12' },
         ].map(s => (
           <div key={s.label} style={{ background: '#fff', border: '1px solid rgba(26,58,42,0.08)', borderRadius: 14, padding: '1rem', textAlign: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.03)' }}>
             <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 28, fontWeight: 800, color: s.color, margin: '0 0 3px', letterSpacing: '-0.03em', lineHeight: 1 }}>{s.value}</p>
-            <p style={{ fontSize: 12, color: '#8a9e90', margin: 0, fontWeight: 600 }}>{s.label}</p>
+            <p style={{ fontSize: 12, color: '#5b7062', margin: 0, fontWeight: 600 }}>{s.label}</p>
           </div>
         ))}
       </div>
@@ -318,7 +318,7 @@ export default function FirstTimersClient({ churchId, firstTimers: init, groups,
           <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 18, fontWeight: 700, color: '#1a3a2a', margin: '0 0 8px' }}>
             {list.length === 0 ? 'No visitors yet' : 'No results'}
           </p>
-          <p style={{ fontSize: 14, color: '#8a9e90', margin: '0 0 20px' }}>
+          <p style={{ fontSize: 14, color: '#5b7062', margin: '0 0 20px' }}>
             {list.length === 0 ? 'Record your first visitor to start tracking new faces.' : `No visitors match "${search}"`}
           </p>
           {list.length === 0 && (
@@ -360,7 +360,7 @@ export default function FirstTimersClient({ churchId, firstTimers: init, groups,
                   <p style={{ fontSize: 14, fontWeight: 700, color: '#1a3a2a', margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
                     {ft.name}
                   </p>
-                  <p style={{ fontSize: 12, color: '#8a9e90', margin: 0 }}>
+                  <p style={{ fontSize: 12, color: '#5b7062', margin: 0 }}>
                     {fmtDate(ft.date)}
                     {ft.phone ? ` · ${ft.phone}` : ''}
                   </p>
@@ -489,7 +489,7 @@ function Modal({ title, onClose, children }) {
       <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, padding: '1.5rem', boxShadow: '0 -8px 40px rgba(0,0,0,0.15)', maxHeight: '90dvh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
           <h3 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 18, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>{title}</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8a9e90', padding: 4 }}>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5b7062', padding: 4 }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>

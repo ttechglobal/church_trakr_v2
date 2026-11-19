@@ -15,7 +15,7 @@ export default function DashboardGreeting({ fallbackName, greeting, churchName, 
 
   return (
     <div>
-      <p style={{ fontSize: 13, color: '#8a9e90', margin: '0 0 3px', fontWeight: 500 }}>
+      <p style={{ fontSize: 13, color: '#5b7062', margin: '0 0 3px', fontWeight: 500 }}>
         {greeting}{firstName ? `, ${firstName}` : ''}
       </p>
       <h1 style={{

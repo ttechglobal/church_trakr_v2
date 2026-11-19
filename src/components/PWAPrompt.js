@@ -42,11 +42,11 @@ function NotifSheet({ onAccept, onDismiss }) {
         <h2 style={{fontFamily:'var(--font-playfair),Georgia,serif',fontSize:20,fontWeight:700,color:'#1a3a2a',margin:'0 0 8px'}}>
           Stay on top of follow-ups
         </h2>
-        <p style={{fontSize:14,color:'#8a9e90',margin:'0 0 1.5rem',lineHeight:1.5}}>
+        <p style={{fontSize:14,color:'#5b7062',margin:'0 0 1.5rem',lineHeight:1.5}}>
           Get Sunday reminders to take attendance and follow up with absent members.
         </p>
         <div style={{display:'flex',gap:10}}>
-          <button onClick={onDismiss} style={{flex:1,height:48,borderRadius:13,border:'1.5px solid rgba(26,58,42,0.18)',background:'#fff',color:'#8a9e90',fontSize:15,fontWeight:600,cursor:'pointer'}}>
+          <button onClick={onDismiss} style={{flex:1,height:48,borderRadius:13,border:'1.5px solid rgba(26,58,42,0.18)',background:'#fff',color:'#5b7062',fontSize:15,fontWeight:600,cursor:'pointer'}}>
             Not now
           </button>
           <button onClick={onAccept} style={{flex:1,height:48,borderRadius:13,border:'none',background:'#1a3a2a',color:'#e8d5a0',fontSize:15,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 14px rgba(26,58,42,0.25)'}}>

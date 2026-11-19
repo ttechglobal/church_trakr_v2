@@ -168,7 +168,7 @@ export default function TemplatesClient() {
                     <button
                       onClick={() => resetToDefault(tpl.id)}
                       title="Reset to default"
-                      style={{ height: 30, width: 30, borderRadius: 8, border: 'none', background: 'rgba(26,58,42,0.06)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8a9e90' }}
+                      style={{ height: 30, width: 30, borderRadius: 8, border: 'none', background: 'rgba(26,58,42,0.06)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#5b7062' }}
                     >
                       <RotateCcw size={12} />
                     </button>

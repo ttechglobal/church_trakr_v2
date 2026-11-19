@@ -170,12 +170,12 @@ export default function NotificationBell({ pendingFollowUps = 0 }) {
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 {unreadCount > 0 && <button onClick={markAllRead} style={{ fontSize: 11, color: '#4a8a65', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>Mark all read</button>}
-                <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8a9e90', padding: 2, display: 'flex' }}><X size={14} /></button>
+                <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5b7062', padding: 2, display: 'flex' }}><X size={14} /></button>
               </div>
             </div>
             <div style={{ overflowY: 'auto', flex: 1 }}>
               {notifications.length === 0 ? (
-                <div style={{ padding: '2rem', textAlign: 'center', color: '#8a9e90' }}>
+                <div style={{ padding: '2rem', textAlign: 'center', color: '#5b7062' }}>
                   <Bell size={24} style={{ margin: '0 auto 8px', display: 'block', opacity: .4 }} />
                   <p style={{ fontSize: 13, margin: 0 }}>No notifications yet</p>
                 </div>
@@ -184,11 +184,11 @@ export default function NotificationBell({ pendingFollowUps = 0 }) {
                   <Link key={n.id} href={n.href ?? '/dashboard'} onClick={() => { markRead(n.id); setOpen(false) }}
                     style={{ display: 'flex', gap: 12, padding: '12px 16px', borderBottom: '1px solid rgba(26,58,42,0.06)', background: n.read ? 'transparent' : 'rgba(26,58,42,0.03)', textDecoration: 'none' }}>
                     <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(26,58,42,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
-                      {iconForType[n.type] ?? <Bell size={14} style={{ color: '#8a9e90' }} />}
+                      {iconForType[n.type] ?? <Bell size={14} style={{ color: '#5b7062' }} />}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: 13, color: '#1a3a2a', margin: 0, lineHeight: 1.4, fontWeight: n.read ? 400 : 600 }}>{n.message}</p>
-                      <p style={{ fontSize: 11, color: '#8a9e90', margin: '3px 0 0' }}>{fmtTime(n.createdAt)}</p>
+                      <p style={{ fontSize: 11, color: '#5b7062', margin: '3px 0 0' }}>{fmtTime(n.createdAt)}</p>
                     </div>
                     {!n.read && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#1a3a2a', flexShrink: 0, marginTop: 5 }} />}
                   </Link>

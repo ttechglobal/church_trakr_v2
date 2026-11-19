@@ -177,7 +177,7 @@ const AVATAR_PALETTES = [
   { bg: '#2d5a42', color: '#f7f5f0' },
   { bg: '#c9a84c', color: '#1a3a2a' },
   { bg: '#3d7a58', color: '#f7f5f0' },
-  { bg: '#a8862e', color: '#f7f5f0' },
+  { bg: '#7a5c12', color: '#f7f5f0' },
   { bg: '#4a8a65', color: '#1a3a2a' },
   { bg: '#1a3a2a', color: '#c9a84c' },
   { bg: '#0f2a1a', color: '#e8d5a0' },

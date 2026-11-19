@@ -150,7 +150,7 @@ export default function CreditsClient({ church, transactions = [] }) {
           <button key={t} onClick={() => { setTab(t); setStep('select') }}
             style={{ flex:1, height:34, borderRadius:9, border:'none', cursor:'pointer', fontSize:13,
               fontWeight: tab===t ? 700 : 500, background: tab===t ? '#fff' : 'transparent',
-              color: tab===t ? '#1a3a2a' : '#8a9e90', boxShadow: tab===t ? '0 1px 4px rgba(0,0,0,.08)' : 'none', transition:'all .15s' }}>
+              color: tab===t ? '#1a3a2a' : '#5b7062', boxShadow: tab===t ? '0 1px 4px rgba(0,0,0,.08)' : 'none', transition:'all .15s' }}>
             {label}
           </button>
         ))}
@@ -180,7 +180,7 @@ export default function CreditsClient({ church, transactions = [] }) {
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
                         <p style={{ fontSize:15, fontWeight:700, color: sel ? '#fff' : '#1a3a2a', margin:0 }}>{p.label}</p>
-                        <p style={{ fontSize:13, color: sel ? 'rgba(255,255,255,.6)' : '#8a9e90', margin:'2px 0 0' }}>{p.credits} SMS credits</p>
+                        <p style={{ fontSize:13, color: sel ? 'rgba(255,255,255,.6)' : '#5b7062', margin:'2px 0 0' }}>{p.credits} SMS credits</p>
                       </div>
                       <div style={{ textAlign:'right', flexShrink:0 }}>
                         <p className="font-display" style={{ fontSize:18, fontWeight:800, color: sel ? '#e8d5a0' : '#1a3a2a', margin:0, lineHeight:1 }}>{fmtN(p.baseNaira)}</p>
@@ -199,7 +199,7 @@ export default function CreditsClient({ church, transactions = [] }) {
                   </div>
                   <div style={{ flex:1 }}>
                     <p style={{ fontSize:15, fontWeight:700, color: selected==='custom' ? '#fff' : '#1a3a2a', margin:0 }}>Custom Amount</p>
-                    <p style={{ fontSize:13, color: selected==='custom' ? 'rgba(255,255,255,.6)' : '#8a9e90', margin:'2px 0 0' }}>Enter exactly how many you need</p>
+                    <p style={{ fontSize:13, color: selected==='custom' ? 'rgba(255,255,255,.6)' : '#5b7062', margin:'2px 0 0' }}>Enter exactly how many you need</p>
                   </div>
                 </button>
               </div>

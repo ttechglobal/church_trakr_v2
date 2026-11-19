@@ -12,7 +12,7 @@ const dmSans = DM_Sans({
   subsets: ['latin'],
   variable: '--font-dm-sans',
   display: 'swap',
-  weight: ['300', '400', '500', '600'],
+  weight: ['300', '400', '500', '600', '700'],
 })
 
 export const metadata = {
@@ -32,8 +32,6 @@ export const viewport = {
   themeColor:   '#1a3a2a',
   width:        'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 }
 
 export default function RootLayout({ children }) {

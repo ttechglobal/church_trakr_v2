@@ -253,7 +253,7 @@ function _showBrowserNotification(title, body, url) {
     const n = new Notification(title, {
       body,
       icon:  '/icons/icon-192.png',
-      badge: '/icons/icon-72.png',
+      badge: '/icons/icon-192.png',
       data:  { url },
     })
     n.onclick = () => { window.focus(); window.location.href = url; n.close() }

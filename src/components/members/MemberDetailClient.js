@@ -125,7 +125,7 @@ export default function MemberDetailClient({ member: initialMember, groups, atte
                 </span>
               </div>
               {memberGroups.length > 0 && (
-                <p style={{ fontSize: 13, color: '#8a9e90', margin: '0 0 4px' }}>{memberGroups.join(', ')}</p>
+                <p style={{ fontSize: 13, color: '#5b7062', margin: '0 0 4px' }}>{memberGroups.join(', ')}</p>
               )}
               {member.phone && (
                 <p style={{ fontSize: 12.5, color: '#4a8a65', margin: 0, fontWeight: 500 }}>{member.phone}</p>
@@ -155,9 +155,9 @@ export default function MemberDetailClient({ member: initialMember, groups, atte
                   cursor: disabled ? 'not-allowed' : 'pointer',
                 }}>
                   <div style={{ width: 38, height: 38, borderRadius: 11, background: disabled ? 'rgba(26,58,42,0.05)' : `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon size={18} color={disabled ? '#8a9e90' : color} />
+                    <Icon size={18} color={disabled ? '#5b7062' : color} />
                   </div>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: disabled ? '#b0bab5' : '#1a3a2a' }}>{label}</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: disabled ? '#5b7062' : '#1a3a2a' }}>{label}</span>
                 </div>
               )
               if (href) return <a key={label} href={href} target={href.startsWith('http') ? '_blank' : undefined} rel="noreferrer" style={{ textDecoration: 'none' }}>{el}</a>
@@ -183,8 +183,8 @@ export default function MemberDetailClient({ member: initialMember, groups, atte
           ].map(({ label, value, color, sub }) => (
             <div key={label} style={{ textAlign: 'center', padding: '12px 8px', background: '#fafaf9', borderRadius: 14 }}>
               <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 26, fontWeight: 700, color, margin: '0 0 2px', lineHeight: 1 }}>{value}</p>
-              <p style={{ fontSize: 11, color: '#8a9e90', margin: 0, fontWeight: 600 }}>{label}</p>
-              {sub && <p style={{ fontSize: 10, color: '#b0bab5', margin: '2px 0 0' }}>{sub}</p>}
+              <p style={{ fontSize: 11, color: '#5b7062', margin: 0, fontWeight: 600 }}>{label}</p>
+              {sub && <p style={{ fontSize: 10, color: '#5b7062', margin: '2px 0 0' }}>{sub}</p>}
             </div>
           ))}
         </div>
@@ -192,7 +192,7 @@ export default function MemberDetailClient({ member: initialMember, groups, atte
         {/* Attendance streak visualization */}
         {attendanceHistory.length > 0 && (
           <div>
-            <p style={{ fontSize: 11, color: '#8a9e90', fontWeight: 600, margin: '0 0 8px', letterSpacing: '0.04em' }}>RECENT SESSIONS</p>
+            <p style={{ fontSize: 11, color: '#5b7062', fontWeight: 600, margin: '0 0 8px', letterSpacing: '0.04em' }}>RECENT SESSIONS</p>
             <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
               {attendanceHistory.slice(0, 12).reverse().map((r, i) => (
                 <div key={i} title={fmtDate(r.attendance_sessions?.date) + (r.present ? ' — Present' : ' — Absent')}
@@ -204,7 +204,7 @@ export default function MemberDetailClient({ member: initialMember, groups, atte
                 </div>
               ))}
               {attendanceHistory.length > 12 && (
-                <div style={{ width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(26,58,42,0.06)', fontSize: 10, fontWeight: 700, color: '#8a9e90' }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(26,58,42,0.06)', fontSize: 10, fontWeight: 700, color: '#5b7062' }}>
                   +{attendanceHistory.length - 12}
                 </div>
               )}
@@ -212,7 +212,7 @@ export default function MemberDetailClient({ member: initialMember, groups, atte
           </div>
         )}
         {attendanceHistory.length === 0 && (
-          <p style={{ fontSize: 13, color: '#8a9e90', textAlign: 'center', margin: 0 }}>No attendance records yet</p>
+          <p style={{ fontSize: 13, color: '#5b7062', textAlign: 'center', margin: 0 }}>No attendance records yet</p>
         )}
       </div>
 
@@ -229,7 +229,7 @@ export default function MemberDetailClient({ member: initialMember, groups, atte
               <Icon size={14} color="#4a8a65" strokeWidth={1.75} />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 11, color: '#8a9e90', margin: '0 0 1px', fontWeight: 600 }}>{label}</p>
+              <p style={{ fontSize: 11, color: '#5b7062', margin: '0 0 1px', fontWeight: 600 }}>{label}</p>
               <p style={{ fontSize: 14, fontWeight: 500, color: '#1a3a2a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</p>
             </div>
             {href && (
@@ -240,7 +240,7 @@ export default function MemberDetailClient({ member: initialMember, groups, atte
           </div>
         ))}
         {!member.phone && !member.address && !member.birthday && memberGroups.length === 0 && (
-          <p style={{ fontSize: 13, color: '#8a9e90', textAlign: 'center', padding: '1.5rem' }}>No additional details</p>
+          <p style={{ fontSize: 13, color: '#5b7062', textAlign: 'center', padding: '1.5rem' }}>No additional details</p>
         )}
       </div>
 
@@ -249,7 +249,7 @@ export default function MemberDetailClient({ member: initialMember, groups, atte
         <div style={{ background: '#fff', borderRadius: 20, border: '1px solid rgba(26,58,42,0.07)', overflow: 'hidden', boxShadow: '0 1px 4px rgba(26,58,42,0.06)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid rgba(26,58,42,0.07)', background: '#fafaf9' }}>
             <p style={{ fontSize: 13, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>Follow-up History</p>
-            <span style={{ fontSize: 11, color: '#8a9e90' }}>Last {Math.min(attendanceHistory.length, 8)} sessions</span>
+            <span style={{ fontSize: 11, color: '#5b7062' }}>Last {Math.min(attendanceHistory.length, 8)} sessions</span>
           </div>
           <div>
             {attendanceHistory.slice(0, 8).map((r, i) => (
@@ -257,7 +257,7 @@ export default function MemberDetailClient({ member: initialMember, groups, atte
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: r.present ? '#16a34a' : '#dc2626', flexShrink: 0 }} />
                 <span style={{ fontSize: 13, color: '#1a3a2a', flex: 1 }}>{fmtDate(r.attendance_sessions?.date)}</span>
                 {r.attendance_sessions?.groups?.name && (
-                  <span style={{ fontSize: 11, color: '#8a9e90', background: 'rgba(26,58,42,0.06)', padding: '2px 8px', borderRadius: 6 }}>{r.attendance_sessions.groups.name}</span>
+                  <span style={{ fontSize: 11, color: '#5b7062', background: 'rgba(26,58,42,0.06)', padding: '2px 8px', borderRadius: 6 }}>{r.attendance_sessions.groups.name}</span>
                 )}
                 <span style={{ fontSize: 12, fontWeight: 600, color: r.present ? '#16a34a' : '#dc2626' }}>{r.present ? 'Present' : 'Absent'}</span>
               </div>
@@ -270,7 +270,7 @@ export default function MemberDetailClient({ member: initialMember, groups, atte
       {showDeleteConfirm ? (
         <div style={{ background: '#fef2f2', borderRadius: 16, border: '1.5px solid rgba(220,38,38,0.2)', padding: '1rem 1.25rem' }}>
           <p style={{ fontSize: 14, fontWeight: 600, color: '#dc2626', margin: '0 0 12px' }}>Remove this member?</p>
-          <p style={{ fontSize: 12.5, color: '#8a9e90', margin: '0 0 16px' }}>Their attendance history will be preserved but they will no longer appear in active lists.</p>
+          <p style={{ fontSize: 12.5, color: '#5b7062', margin: '0 0 16px' }}>Their attendance history will be preserved but they will no longer appear in active lists.</p>
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={() => setShowDeleteConfirm(false)} className="btn btn-outline" style={{ flex: 1, height: 44 }}>Cancel</button>
             <button onClick={handleDelete} disabled={deleting} className="btn btn-danger" style={{ flex: 1, height: 44 }}>

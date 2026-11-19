@@ -2,6 +2,23 @@
 
 import { useState, useEffect, useRef } from 'react'
 
+
+// Renders nothing until the image file really loads. Missing art falls back to the
+// built-in mockups instead of showing a broken-image icon / alt text. (onError alone is
+// unreliable: it never fires if the request fails before React hydrates.)
+function OptionalImage({ src, alt, ...rest }) {
+  const [ok, setOk] = useState(false)
+  useEffect(() => {
+    const probe = new window.Image()
+    probe.onload  = () => setOk(true)
+    probe.onerror = () => setOk(false)
+    probe.src = src
+    return () => { probe.onload = null; probe.onerror = null }
+  }, [src])
+  if (!ok) return null
+  return <img src={src} alt={alt} {...rest} />
+}
+
 // ── Data ──────────────────────────────────────────────────────────────────────
 const STEPS = [
   { num: '01', title: 'Add Your Members',  body: 'Import your full member list in seconds — by CSV, Excel, or one by one.' },
@@ -119,7 +136,7 @@ export default function LandingPage() {
           <div className="ct-hero-img-col">
             <div className="ct-hero-frame">
               {/* Replace /images/hero-phone.webp with generated image */}
-              <img src="/images/hero-phone.webp" alt="Church Trakr attendance app on smartphone" className="ct-hero-real-img" loading="eager" onError={e => e.target.style.display='none'} />
+              <OptionalImage src="/images/hero-phone.webp" alt="Church Trakr attendance app on smartphone" className="ct-hero-real-img" loading="eager" />
               {/* Fallback app mockup */}
               <div className="ct-phone-fallback" aria-hidden>
                 <div className="ct-phone-bar">
@@ -176,12 +193,11 @@ export default function LandingPage() {
             </div>
             <div className="ct-problem-img-wrap">
               {/* Replace /images/problem-split.webp with generated image */}
-              <img
+              <OptionalImage
                 src="/images/problem-split.webp"
                 alt="Messy handwritten attendance register beside a clean digital attendance app"
                 className="ct-problem-img" loading="lazy"
                 data-prompt="Split composition: left half crumpled handwritten church attendance sheet with pen on wooden desk; right half clean smartphone screen with digital checklist. Warm natural light. Flat lay overhead. No people. Analog chaos vs digital clarity."
-                onError={e => e.target.style.display='none'}
               />
             </div>
           </div>
@@ -206,10 +222,9 @@ export default function LandingPage() {
             </div>
             <div className="ct-steps-img-wrap">
               {/* Replace /images/steps-followup.webp with generated image */}
-              <img src="/images/steps-followup.webp" alt="Church leader sending a follow-up message on phone"
+              <OptionalImage src="/images/steps-followup.webp" alt="Church leader sending a follow-up message on phone"
                 className="ct-steps-img" loading="lazy"
                 data-prompt="Candid warm photo of a young Nigerian man in smart casual, smiling while typing on his phone in a bright modern church lobby. Natural window light. Bokeh background. No screen content visible. Editorial photography style."
-                onError={e => e.target.style.display='none'}
               />
             </div>
           </div>
@@ -225,10 +240,9 @@ export default function LandingPage() {
             </div>
             <div className="ct-features-img-wrap">
               {/* Replace /images/features-team.webp with generated image */}
-              <img src="/images/features-team.webp" alt="Church leaders reviewing attendance data together on a tablet"
+              <OptionalImage src="/images/features-team.webp" alt="Church leaders reviewing attendance data together on a tablet"
                 className="ct-features-img" loading="lazy"
                 data-prompt="Candid photo of 2-3 young Nigerian church leaders mixed gender gathered around a tablet looking at data. Smiling, engaged. Bright modern church office. Natural light. Collaborative and purposeful. No screen content visible."
-                onError={e => e.target.style.display='none'}
               />
             </div>
             <div className="ct-features-grid">
@@ -256,10 +270,9 @@ export default function LandingPage() {
             </div>
             <div>
               {/* Replace /images/report-hand.webp with generated image */}
-              <img src="/images/report-hand.webp" alt="Hand holding phone with Church Trakr attendance report showing bold numbers"
+              <OptionalImage src="/images/report-hand.webp" alt="Hand holding phone with Church Trakr attendance report showing bold numbers"
                 className="ct-report-real-img" loading="lazy"
                 data-prompt="Close-up of a hand holding a smartphone with a beautifully designed church attendance report card. Bold numbers, clean typography — present, absent, followed up. Softly blurred warm background. Conveying clarity and professionalism. Premium product photography."
-                onError={e => e.target.style.display='none'}
               />
               {/* Fallback report card */}
               <div className="ct-report-card">
@@ -292,7 +305,7 @@ export default function LandingPage() {
                   <p style={{fontSize:15,color:'#374151',lineHeight:1.75,fontStyle:'italic',marginBottom:24}}>"{t.quote}"</p>
                   <div style={{display:'flex',alignItems:'center',gap:10}}>
                     <div style={{width:36,height:36,borderRadius:'50%',background:t.bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:800,color:'#c9a84c',flexShrink:0}}>{t.initials}</div>
-                    <p style={{fontSize:13,color:'#8a9e90',fontWeight:600}}>{t.name}</p>
+                    <p style={{fontSize:13,color:'#5b7062',fontWeight:600}}>{t.name}</p>
                   </div>
                 </div>
               ))}
@@ -331,10 +344,9 @@ export default function LandingPage() {
       {/* ─────────────── FINAL CTA ─────────────── */}
       <section className="ct-cta">
         {/* Replace /images/cta-congregation.webp with generated image */}
-        <img src="/images/cta-congregation.webp" alt="Nigerian church congregation during Sunday service, viewed from behind looking toward a bright stage"
+        <OptionalImage src="/images/cta-congregation.webp" alt="Nigerian church congregation during Sunday service, viewed from behind looking toward a bright stage"
           className="ct-cta-bg" loading="lazy"
           data-prompt="Wide-angle cinematic photo of vibrant Nigerian church congregation during Sunday service, viewed from slightly behind and above looking toward bright modern stage. Standing, engaged, worshipping. Warm golden lighting. Uplifting community spirit. Slightly darkened vignette for text overlay. No faces clearly identifiable."
-          onError={e => e.target.style.display='none'}
         />
         <div className="ct-cta-overlay" aria-hidden/>
         <div className="ct-cta-inner">
