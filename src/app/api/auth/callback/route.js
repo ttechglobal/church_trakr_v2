@@ -10,7 +10,9 @@ import { NextResponse } from 'next/server'
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/dashboard'
+  // Only allow same-site relative paths (blocks //evil.com and /\evil.com open redirects)
+  const rawNext = searchParams.get('next') ?? '/dashboard'
+  const next = /^\/(?![\/\\])/.test(rawNext) ? rawNext : '/dashboard'
 
   if (code) {
     const supabase = await createClient()

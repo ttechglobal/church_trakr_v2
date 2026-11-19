@@ -64,19 +64,19 @@ export async function POST(request) {
 
     const reference = `CT-${church.id.slice(0, 8).toUpperCase()}-${Date.now()}`
 
-    // Log the pending transaction — non-fatal if it fails
-    try {
-      await admin.from('credit_transactions').insert({
-        church_id:   church.id,
-        pack_id:     packId ?? 'custom',
-        credits,
-        amount_kobo: totalNaira * 100,
-        reference,
-        status:      'pending_manual',
-        gateway:     'manual',
-      })
-    } catch (logErr) {
-      console.warn('[initiate] tx log failed (non-fatal):', logErr?.message)
+    // The order record is the source of truth for notify-transfer, so it must be saved.
+    const { error: txErr } = await admin.from('credit_transactions').insert({
+      church_id:   church.id,
+      pack_id:     packId ?? 'custom',
+      credits,
+      amount_kobo: totalNaira * 100,
+      reference,
+      status:      'pending_manual',
+      gateway:     'manual',
+    })
+    if (txErr) {
+      console.error('[initiate] could not save order:', txErr.code, txErr.message)
+      return NextResponse.json({ error: 'Could not create your order. Please try again.' }, { status: 500 })
     }
 
     return NextResponse.json({

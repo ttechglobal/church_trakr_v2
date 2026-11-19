@@ -1,69 +1,78 @@
 /**
- * POST /api/admin/auth — super admin login
+ * POST   /api/admin/auth — super admin login
  * DELETE /api/admin/auth — logout
  *
- * Reads env vars INSIDE the handler (not at module level) so they are
- * always current — no restart required after adding them.
- *
- * Auth handler — validates admin credentials and sets session cookie.
+ * Env vars are read inside the handler so they're always current.
+ * Session cookie is a signed, expiring, per-login token (see lib/adminAuth.js).
  */
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { ADMIN_COOKIE, ADMIN_SESSION_SEC, createAdminSession, safeEqual } from '@/lib/adminAuth'
+
+// Best-effort brute-force throttle (per server instance).
+// For multi-instance deployments, back this with Redis/Upstash.
+const attempts = new Map() // ip -> { count, resetAt }
+const MAX_ATTEMPTS = 5
+const WINDOW_MS    = 15 * 60 * 1000
+
+function clientIp(request) {
+  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+}
+
+function isLimited(ip) {
+  const now = Date.now()
+  const rec = attempts.get(ip)
+  if (!rec || rec.resetAt < now) return false
+  return rec.count >= MAX_ATTEMPTS
+}
+
+function recordFailure(ip) {
+  const now = Date.now()
+  const rec = attempts.get(ip)
+  if (!rec || rec.resetAt < now) attempts.set(ip, { count: 1, resetAt: now + WINDOW_MS })
+  else rec.count++
+  if (attempts.size > 1000) {
+    for (const [k, v] of attempts) if (v.resetAt < now) attempts.delete(k)
+  }
+}
 
 export async function POST(request) {
-  // Read inside handler — never stale
-  const ADMIN_EMAIL    = process.env.SUPER_ADMIN_EMAIL    || 'admin@churchtrackr.com'
+  const ADMIN_EMAIL    = process.env.SUPER_ADMIN_EMAIL    || null
   const ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD || null
-  const SESSION_TOKEN  = process.env.SUPER_ADMIN_TOKEN    || null
+
+  if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+    console.error('[admin/auth] SUPER_ADMIN_EMAIL / SUPER_ADMIN_PASSWORD are not configured')
+    return NextResponse.json({ error: 'Admin login is not configured.' }, { status: 503 })
+  }
+
+  const ip = clientIp(request)
+  if (isLimited(ip)) {
+    return NextResponse.json({ error: 'Too many attempts. Try again later.' }, { status: 429 })
+  }
 
   const body = await request.json().catch(() => ({}))
   const { email, password } = body
 
-  // ── Safe diagnostics — no secret values ever leave this function ────────
-  const debug = {
-    envEmailLength:     ADMIN_EMAIL?.length ?? 0,
-    envPasswordSet:     !!ADMIN_PASSWORD,
-    envPasswordLength:  ADMIN_PASSWORD?.length ?? 0,
-    envTokenSet:        !!SESSION_TOKEN,
-    inputEmailLength:   email?.length ?? 0,
-    inputPasswordLength:password?.length ?? 0,
-    emailMatchesIgnoringCase:
-      typeof email === 'string' && email.toLowerCase() === ADMIN_EMAIL.toLowerCase(),
-    emailExactMatch:    email === ADMIN_EMAIL,
-    passwordExactMatch: password === ADMIN_PASSWORD,
-    // Catches the #1 real-world cause: trailing newline/space pasted into
-    // the Vercel dashboard field when the env var was added.
-    passwordMatchesTrimmed:
-      typeof password === 'string' && ADMIN_PASSWORD != null &&
-      password.trim() === ADMIN_PASSWORD.trim(),
+  // Evaluate both so timing doesn't reveal which field was wrong
+  const emailOk = safeEqual(String(email ?? '').toLowerCase(), ADMIN_EMAIL.toLowerCase())
+  const passOk  = safeEqual(password, ADMIN_PASSWORD)
+
+  if (!emailOk || !passOk) {
+    recordFailure(ip)
+    await new Promise(r => setTimeout(r, 300))
+    return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
   }
 
-  // Diagnostic logging removed — auth debug data never logged
+  attempts.delete(ip)
 
-  if (!ADMIN_PASSWORD) {
-    return NextResponse.json({
-      error: 'SUPER_ADMIN_PASSWORD is not set in your .env.local file. Add it and restart the dev server.',
-      debug,
-    }, { status: 503 })
-  }
-
-  const effectiveToken = SESSION_TOKEN || Buffer.from(ADMIN_PASSWORD).toString('base64')
-
-  const emailMatch    = email    === ADMIN_EMAIL
-  const passwordMatch = password === ADMIN_PASSWORD
-
-  if (!emailMatch || !passwordMatch) {
-    await new Promise(r => setTimeout(r, 200))
-    return NextResponse.json({ error: 'Invalid credentials', debug }, { status: 401 })
-  }
-
+  const session = createAdminSession()
   const cookieStore = await cookies()
-  cookieStore.set('ct_super_admin', effectiveToken, {
+  cookieStore.set(ADMIN_COOKIE, session, {
     httpOnly: true,
     secure:   process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path:     '/',          // '/' not '/admin' — avoids cookie scope issues
-    maxAge:   60 * 60 * 8,  // 8 hours
+    sameSite: 'strict',
+    path:     '/',
+    maxAge:   ADMIN_SESSION_SEC,
   })
 
   return NextResponse.json({ success: true })
@@ -71,6 +80,6 @@ export async function POST(request) {
 
 export async function DELETE() {
   const cookieStore = await cookies()
-  cookieStore.delete('ct_super_admin')
+  cookieStore.delete(ADMIN_COOKIE)
   return NextResponse.json({ success: true })
 }

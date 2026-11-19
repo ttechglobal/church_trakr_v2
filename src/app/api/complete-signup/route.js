@@ -1,10 +1,12 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse }       from 'next/server'
+import { randomInt }          from 'node:crypto'
+import { resolveSignupUserId } from '@/lib/signupAuth'
 
 function makeCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  return Array.from({ length: 8 }, (_, i) =>
-    i === 4 ? '-' : chars[Math.floor(Math.random() * chars.length)]
+  return Array.from({ length: 10 }, (_, i) =>
+    i === 5 ? '-' : chars[randomInt(chars.length)]
   ).join('')
 }
 
@@ -16,17 +18,21 @@ export async function POST(request) {
       phone, country, state, churchSize, useCases,
     } = body
 
-    if (!userId)      return NextResponse.json({ error: 'userId is required' },      { status: 400 })
     if (!name?.trim()) return NextResponse.json({ error: 'name is required' },       { status: 400 })
     if (!adminName?.trim()) return NextResponse.json({ error: 'adminName required'}, { status: 400 })
+
+    // Never trust the body's userId on its own — verify it against the session
+    // (or a just-created, church-less auth user).
+    const verifiedUserId = await resolveSignupUserId(userId)
+    if (!verifiedUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const isChurch = accountType === 'church'
     const admin    = createAdminClient()
 
     const payload = {
-      admin_user_id:  userId,
-      name:           name.trim(),
-      admin_name:     adminName.trim(),
+      admin_user_id:  verifiedUserId,
+      name:           String(name).trim().slice(0, 120),
+      admin_name:     String(adminName).trim().slice(0, 120),
       account_type:   isChurch ? 'church' : 'group',
       phone:          phone?.trim() || null,
       sms_credits:    0,
@@ -52,15 +58,11 @@ export async function POST(request) {
       console.error('[complete-signup] insert failed:', {
         message: insertErr?.message,
         code:    insertErr?.code,
-        details: insertErr?.details,
-        hint:    insertErr?.hint,
       })
-      return NextResponse.json({
-        error:   insertErr?.message ?? 'Database insert failed',
-        code:    insertErr?.code,
-        details: insertErr?.details,
-        hint:    insertErr?.hint,
-      }, { status: 500 })
+      if (insertErr?.code === '23505') {
+        return NextResponse.json({ error: 'An account already exists for this user.' }, { status: 409 })
+      }
+      return NextResponse.json({ error: 'Could not create your account. Please try again.' }, { status: 500 })
     }
 
     // Church profile created successfully

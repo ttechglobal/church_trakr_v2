@@ -1,17 +1,19 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sanitizeInput } from '@/lib/auth'
+import { resolveSignupUserId } from '@/lib/signupAuth'
 import { NextResponse } from 'next/server'
 
 export async function POST(request) {
   try {
     const body = await request.json()
 
-    const userId    = sanitizeInput(body.userId ?? '')
-    const groupName = sanitizeInput(body.groupName ?? '') || 'My Church'
-    const adminName = sanitizeInput(body.adminName ?? '') || 'Admin'
+    const groupName = sanitizeInput(body.groupName ?? '').slice(0, 120) || 'My Church'
+    const adminName = sanitizeInput(body.adminName ?? '').slice(0, 120) || 'Admin'
 
-    if (!userId || userId.length !== 36) {
-      return NextResponse.json({ error: 'Invalid user ID' }, { status: 400 })
+    // Verify identity — never trust a bare userId from the client
+    const userId = await resolveSignupUserId(sanitizeInput(body.userId ?? ''))
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const admin = createAdminClient()
@@ -21,7 +23,7 @@ export async function POST(request) {
       .from('churches')
       .select('id')
       .eq('admin_user_id', userId)
-      .single()
+      .maybeSingle()
 
     if (existing) {
       return NextResponse.json({ success: true, created: false })

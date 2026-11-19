@@ -63,7 +63,7 @@ export function withAuth(handler) {
         return Response.json({ error: err.message }, { status: err.status })
       }
       console.error('[API Error]', err)
-      return Response.json({ error: 'Internal server error', detail: err.message }, { status: 500 })
+      return Response.json({ error: 'Internal server error' }, { status: 500 })
     }
   }
 }
@@ -81,7 +81,7 @@ export function withAuthFull(handler) {
         return Response.json({ error: err.message }, { status: err.status })
       }
       console.error('[API Error]', err)
-      return Response.json({ error: 'Internal server error', detail: err.message }, { status: 500 })
+      return Response.json({ error: 'Internal server error' }, { status: 500 })
     }
   }
 }
