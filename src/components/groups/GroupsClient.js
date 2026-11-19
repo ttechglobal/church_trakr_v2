@@ -5,6 +5,7 @@ import Link from 'next/link'
 import BackButton from '@/components/ui/BackButton'
 import { useRouter } from 'next/navigation'
 import { fmtDate, attendanceRate, rateColor } from '@/lib/utils'
+import Modal from '@/components/ui/Modal'
 
 export default function GroupsClient({ churchId, groups: initialGroups }) {
   const router = useRouter()
@@ -186,8 +187,8 @@ export default function GroupsClient({ churchId, groups: initialGroups }) {
         >
           <div className="space-y-4">
             <div>
-              <label className="input-label">Group name *</label>
-              <input
+              <label htmlFor="groupsclient-1" className="input-label">Group name *</label>
+              <input id="groupsclient-1"
                 className="input"
                 placeholder="e.g. Youth Fellowship"
                 value={form.name}
@@ -196,8 +197,8 @@ export default function GroupsClient({ churchId, groups: initialGroups }) {
               />
             </div>
             <div>
-              <label className="input-label">Leader name</label>
-              <input
+              <label htmlFor="groupsclient-2" className="input-label">Leader name</label>
+              <input id="groupsclient-2"
                 className="input"
                 placeholder="e.g. Pastor James"
                 value={form.leader}
@@ -232,25 +233,6 @@ export default function GroupsClient({ churchId, groups: initialGroups }) {
       )}
 
       <div className="h-6" />
-    </div>
-  )
-}
-
-function Modal({ title, onClose, children }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink/40 backdrop-blur-sm p-4"
-      onClick={e => e.target === e.currentTarget && onClose()}
-    >
-      <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-modal animate-slide-up safe-bottom">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="font-display text-lg font-semibold text-forest">{title}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-mist hover:text-forest hover:bg-ivory transition-colors">
-            <CloseIcon />
-          </button>
-        </div>
-        {children}
-      </div>
     </div>
   )
 }

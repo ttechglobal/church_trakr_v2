@@ -114,17 +114,17 @@ function CompleteSetupScreen({ onComplete }) {
         </div>
 
         <div>
-          <label className="input-label">
+          <label htmlFor="login-name" className="input-label">
             {accountType === 'church' ? 'Church name' : 'Group name'}
           </label>
-          <input className="input" required
+          <input id="login-name" className="input" required
             placeholder={accountType === 'church' ? 'e.g. Grace Assembly' : 'e.g. Youth Fellowship'}
             value={name} onChange={e => setName(e.target.value)} />
         </div>
 
         <div>
-          <label className="input-label">Your name</label>
-          <input className="input" required placeholder="Full name"
+          <label htmlFor="login-1" className="input-label">Your name</label>
+          <input id="login-1" className="input" required placeholder="Full name"
             value={adminName} onChange={e => setAdminName(e.target.value)} />
         </div>
 

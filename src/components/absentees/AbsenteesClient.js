@@ -5,6 +5,7 @@ import { Send, X, AlertCircle, CheckCircle, Phone, ClipboardList } from 'lucide-
 import Link from 'next/link'
 import BackButton from '@/components/ui/BackButton'
 import { fmtDate, toWhatsAppNumber, getAv } from '@/lib/utils'
+import Modal from '@/components/ui/Modal'
 
 const CREDITS_PER_SMS = 5
 const DEFAULT_ABSENTEE_MSG = (churchName) =>
@@ -492,37 +493,41 @@ export default function AbsenteesClient({
 
       {/* ── Note modal ───────────────────────────────────────────────────────── */}
       {noteTarget && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', background: 'rgba(15,26,19,0.55)', backdropFilter: 'blur(4px)' }}
-          onClick={e => e.target === e.currentTarget && setNoteTarget(null)}>
-          <div style={{ background: '#fff', borderRadius: '24px 24px 0 0', width: '100%', maxWidth: 480, padding: '0 1.25rem 2rem', boxShadow: '0 -12px 48px rgba(0,0,0,0.2)' }}>
-            <div style={{ width: 40, height: 4, borderRadius: 2, background: '#e0dbd0', margin: '14px auto 1.5rem' }} />
-            <h3 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 18, fontWeight: 700, color: '#1a3a2a', margin: '0 0 1rem' }}>Note for {noteTarget.name}</h3>
-            <textarea className="input" style={{ resize: 'none', minHeight: 100, fontSize: 14 }}
-              placeholder="e.g. Reached by phone, travelling this weekend…"
-              value={noteText} onChange={e => setNoteText(e.target.value)} autoFocus />
-            <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-              <button onClick={() => setNoteTarget(null)} className="btn btn-outline" style={{ flex: 1, height: 48 }}>Cancel</button>
-              <button onClick={saveNote} className="btn btn-primary" style={{ flex: 1, height: 48 }}>Save Note</button>
-            </div>
+        <Modal title={`Note for ${noteTarget.name}`} onClose={() => setNoteTarget(null)} footer={
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={() => setNoteTarget(null)} className="btn btn-outline" style={{ flex: 1 }}>Cancel</button>
+            <button onClick={saveNote} className="btn btn-primary" style={{ flex: 1 }}>Save Note</button>
           </div>
-        </div>
+        }>
+          <textarea className="input" aria-label={`Note for ${noteTarget.name}`} style={{ resize: 'none', minHeight: 100, fontSize: 14 }}
+            placeholder="e.g. Reached by phone, travelling this weekend…"
+            value={noteText} onChange={e => setNoteText(e.target.value)} autoFocus />
+        </Modal>
       )}
 
       {/* ── Bulk SMS Modal ───────────────────────────────────────────────────── */}
       {showSms && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', padding: 16 }}
-          onClick={e => e.target === e.currentTarget && !sending && setShowSms(false)}>
-          <div style={{ background: '#fff', borderRadius: 24, width: '100%', maxWidth: 480, boxShadow: '0 -12px 48px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.125rem 1.25rem 0.875rem', borderBottom: '1px solid rgba(26,58,42,0.08)' }}>
-              <div>
-                <p style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 18, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>Send Bulk SMS</p>
-                <p style={{ fontSize: 12, color: '#5b7062', margin: '2px 0 0' }}>{smsTargets.length} of {absentees.length} absentees have phone numbers</p>
-              </div>
-              <button onClick={() => !sending && setShowSms(false)} style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'rgba(26,58,42,0.07)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1a3a2a' }}>
-                <X size={15} />
-              </button>
+        <Modal title="Send Bulk SMS" onClose={() => setShowSms(false)} dismissible={!sending} footer={
+            <div style={{ display: 'flex', gap: 10 }}>
+              {smsResult ? (
+                <button onClick={() => { setSmsResult(null); if (!smsResult.error) setShowSms(false) }} className="btn btn-primary" style={{ width: '100%', height: 48 }}>
+                  {smsResult.error ? 'Try again' : 'Done'}
+                </button>
+              ) : (
+                <>
+                  <button onClick={() => setShowSms(false)} className="btn btn-outline" style={{ flex: 1, height: 48 }} disabled={sending}>Cancel</button>
+                  <button onClick={handleBulkSms} disabled={!canAffordSome || !smsText.trim() || sending} className="btn btn-primary" style={{ flex: 1, height: 48, opacity: (!canAffordSome || !smsText.trim() || sending) ? 0.5 : 1, gap: 6 }}>
+                    {sending
+                      ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ animation: 'abs-spin 0.7s linear infinite', display: 'inline-block' }}><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.2"/><path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/></svg> Sending…</>
+                      : <><Send size={13} /> Send to {Math.min(smsTargets.length, maxCanSend)}</>
+                    }
+                  </button>
+                </>
+              )}
             </div>
-            <div style={{ padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        }>
+          <p style={{ fontSize: 13, color: '#5b7062', margin: 0 }}>{smsTargets.length} of {absentees.length} absentees have phone numbers</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {smsResult ? (
                 smsResult.error ? (
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', borderRadius: 12, background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)' }}>
@@ -561,10 +566,10 @@ export default function AbsenteesClient({
                   )}
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <label style={{ fontSize: 13, fontWeight: 600, color: '#1a3a2a' }}>Message</label>
+                      <label htmlFor="abs-sms-message" style={{ fontSize: 13, fontWeight: 600, color: '#1a3a2a' }}>Message</label>
                       <span style={{ fontSize: 11, color: '#5b7062' }}>{smsText.length} chars</span>
                     </div>
-                    <textarea className="input" style={{ resize: 'none', minHeight: 110, fontSize: 13.5 }}
+                    <textarea id="abs-sms-message" className="input" style={{ resize: 'none', minHeight: 110, fontSize: 13.5 }}
                       value={smsText} onChange={e => setSmsText(e.target.value)} placeholder="Type your message…" />
                     <p style={{ fontSize: 12, color: '#5b7062', margin: '5px 0 0' }}>
                       💡 Use <code style={{ background: '#f0ede7', padding: '1px 5px', borderRadius: 4, fontSize: 11 }}>{'{name}'}</code> to personalise
@@ -579,25 +584,7 @@ export default function AbsenteesClient({
                 </>
               )}
             </div>
-            <div style={{ padding: '0 1.25rem 1.5rem', display: 'flex', gap: 10 }}>
-              {smsResult ? (
-                <button onClick={() => { setSmsResult(null); if (!smsResult.error) setShowSms(false) }} className="btn btn-primary" style={{ width: '100%', height: 48 }}>
-                  {smsResult.error ? 'Try again' : 'Done'}
-                </button>
-              ) : (
-                <>
-                  <button onClick={() => setShowSms(false)} className="btn btn-outline" style={{ flex: 1, height: 48 }} disabled={sending}>Cancel</button>
-                  <button onClick={handleBulkSms} disabled={!canAffordSome || !smsText.trim() || sending} className="btn btn-primary" style={{ flex: 1, height: 48, opacity: (!canAffordSome || !smsText.trim() || sending) ? 0.5 : 1, gap: 6 }}>
-                    {sending
-                      ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ animation: 'abs-spin 0.7s linear infinite', display: 'inline-block' }}><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.2"/><path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/></svg> Sending…</>
-                      : <><Send size={13} /> Send to {Math.min(smsTargets.length, maxCanSend)}</>
-                    }
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       <div style={{ height: 24 }} />

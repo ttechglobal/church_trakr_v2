@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Building2, Copy, RefreshCw, Link2Off, Check, Clock, Wifi, WifiOff, User, ChevronLeft } from 'lucide-react'
 import Link from 'next/link'
+import { useConfirm } from '@/components/ui/Confirm'
 
 const C = {
   forest:'#1a3a2a', mid:'#2d5a42', muted:'#5b7062',
@@ -30,6 +31,7 @@ function StatusBadge({ status }) {
 }
 
 export default function ChurchSettingsClient({ church, connections: initialConnections }) {
+  const confirm = useConfirm()
   const [code, setCode]           = useState(church.connection_code ?? '')
   const [connections, setConn]    = useState(initialConnections)
   const [codeLoading, setCodeLd]  = useState(false)
@@ -54,7 +56,7 @@ export default function ChurchSettingsClient({ church, connections: initialConne
   }
 
   async function regenerateCode() {
-    if (!confirm('Regenerate code? Existing approved connections will NOT be broken — only new requests use the new code.')) return
+    if (!(await confirm({ title: 'Regenerate connection code?', message: 'Existing approved connections will not be broken. Only new requests will use the new code.', confirmLabel: 'Regenerate' }))) return
     setCodeLd(true)
     const res = await fetch('/api/church/code', { method:'POST' })
     const d = await res.json()
@@ -107,8 +109,9 @@ export default function ChurchSettingsClient({ church, connections: initialConne
           { key:'admin_name', label:'Admin Name',   placeholder:'Your name' },
         ].map(({ key, label, placeholder }) => (
           <div key={key} style={{ marginBottom:12 }}>
-            <label style={{ display:'block', fontSize:12, fontWeight:700, color:C.forest, marginBottom:5, textTransform:'uppercase', letterSpacing:'0.04em' }}>{label}</label>
+            <label htmlFor={`church-profile-${key}`} style={{ display:'block', fontSize:12, fontWeight:700, color:C.forest, marginBottom:5, textTransform:'uppercase', letterSpacing:'0.04em' }}>{label}</label>
             <input
+              id={`church-profile-${key}`}
               value={profile[key]}
               onChange={e => setProfile(p => ({ ...p, [key]: e.target.value }))}
               placeholder={placeholder}
@@ -194,7 +197,7 @@ export default function ChurchSettingsClient({ church, connections: initialConne
                   <p style={{ fontSize:11, color:C.muted, margin:0 }}>Connected {fmtDate(c.connected_at)}</p>
                 </div>
                 <button
-                  onClick={() => { if(confirm(`Disconnect ${c.subgroupName}? Their historical data will remain visible.`)) handleAction(c.id, 'disconnect') }}
+                  onClick={async () => { if (await confirm({ title: `Disconnect ${c.subgroupName}?`, message: 'Their historical data will remain visible.', confirmLabel: 'Disconnect', danger: true })) handleAction(c.id, 'disconnect') }}
                   disabled={actionLoading === c.id}
                   className="btn btn-sm btn-outline"
                   style={{ color:C.error, borderColor:'rgba(220,38,38,0.3)', flexShrink:0 }}

@@ -158,10 +158,10 @@ export default function BroadcastClient({ church, groups }) {
               <p style={{ fontSize:12, color:C.muted, margin:'0 0 12px', lineHeight:1.5 }}>
                 Send this on <strong>Saturday</strong> to remind members about tomorrow's service.
               </p>
-              <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.forest, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:6 }}>
+              <label htmlFor="broadcastclient-1" style={{ display:'block', fontSize:11, fontWeight:700, color:C.forest, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:6 }}>
                 Message
               </label>
-              <textarea
+              <textarea id="broadcastclient-1"
                 value={message}
                 onChange={e => setMessage(e.target.value)}
                 rows={5}
@@ -184,11 +184,11 @@ export default function BroadcastClient({ church, groups }) {
               </div>
 
               {/* Program type selector */}
-              <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.forest, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:6 }}>
+              <label htmlFor="broadcastclient-2" style={{ display:'block', fontSize:11, fontWeight:700, color:C.forest, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:6 }}>
                 Program Type
               </label>
               <div style={{ position:'relative', marginBottom:14 }}>
-                <select
+                <select id="broadcastclient-2"
                   value={specialType}
                   onChange={e => setSpecialType(e.target.value)}
                   style={{
@@ -205,10 +205,10 @@ export default function BroadcastClient({ church, groups }) {
               </div>
 
               {/* Optional program title */}
-              <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.forest, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:6 }}>
+              <label htmlFor="broadcast-program-title" style={{ display:'block', fontSize:11, fontWeight:700, color:C.forest, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:6 }}>
                 Program Title <span style={{ fontWeight:400, textTransform:'none', fontSize:11, color:C.muted }}>(optional)</span>
               </label>
-              <input
+              <input id="broadcast-program-title"
                 type="text"
                 placeholder="e.g. Shiloh 2025"
                 value={programTitle}
@@ -221,7 +221,7 @@ export default function BroadcastClient({ church, groups }) {
               />
 
               {/* Message — show template or custom textarea */}
-              <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.forest, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:6 }}>
+              <label htmlFor="broadcastclient-3" style={{ display:'block', fontSize:11, fontWeight:700, color:C.forest, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:6 }}>
                 Message
               </label>
               {!isCustomSpecial ? (
@@ -229,7 +229,7 @@ export default function BroadcastClient({ church, groups }) {
                   {activeTemplate?.body}
                 </div>
               ) : (
-                <textarea
+                <textarea id="broadcastclient-3"
                   value={customMsg}
                   onChange={e => setCustomMsg(e.target.value)}
                   placeholder="Write your message here. Use {name} to personalise."

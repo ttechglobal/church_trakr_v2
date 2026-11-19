@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useCallback } from 'react'
 import BackButton from '@/components/ui/BackButton'
 import { fmtDate } from '@/lib/utils'
+import { useToast } from '@/components/ui/Toast'
 import {
   FileText, Download, Share2, Calendar, ChevronLeft, ChevronRight,
   Users, TrendingUp, Star, UserMinus, UserCheck, Plane
@@ -239,6 +240,7 @@ function ReportCard({ church, data, type, reportRef }) {
 export default function ReportClient({
   church, sessions, members, firstTimers, awayMembers
 }) {
+  const { toast } = useToast()
   const [reportType, setReportType] = useState('sunday')  // 'sunday' | 'monthly'
   const [generated, setGenerated]   = useState(false)
   const [exporting, setExporting]   = useState(false)
@@ -382,7 +384,7 @@ export default function ReportClient({
       URL.revokeObjectURL(url)
     } catch (err) {
       console.error('PNG export failed:', err)
-      alert('Export failed. Please try again.')
+      toast('Export failed. Please try again.', { type: 'error' })
     } finally {
       setExporting(false)
     }
@@ -407,7 +409,7 @@ export default function ReportClient({
       pdf.save(`${church.name.replace(/\s+/g, '-')}-report.pdf`)
     } catch (err) {
       console.error('PDF export failed:', err)
-      alert('PDF export failed. Please try again.')
+      toast('PDF export failed. Please try again.', { type: 'error' })
     } finally {
       setExporting(false)
     }
@@ -441,7 +443,7 @@ export default function ReportClient({
       const a = Object.assign(document.createElement('a'), { href: url, download: fileName })
       a.click()
       URL.revokeObjectURL(url)
-      setTimeout(() => alert('Image downloaded — open WhatsApp and share it from your gallery.'), 300)
+      toast('Image downloaded. Open WhatsApp and share it from your gallery.', { duration: 8000 })
     } catch (err) {
       if (err.name !== 'AbortError') {
         console.error('Share failed:', err)

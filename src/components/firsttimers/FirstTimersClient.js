@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useId, isValidElement, cloneElement } from 'react'
 import { toWhatsAppNumber, getAv, toISODate, fmtDate } from '@/lib/utils'
 import BackButton from '@/components/ui/BackButton'
-import FixedModal from '@/components/ui/FixedModal'
+import Modal from '@/components/ui/Modal'
 
 const WELCOME = name =>
   `Hi ${name}, welcome to our service! We're so glad you joined us today. Hope to see you again soon! 🙏`
@@ -411,29 +411,29 @@ function FTModal({ initial, isNew, saving, error, onSave, onClose }) {
   )
 
   return (
-    <FixedModal title={isNew ? 'Add visitor' : 'Edit visitor'} onClose={onClose} footer={footer}>
+    <Modal title={isNew ? 'Add visitor' : 'Edit visitor'} onClose={onClose} footer={footer}>
       <div>
-        <label className="input-label">Name *</label>
-        <input className="input" autoFocus placeholder="Full name"
+        <label htmlFor="firsttimersclient-1" className="input-label">Name *</label>
+        <input id="firsttimersclient-1" className="input" autoFocus placeholder="Full name"
           value={form.name} onChange={e => set('name', e.target.value)} />
       </div>
       <div>
-        <label className="input-label">Phone</label>
-        <input className="input" type="tel" placeholder="+234…"
+        <label htmlFor="firsttimersclient-2" className="input-label">Phone</label>
+        <input id="firsttimersclient-2" className="input" type="tel" placeholder="+234…"
           value={form.phone} onChange={e => set('phone', e.target.value)} />
       </div>
       <div>
-        <label className="input-label">Address</label>
-        <input className="input" placeholder="Optional"
+        <label htmlFor="firsttimersclient-3" className="input-label">Address</label>
+        <input id="firsttimersclient-3" className="input" placeholder="Optional"
           value={form.address} onChange={e => set('address', e.target.value)} />
       </div>
       <div>
-        <label className="input-label">Date of visit</label>
-        <input className="input" type="date"
+        <label htmlFor="firsttimersclient-4" className="input-label">Date of visit</label>
+        <input id="firsttimersclient-4" className="input" type="date"
           value={form.date} onChange={e => set('date', e.target.value)} />
       </div>
       {error && <p className="text-sm text-error">{error}</p>}
-    </FixedModal>
+    </Modal>
   )
 }
 
@@ -474,27 +474,14 @@ function ConvertModal({ visitor, groups, saving, error, onConvert, onClose }) {
 }
 
 function Field({ label, children }) {
+  const autoId = useId()
+  // Give the wrapped control an id (keeping its own, if it has one) so the label is really connected
+  const child = isValidElement(children) ? cloneElement(children, { id: children.props.id ?? autoId }) : children
+  const id = isValidElement(child) ? child.props.id : undefined
   return (
     <div>
-      <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#2d4a36', marginBottom: 5 }}>{label}</label>
-      {children}
-    </div>
-  )
-}
-
-function Modal({ title, onClose, children }) {
-  return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(15,26,19,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, padding: '1.5rem', boxShadow: '0 -8px 40px rgba(0,0,0,0.15)', maxHeight: '90dvh', overflowY: 'auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
-          <h3 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 18, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>{title}</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5b7062', padding: 4 }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
-        {children}
-      </div>
+      <label htmlFor={id} style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#2d4a36', marginBottom: 5 }}>{label}</label>
+      {child}
     </div>
   )
 }

@@ -10,6 +10,7 @@ import {
   UserCheck, Calendar, UserPlus,
 } from 'lucide-react'
 import { getGreeting, getAv, toWhatsAppNumber } from '@/lib/utils'
+import Modal from '@/components/ui/Modal'
 
 // Inline WhatsApp icon — no external dependency
 function WAIcon({ size = 13 }) {
@@ -64,15 +65,14 @@ function AddMemberModal({ onClose, onAdded }) {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 500, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, background: '#fff', borderRadius: '20px 20px 0 0', padding: '1.5rem 1.25rem 2rem', boxShadow: '0 -8px 40px rgba(0,0,0,0.18)' }}>
-        <div style={{ width: 36, height: 4, borderRadius: 2, background: '#e0dbd0', margin: '0 auto 1.25rem' }} />
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
-          <h2 style={{ fontFamily: 'var(--font-playfair),Georgia,serif', fontSize: 20, fontWeight: 700, color: '#1a3a2a', margin: 0 }}>Add Member</h2>
-          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'rgba(26,58,42,0.07)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <X size={15} color="#1a3a2a" />
+    <Modal title="Add Member" onClose={onClose} dismissible={!saving} footer={
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onClose} style={{ flex: 1, height: 50, borderRadius: 13, border: '1.5px solid rgba(26,58,42,0.15)', background: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 600, color: '#5b7062', fontFamily: 'inherit' }}>Cancel</button>
+          <button onClick={handleSubmit} disabled={saving || !form.name.trim()} className="btn btn-primary" style={{ flex: 2, height: 50, borderRadius: 13, fontSize: 15, opacity: (saving || !form.name.trim()) ? 0.6 : 1 }}>
+            {saving ? 'Adding…' : 'Add Member'}
           </button>
         </div>
+      }>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {[
             { key: 'name',     Icon: User,   placeholder: 'Full name *',                    type: 'text' },
@@ -82,20 +82,13 @@ function AddMemberModal({ onClose, onAdded }) {
           ].map(({ key, Icon, placeholder, type }) => (
             <div key={key} style={{ position: 'relative' }}>
               <Icon size={14} color="#5b7062" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-              <input value={form[key]} onChange={e => set(key, e.target.value)} placeholder={placeholder} type={type} autoFocus={key === 'name'}
-                style={{ width: '100%', height: 48, borderRadius: 12, border: '1.5px solid rgba(26,58,42,0.15)', paddingLeft: 36, paddingRight: 14, fontSize: 14, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', color: '#1a3a2a', background: '#fafaf9' }} />
+              <input aria-label={placeholder.replace(' *', '')} value={form[key]} onChange={e => set(key, e.target.value)} placeholder={placeholder} type={type} autoFocus={key === 'name'}
+                style={{ width: '100%', height: 48, borderRadius: 12, border: '1.5px solid rgba(26,58,42,0.15)', paddingLeft: 36, paddingRight: 14, fontSize: 14, boxSizing: 'border-box', fontFamily: 'inherit', color: '#1a3a2a', background: '#fafaf9' }} />
             </div>
           ))}
         </div>
         {error && <p style={{ fontSize: 13, color: '#dc2626', margin: '10px 0 0', fontWeight: 500 }}>{error}</p>}
-        <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-          <button onClick={onClose} style={{ flex: 1, height: 50, borderRadius: 13, border: '1.5px solid rgba(26,58,42,0.15)', background: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 600, color: '#5b7062', fontFamily: 'inherit' }}>Cancel</button>
-          <button onClick={handleSubmit} disabled={saving || !form.name.trim()} className="btn btn-primary" style={{ flex: 2, height: 50, borderRadius: 13, fontSize: 15, opacity: (saving || !form.name.trim()) ? 0.6 : 1 }}>
-            {saving ? 'Adding…' : 'Add Member'}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 

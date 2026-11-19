@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import BackButton from '@/components/ui/BackButton'
 import { CheckCircle, Clock, AlertCircle, RefreshCw } from 'lucide-react'
+import { useConfirm } from '@/components/ui/Confirm'
 
 function fmtDate(iso) {
   if (!iso) return ''
@@ -10,6 +11,7 @@ function fmtDate(iso) {
 }
 
 export default function SenderIdClient({ churchId, currentSenderId, currentStatus, latestRequest }) {
+  const confirm = useConfirm()
   const [senderId,    setSenderId]    = useState('')
   const [useCase,     setUseCase]     = useState('')
   const [submitting,  setSubmitting]  = useState(false)
@@ -51,7 +53,7 @@ export default function SenderIdClient({ churchId, currentSenderId, currentStatu
   }
 
   async function handleCancel() {
-    if (!confirm('Cancel your Sender ID request?')) return
+    if (!(await confirm({ title: 'Cancel your Sender ID request?', confirmLabel: 'Cancel request', cancelLabel: 'Keep request', danger: true }))) return
     setCancelling(true)
     try {
       await fetch('/api/settings/sender-id', { method: 'DELETE' })
@@ -165,8 +167,8 @@ export default function SenderIdClient({ churchId, currentSenderId, currentStatu
 
           <div className="space-y-4">
             <div>
-              <label className="input-label">Sender ID <span className="text-mist font-normal">(max 11 characters)</span></label>
-              <input
+              <label htmlFor="senderidclient-1" className="input-label">Sender ID <span className="text-mist font-normal">(max 11 characters)</span></label>
+              <input id="senderidclient-1"
                 className="input"
                 placeholder="e.g. GraceYouth"
                 maxLength={11}
@@ -177,8 +179,8 @@ export default function SenderIdClient({ churchId, currentSenderId, currentStatu
             </div>
 
             <div>
-              <label className="input-label">Reason / Use case</label>
-              <textarea
+              <label htmlFor="senderidclient-2" className="input-label">Reason / Use case</label>
+              <textarea id="senderidclient-2"
                 className="input resize-none text-sm"
                 style={{ minHeight: 72 }}
                 placeholder="e.g. Youth Ministry at Grace Church, used for Sunday attendance follow-ups"

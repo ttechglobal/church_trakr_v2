@@ -1,6 +1,7 @@
 import { Playfair_Display, DM_Sans } from 'next/font/google'
 import '../styles/globals.css'
 import { ToastProvider } from '@/components/ui/Toast'
+import { ConfirmProvider } from '@/components/ui/Confirm'
 
 const playfair = Playfair_Display({
   subsets: ['latin'],
@@ -49,7 +50,7 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="ChurchTrakr" />
       </head>
-      <body><ToastProvider>{children}</ToastProvider></body>
+      <body><ToastProvider><ConfirmProvider>{children}</ConfirmProvider></ToastProvider></body>
     </html>
   )
 }

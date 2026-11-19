@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useToast } from '@/components/ui/Toast'
 
 const PACKAGES = [
   { credits: 100,  price: 120  },
@@ -15,6 +16,7 @@ const NAIRA_PER_CREDIT = 1.20
 const WHATSAPP_ADMIN = '2348050340350'
 
 export default function CreditsClient({ churchId, balance: initialBalance }) {
+  const { toast } = useToast()
   const [balance, setBalance] = useState(initialBalance)
   const [selected, setSelected] = useState(null)
   const [msgCount, setMsgCount] = useState('')
@@ -45,7 +47,7 @@ export default function CreditsClient({ churchId, balance: initialBalance }) {
       if (!res.ok) throw new Error(data.error ?? 'Failed')
       setConfirmed(true)
     } catch (err) {
-      alert(err.message)
+      toast(err.message, { type: 'error' })
     } finally {
       setSubmitting(false)
     }
@@ -144,8 +146,8 @@ export default function CreditsClient({ churchId, balance: initialBalance }) {
             <InfoRow label="Amount" value={`₦${activePackage.price.toLocaleString()}`} highlight />
           </div>
           <div>
-            <label className="input-label">Transfer reference (optional)</label>
-            <input className="input text-sm" placeholder="e.g. last 4 digits of transfer"
+            <label htmlFor="creditsclient-1" className="input-label">Transfer reference (optional)</label>
+            <input id="creditsclient-1" className="input text-sm" placeholder="e.g. last 4 digits of transfer"
               value={reference} onChange={e => setReference(e.target.value)} />
           </div>
           <button onClick={handleConfirm} disabled={submitting} className="btn-primary w-full">

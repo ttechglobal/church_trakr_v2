@@ -4,10 +4,12 @@ import { useState, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { fmtDate, fmtBday, getAv, attendanceRate, normBirthday, toWhatsAppNumber } from '@/lib/utils'
-import FixedModal from '@/components/ui/FixedModal'
 import { importMembers, describeImport } from '@/lib/importClient'
+import Modal from '@/components/ui/Modal'
+import { useToast } from '@/components/ui/Toast'
 
 export default function GroupDetailClient({ church, group, members: initMembers, allMembers, sessions }) {
+  const { toast } = useToast()
   const router = useRouter()
   const [members, setMembers] = useState(initMembers)
   const [tab, setTab] = useState('members') // members | birthdays | attendance
@@ -64,7 +66,7 @@ export default function GroupDetailClient({ church, group, members: initMembers,
       })
       setMembers(prev => prev.filter(m => m.id !== memberId))
     } catch (err) {
-      alert('Failed to remove member')
+      toast('Failed to remove member', { type: 'error' })
     }
   }
 
@@ -82,7 +84,7 @@ export default function GroupDetailClient({ church, group, members: initMembers,
       if (data.member) setMembers(prev => [...prev, data.member].sort((a, b) => a.name.localeCompare(b.name)))
       setShowAddExisting(false)
     } catch (err) {
-      alert('Failed to add member')
+      toast('Failed to add member', { type: 'error' })
     }
   }
 
@@ -427,29 +429,29 @@ function AddNewMemberModal({ churchId, groupId, onClose, onAdded }) {
   )
 
   return (
-    <FixedModal title="Add new member" onClose={onClose} footer={footer}>
+    <Modal title="Add new member" onClose={onClose} footer={footer}>
       <div>
-        <label className="input-label">Name *</label>
-        <input className="input" autoFocus placeholder="Full name"
+        <label htmlFor="groupdetailclient-1" className="input-label">Name *</label>
+        <input id="groupdetailclient-1" className="input" autoFocus placeholder="Full name"
           value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
       </div>
       <div>
-        <label className="input-label">Phone</label>
-        <input className="input" type="tel" placeholder="+234…"
+        <label htmlFor="groupdetailclient-2" className="input-label">Phone</label>
+        <input id="groupdetailclient-2" className="input" type="tel" placeholder="+234…"
           value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
       </div>
       <div>
-        <label className="input-label">Address</label>
-        <input className="input" placeholder="Optional"
+        <label htmlFor="groupdetailclient-3" className="input-label">Address</label>
+        <input id="groupdetailclient-3" className="input" placeholder="Optional"
           value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} />
       </div>
       <div>
-        <label className="input-label">Birthday</label>
-        <input className="input" type="date"
+        <label htmlFor="groupdetailclient-4" className="input-label">Birthday</label>
+        <input id="groupdetailclient-4" className="input" type="date"
           value={form.birthday} onChange={e => setForm(p => ({ ...p, birthday: e.target.value }))} />
       </div>
       {error && <p className="text-sm text-error">{error}</p>}
-    </FixedModal>
+    </Modal>
   )
 }
 
@@ -543,8 +545,9 @@ function ExcelImportModal({ churchId, groupId, onClose, onImported }) {
           <p className="text-sm text-mist">{rows.length} rows found. Map your columns:</p>
           {[['name', 'Name *'], ['phone', 'Phone'], ['address', 'Address'], ['birthday', 'Birthday']].map(([field, label]) => (
             <div key={field}>
-              <label className="input-label">{label}</label>
+              <label htmlFor={`import-map-${field}`} className="input-label">{label}</label>
               <select
+                id={`import-map-${field}`}
                 className="input"
                 value={colMap[field]}
                 onChange={e => setColMap(p => ({ ...p, [field]: e.target.value }))}
@@ -610,25 +613,6 @@ function ExcelImportModal({ churchId, groupId, onClose, onImported }) {
         </div>
       )}
     </Modal>
-  )
-}
-
-function Modal({ title, onClose, children }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink/40 backdrop-blur-sm p-4"
-      onClick={e => e.target === e.currentTarget && onClose()}
-    >
-      <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-modal animate-slide-up safe-bottom max-h-[90dvh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="font-display text-lg font-semibold text-forest">{title}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-mist hover:text-forest hover:bg-ivory">
-            <CloseIcon />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
   )
 }
 

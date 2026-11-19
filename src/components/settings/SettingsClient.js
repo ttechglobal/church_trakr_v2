@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import dynamic from 'next/dynamic'
 import { usePWA } from '@/hooks/usePWA'
+import { useConfirm } from '@/components/ui/Confirm'
 import {
   User, Bell, ShieldAlert, Link2,
   Smartphone, CheckCircle, ChevronRight,
@@ -136,8 +137,8 @@ export default function SettingsClient({ church: initialChurch, user }) {
               { key: 'location',   label: 'Location',            placeholder: 'City or address'     },
             ].map(({ key, label, placeholder, type = 'text' }) => (
               <div key={key}>
-                <label className="input-label">{label}</label>
-                <input className="input" type={type} placeholder={placeholder}
+                <label htmlFor={`profile-${key}`} className="input-label">{label}</label>
+                <input id={`profile-${key}`} className="input" type={type} placeholder={placeholder}
                   value={profile[key]}
                   onChange={e => setProfile(p => ({ ...p, [key]: e.target.value }))} />
               </div>
@@ -263,6 +264,7 @@ export default function SettingsClient({ church: initialChurch, user }) {
 
 // ── Church Link Tab ────────────────────────────────────────────────────────────
 function ChurchLinkTab() {
+  const confirm = useConfirm()
   const [code,      setCode]      = useState('')
   const [status,    setStatus]    = useState(null)
   const [preview,   setPreview]   = useState(null)
@@ -295,7 +297,7 @@ function ChurchLinkTab() {
   }
 
   async function disconnect() {
-    if (!confirm('Disconnect from this church dashboard? Your own data is unaffected.')) return
+    if (!(await confirm({ title: 'Disconnect from this church dashboard?', message: 'Your own data is unaffected.', confirmLabel: 'Disconnect', danger: true }))) return
     setSub(true)
     await fetch('/api/church/connect', { method: 'DELETE' })
     setStatus(null); setSub(false)
@@ -324,9 +326,9 @@ function ChurchLinkTab() {
         <div className="space-y-3">
           <p className="text-sm text-mist">Not linked to any church dashboard. Ask your church admin for their connection code.</p>
           <div>
-            <label className="input-label">Connection Code</label>
+            <label htmlFor="settingsclient-1" className="input-label">Connection Code</label>
             <div className="flex gap-2">
-              <input className="input flex-1" placeholder="e.g. ABCDE-1234"
+              <input id="settingsclient-1" className="input flex-1" placeholder="e.g. ABCDE-1234"
                 value={code} onChange={e => { setCode(e.target.value.toUpperCase()); setPreview(null); setMsg('') }}
                 onKeyDown={e => e.key === 'Enter' && lookupCode()}
                 style={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'monospace', fontWeight: 700 }} />

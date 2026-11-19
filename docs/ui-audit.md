@@ -31,10 +31,12 @@ Date: 2026-11-19. Companion to the backend audit (all items from it are fixed or
 | 5 Mark all present | **Fixed.** "Mark all present" / "Clear all" acts on exactly what is on screen (respects search and tabs), with an Undo toast. |
 | 6 Draft loss | **Fixed.** Marks autosave on this phone and are restored after a restart, a lock or a back-tap, with a Discard option. |
 | 7 Offline queue | **Fixed.** One shared queue (`lib/offlineQueue.js`): one save per group+date, single-flight uploads, 5xx/network/401 retried, permanent rejections reported, gives up after 15 attempts, plus a visible "N saves waiting · Upload now" pill. Session-expired saves are kept, not discarded. |
-| 14 Toast system | **Added** (`components/ui/Toast.js`), used by the attendance flow. 21 `alert()/confirm()` calls remain in other screens. |
 | 16, 26 Tiny text / tap targets | **Fixed on the attendance flow** (back buttons, tabs and search are 44px; stat labels 12px; rows 56px). Other screens still open. |
 | New: summary wording | "Attendance Saved!" now says **"Saved on this phone"** (amber) when the save is only queued. |
-| 11–13, 15, 17, 18, 20, 22, 24, 25 | Open |
+| 11 Form labels | **Fixed.** Every `<label>` in the app is now connected to its control (34 adjacent pairs + 8 loop/dynamic cases; the two radio groups already wrap their inputs; the chip pickers became labelled `role="group"` with `aria-pressed`). New shared `Field` component (`components/ui/Field.js`) provides label, hint, error and `aria-describedby` wiring for new forms. Dashboard "Add member" placeholder-only inputs now have accessible names. |
+| 12 Modals | **Fixed.** One accessible `Modal` (`components/ui/Modal.js`) replaces six hand-rolled copies (FixedModal, ModalShell, three local `Modal`s, and five inline overlays in Members, Absentees, Dashboard and Follow-up Team). Focus trap, Escape, focus return, safe scroll lock for stacked dialogs, portal rendering, 44px close button. The `!important` z-index hack and global `[role="dialog"]` CSS override are gone. Not migrated: the two super-admin modals in `app/admin/page.js`. |
+| 14 Toasts / native dialogs | **Fixed.** All `alert()` calls are now toasts and all `confirm()` calls are a promise-based `useConfirm()` dialog (destructive prompts start focused on Cancel). |
+| 15, 17, 18, 20, 22, 24, 25 | Open |
 
 ---
 

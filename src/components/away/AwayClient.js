@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { getAv, toWhatsAppNumber } from '@/lib/utils'
 import { Phone, Search, UserCheck, ArrowLeft, AlertTriangle, Pencil, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { useDisplayName } from '@/hooks/useDisplayName'
+import { useToast } from '@/components/ui/Toast'
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,7 @@ function WaIcon({ size = 14, color = 'currentColor' }) {
 // ── main component ─────────────────────────────────────────────────────────────
 
 export default function AwayClient({ churchId, awayMembers: initAway, activeMembers, currentUserName }) {
+  const { toast } = useToast()
   const { displayName } = useDisplayName(currentUserName)
 
   const [away,      setAway]      = useState(initAway)
@@ -91,7 +93,7 @@ export default function AwayClient({ churchId, awayMembers: initAway, activeMemb
       setAddReason('')
       setAddSearch('')
     } catch (e) {
-      alert(e.message)
+      toast(e.message, { type: 'error' })
     } finally {
       setSaving(p => ({ ...p, [member.id]: false }))
     }
@@ -115,7 +117,7 @@ export default function AwayClient({ churchId, awayMembers: initAway, activeMemb
       }
       setAway(p => p.filter(m => m.id !== member.id))
     } catch (e) {
-      alert(e.message)
+      toast(e.message, { type: 'error' })
     } finally {
       setSaving(p => ({ ...p, [member.id]: false }))
     }
@@ -140,7 +142,7 @@ export default function AwayClient({ churchId, awayMembers: initAway, activeMemb
       setAway(p => p.map(m => m.id === data.member.id ? data.member : m))
       setEditTarget(null)
     } catch (e) {
-      alert(e.message)
+      toast(e.message, { type: 'error' })
     } finally {
       setSaving(p => ({ ...p, [member.id]: false }))
     }
@@ -166,7 +168,7 @@ export default function AwayClient({ churchId, awayMembers: initAway, activeMemb
       if (!res.ok) throw new Error(data.error ?? 'Failed')
       setAway(p => p.map(m => m.id === data.member.id ? data.member : m))
     } catch (e) {
-      alert(e.message)
+      toast(e.message, { type: 'error' })
     } finally {
       setSaving(p => ({ ...p, [member.id]: false }))
     }

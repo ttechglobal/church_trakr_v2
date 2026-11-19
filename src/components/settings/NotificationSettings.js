@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { usePWA } from '@/hooks/usePWA'
 import { useNotificationPrefs } from '@/hooks/useNotifications'
 import { Bell, BellOff, Smartphone, CheckCircle2 } from 'lucide-react'
+import { useToast } from '@/components/ui/Toast'
 
 const NOTIFICATION_TYPES = [
   {
@@ -34,6 +35,7 @@ const NOTIFICATION_TYPES = [
 ]
 
 export default function NotificationSettings() {
+  const { toast } = useToast()
   const { permission, requestPermission, swReady, installPrompt, promptInstall, isInstalled } = usePWA()
   const { prefs, toggle, loaded } = useNotificationPrefs()
   const [requesting, setRequesting] = useState(false)
@@ -45,7 +47,7 @@ export default function NotificationSettings() {
       // Request permission directly — does not require SW to be ready
       // SW is only needed for push notifications (server-side), not local notifications
       if (!('Notification' in window)) {
-        alert('Your browser does not support notifications.')
+        toast('Your browser does not support notifications.', { type: 'error' })
         return
       }
       let result

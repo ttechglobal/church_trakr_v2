@@ -175,18 +175,18 @@ function Step2Credentials({ accountType, onNext, onBack }) {
         <p className="text-sm text-mist mt-1">Step 1 of 4 — your login details</p>
       </div>
       <div>
-        <label className="input-label">Email address</label>
-        <input className="input" type="email" autoComplete="email" placeholder="you@example.com"
+        <label htmlFor="signup-1" className="input-label">Email address</label>
+        <input id="signup-1" className="input" type="email" autoComplete="email" placeholder="you@example.com"
           value={email} onChange={e => setEmail(e.target.value)} autoFocus />
       </div>
       <div>
-        <label className="input-label">Password</label>
-        <input className="input" type="password" autoComplete="new-password" placeholder="Min. 8 characters"
+        <label htmlFor="signup-2" className="input-label">Password</label>
+        <input id="signup-2" className="input" type="password" autoComplete="new-password" placeholder="Min. 8 characters"
           value={pw} onChange={e => setPw(e.target.value)} />
       </div>
       <div>
-        <label className="input-label">Confirm password</label>
-        <input className="input" type="password" autoComplete="new-password" placeholder="Repeat password"
+        <label htmlFor="signup-3" className="input-label">Confirm password</label>
+        <input id="signup-3" className="input" type="password" autoComplete="new-password" placeholder="Repeat password"
           value={pw2} onChange={e => setPw2(e.target.value)} />
       </div>
       {error && <p className="text-sm text-error">{error}</p>}
@@ -212,8 +212,8 @@ function Step3Name({ accountType, onNext, onBack }) {
         <p className="text-sm text-mist mt-1">Step 2 of 4</p>
       </div>
       <div>
-        <label className="input-label">{isChurch ? 'Church name' : 'Group name'}</label>
-        <input className="input" autoFocus
+        <label htmlFor="signup-name" className="input-label">{isChurch ? 'Church name' : 'Group name'}</label>
+        <input id="signup-name" className="input" autoFocus
           placeholder={isChurch ? 'e.g. Grace Assembly' : 'e.g. Grace Assembly — Youth Fellowship'}
           value={name} onChange={e => setName(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && name.trim() && onNext(name.trim())}
@@ -243,13 +243,13 @@ function Step4Admin({ onNext, onBack }) {
         <p className="text-sm text-mist mt-1">Step 3 of 4</p>
       </div>
       <div>
-        <label className="input-label">Your name</label>
-        <input className="input" autoFocus autoComplete="name" placeholder="Full name"
+        <label htmlFor="signup-4" className="input-label">Your name</label>
+        <input id="signup-4" className="input" autoFocus autoComplete="name" placeholder="Full name"
           value={adminName} onChange={e => setAdminName(e.target.value)} />
       </div>
       <div>
-        <label className="input-label">Phone number <span className="text-mist font-normal">(optional)</span></label>
-        <input className="input" type="tel" autoComplete="tel" placeholder="e.g. 08012345678"
+        <label htmlFor="signup-5" className="input-label">Phone number <span className="text-mist font-normal">(optional)</span></label>
+        <input id="signup-5" className="input" type="tel" autoComplete="tel" placeholder="e.g. 08012345678"
           inputMode="tel" value={phone} onChange={e => setPhone(e.target.value)} />
       </div>
       <button disabled={!adminName.trim()} onClick={() => onNext({ adminName: adminName.trim(), phone: phone.trim() || null })}
@@ -285,8 +285,8 @@ function Step5Questions({ onNext, onBack }) {
       <div className="card space-y-3">
         <p className="text-sm font-semibold text-forest">Where is your church located?</p>
         <div>
-          <label className="input-label">Country</label>
-          <select className="input" value={country} onChange={e => { setCountry(e.target.value); setState_('') }}>
+          <label htmlFor="signup-6" className="input-label">Country</label>
+          <select id="signup-6" className="input" value={country} onChange={e => { setCountry(e.target.value); setState_('') }}>
             <option value="Nigeria">Nigeria</option>
             <option value="Ghana">Ghana</option>
             <option value="Kenya">Kenya</option>
@@ -297,9 +297,9 @@ function Step5Questions({ onNext, onBack }) {
           </select>
         </div>
         <div>
-          <label className="input-label">State / Region</label>
+          <label htmlFor="signup-7" className="input-label">State / Region</label>
           {country === 'Nigeria' ? (
-            <select className="input" value={state} onChange={e => setState_(e.target.value)}>
+            <select id="signup-7" className="input" value={state} onChange={e => setState_(e.target.value)}>
               <option value="">— Select state —</option>
               {NIGERIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>

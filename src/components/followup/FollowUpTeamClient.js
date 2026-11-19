@@ -4,6 +4,8 @@ import { useState, useMemo } from 'react'
 import { Users, UserPlus, Trash2, Search, Check, Phone, X, ArrowLeft } from 'lucide-react'
 import { getAv } from '@/lib/utils'
 import Link from 'next/link'
+import Modal from '@/components/ui/Modal'
+import Field from '@/components/ui/Field'
 
 export default function FollowUpTeamClient({ initialTeam = [], membersList = [] }) {
   const [team,    setTeam]    = useState(initialTeam)
@@ -174,26 +176,17 @@ export default function FollowUpTeamClient({ initialTeam = [], membersList = [] 
 
       {/* ── Pick from members sheet ─────────────────────────────────────────── */}
       {showPicker && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 backdrop-blur-sm p-4"
-          onClick={e => e.target === e.currentTarget && setShowPicker(false)}
-        >
-          <div className="bg-white rounded-3xl w-full max-w-md shadow-modal animate-slide-up safe-bottom overflow-hidden flex flex-col"
-            style={{ maxHeight: '80dvh' }}>
-            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-forest/8 shrink-0">
-              <h3 className="font-display text-lg font-semibold text-forest">Add from members</h3>
-              <button onClick={() => setShowPicker(false)} className="w-8 h-8 rounded-full flex items-center justify-center text-mist hover:text-forest hover:bg-forest/8">
-                <X size={16} />
-              </button>
-            </div>
-
+        <Modal title="Add from members" onClose={() => setShowPicker(false)} footer={
+          <button onClick={() => setShowPicker(false)} className="btn btn-primary w-full">Done</button>
+        }>
             {/* Search */}
-            <div className="px-5 py-3 shrink-0">
+            <div>
               <div className="relative">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-mist" />
                 <input
                   className="input pl-8 text-sm"
                   placeholder="Search members…"
+                  aria-label="Search members"
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   autoFocus
@@ -202,7 +195,7 @@ export default function FollowUpTeamClient({ initialTeam = [], membersList = [] 
             </div>
 
             {/* List */}
-            <div className="overflow-y-auto flex-1 px-5 pb-5">
+            <div>
               {filteredMembers.length === 0 ? (
                 <p className="text-sm text-mist text-center py-8">
                   {search ? 'No members match your search' : 'All members are already on the team'}
@@ -234,56 +227,24 @@ export default function FollowUpTeamClient({ initialTeam = [], membersList = [] 
               )}
             </div>
 
-            <div className="px-5 pb-5 pt-2 border-t border-forest/8 shrink-0">
-              <button onClick={() => setShowPicker(false)} className="btn btn-primary w-full">Done</button>
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* ── Add manually sheet ──────────────────────────────────────────────── */}
       {showManual && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 backdrop-blur-sm p-4"
-          onClick={e => e.target === e.currentTarget && setShowManual(false)}
-        >
-          <div className="bg-white rounded-3xl w-full max-w-md p-5 shadow-modal animate-slide-up safe-bottom">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-display text-lg font-semibold text-forest">Add manually</h3>
-              <button onClick={() => setShowManual(false)} className="w-8 h-8 rounded-full flex items-center justify-center text-mist hover:text-forest hover:bg-forest/8">
-                <X size={16} />
-              </button>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm font-medium text-forest mb-1 block">Name <span className="text-error">*</span></label>
-                <input
-                  className="input text-sm"
-                  placeholder="e.g. Tunde Adeyemi"
-                  value={manualName}
-                  onChange={e => setManualName(e.target.value)}
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-forest mb-1 block">Phone number</label>
-                <input
-                  className="input text-sm"
-                  placeholder="e.g. 08012345678"
-                  type="tel"
-                  value={manualPhone}
-                  onChange={e => setManualPhone(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowManual(false)} className="btn btn-outline flex-1">Cancel</button>
-              <button onClick={addManual} disabled={!manualName.trim()} className="btn btn-primary flex-1" style={{ opacity: manualName.trim() ? 1 : 0.5 }}>
-                Add to team
-              </button>
-            </div>
+        <Modal title="Add manually" onClose={() => setShowManual(false)} footer={
+          <div className="flex gap-3">
+            <button onClick={() => setShowManual(false)} className="btn btn-outline flex-1">Cancel</button>
+            <button onClick={addManual} disabled={!manualName.trim()} className="btn btn-primary flex-1">Add to team</button>
           </div>
-        </div>
+        }>
+          <Field label="Name" required>
+            {p => <input {...p} className="input text-sm" placeholder="e.g. Tunde Adeyemi" value={manualName} onChange={e => setManualName(e.target.value)} autoFocus />}
+          </Field>
+          <Field label="Phone number">
+            {p => <input {...p} className="input text-sm" placeholder="e.g. 08012345678" type="tel" value={manualPhone} onChange={e => setManualPhone(e.target.value)} />}
+          </Field>
+        </Modal>
       )}
 
       <div className="h-6" />
